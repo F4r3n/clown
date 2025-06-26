@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "clown-client",
+    "clown-core", "clown-parser", "tests/irctest/clown-compat",
+]
+
+[workspace.lints.rust]
+trivial_numeric_casts = "warn"
+improper_ctypes = "warn"
+improper_ctypes_definitions = "warn"
+rust_2018_idioms = "warn"
+single_use_lifetimes = "warn"
+
+[workspace.lints.clippy]
+indexing_slicing = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+panic_in_result_fn = "warn"
+dbg_macro = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+todo = "warn"
+unnecessary_safety_comment = "warn"
+unnecessary_safety_doc = "warn"
+unimplemented = "warn"
+cast_lossless = "warn"
+trailing_empty_array = "warn"
+as_ptr_cast_mut = "warn"
+lint_groups_priority = "allow"
