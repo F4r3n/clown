@@ -1,0 +1,9 @@
+[package]
+name = "clown-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.98"
+tokio = { version = "1.39.0", features = ["net", "io-util", "time"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }

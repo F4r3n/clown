@@ -1,0 +1,171 @@
+use crate::Message;
+use crate::component::Draw;
+use ratatui::{
+    Frame,
+    crossterm::event::{Event, KeyCode},
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style, Styled},
+    text::{Line, Span, Text},
+    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+};
+
+pub struct TextWidget {
+    vertical_scroll_state: ScrollbarState,
+    content: Vec<String>,
+    scroll_offset: usize,
+    max_visible_height: usize,
+    follow_last: bool,
+    focus: bool,
+}
+
+impl Draw for TextWidget {
+    fn render(&mut self, frame: &mut Frame, area: Rect) {
+        let focused = self.focus;
+        let border_style = if focused {
+            Style::default().fg(Color::Cyan)
+        } else {
+            Style::default()
+        };
+
+        let text_style = Style::default().fg(Color::White);
+        let title = "Message";
+
+        // Adjust visible height and cache for scrolling logic
+        self.max_visible_height = area.height.saturating_sub(2) as usize;
+
+        let max_scroll = self.content.len().saturating_sub(self.max_visible_height);
+        let scroll = self.scroll_offset.min(max_scroll);
+
+        let visible_lines: Vec<Line> = self
+            .content
+            .iter()
+            .skip(scroll)
+            .take(self.max_visible_height)
+            .map(|line| Line::from(vec![Span::styled(line, text_style)]))
+            .collect();
+
+        let text = Text::from(visible_lines);
+
+        let paragraph = Paragraph::new(text.set_style(Style::default()))
+            .block(Block::bordered().title(title).border_style(border_style));
+
+        // Split area for content and scrollbar
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(0), Constraint::Length(1)])
+            .split(area);
+
+        // Update scrollbar state
+        self.vertical_scroll_state =
+            ScrollbarState::new(self.content.len()).position(self.scroll_offset);
+
+        frame.render_widget(paragraph, layout[0]);
+        frame.render_stateful_widget(
+            Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .thumb_style(Style::default().bg(Color::Cyan)),
+            layout[1],
+            &mut self.vertical_scroll_state,
+        );
+    }
+}
+
+impl crate::component::EventHandler for TextWidget {
+    fn has_focus(&self) -> bool {
+        self.focus
+    }
+
+    fn handle_actions(&mut self, event: &Message) -> Option<Message> {
+        match event {
+            Message::AddMessage(content) => {
+                self.add_line(content);
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn set_focus(&mut self, focused: bool) {
+        self.focus = focused;
+    }
+    fn handle_events(&mut self, event: &Event) -> Option<Message> {
+        if event.is_key_release() {
+            return None;
+        }
+        // Only handle events if this widget has focus
+        if let Some(key_event) = event.as_key_event() {
+            match key_event.code {
+                KeyCode::Up => {
+                    self.scroll_up();
+                    None
+                }
+                KeyCode::PageUp => {
+                    for _ in 0..5 {
+                        self.scroll_up();
+                    }
+                    None
+                }
+
+                KeyCode::Down => {
+                    self.scroll_down();
+                    None
+                }
+                KeyCode::PageDown => {
+                    for _ in 0..5 {
+                        self.scroll_down();
+                    }
+                    None
+                }
+                KeyCode::Home => {
+                    self.scroll_offset = 0;
+                    None
+                }
+                KeyCode::End => {
+                    self.scroll_offset = self.content.len();
+                    None
+                }
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl TextWidget {
+    pub fn new(content: Vec<String>) -> Self {
+        Self {
+            content,
+            focus: false,
+            scroll_offset: 0,
+            max_visible_height: 10,
+            follow_last: true,
+            vertical_scroll_state: ScrollbarState::default(),
+        }
+    }
+
+    pub fn set_content(&mut self, content: Vec<String>) {
+        self.content = content;
+        // Reset scroll if content changed
+        self.scroll_offset = 0;
+    }
+
+    pub fn add_line(&mut self, line: &str) {
+        self.content.push(line.to_string());
+        if self.follow_last {
+            // Show last lines that fit the view
+            self.scroll_offset = self.content.len().saturating_sub(self.max_visible_height);
+        }
+    }
+
+    fn scroll_up(&mut self) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(1);
+        self.follow_last = false;
+    }
+
+    fn scroll_down(&mut self) {
+        let max_scroll = self.content.len().saturating_sub(self.max_visible_height);
+        self.scroll_offset = self.scroll_offset.saturating_add(1).min(max_scroll);
+        self.follow_last = max_scroll.eq(&self.scroll_offset);
+    }
+}
