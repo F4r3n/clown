@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.98"
-clown-core = { path = "../clown-core" }
 color-eyre = "0.6.5"
-crossterm = "0.29.0"
 ratatui = "0.30.0-alpha.2"
 tui-input = "0.12.1"

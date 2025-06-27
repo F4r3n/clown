@@ -5,5 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
-tokio = { version = "1.39.0", features = ["net", "io-util", "time"] }
+rustls = "0.23.28"
+tokio = { version = "1.45.1", features = ["net", "io-util", "time", "macros", "rt-multi-thread"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+webpki-roots = "1.0.1"

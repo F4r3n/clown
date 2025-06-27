@@ -71,7 +71,7 @@ impl<'a> FocusManager<'a> {
         }
         None
     }
-
+    #[cfg(test)]
     pub fn unregister_widget(&mut self, widget_id: &WidgetId<'a>) {
         if let Some(pos) = self
             .focusable_widgets
@@ -84,7 +84,7 @@ impl<'a> FocusManager<'a> {
             self.widget_states.remove(widget_id);
         }
     }
-
+    #[cfg(test)]
     pub fn set_widget_enabled(&mut self, widget_id: &WidgetId<'a>, enabled: bool) {
         self.widget_states.insert(widget_id, enabled);
     }
@@ -92,7 +92,7 @@ impl<'a> FocusManager<'a> {
     pub fn get_focused_widget(&self) -> Option<&WidgetId<'a>> {
         return self.current_focus_id.as_ref();
     }
-
+    #[cfg(test)]
     pub fn has_focus(&self, widget_id: &WidgetId<'a>) -> bool {
         if let Some(focused_widget) = self.get_focused_widget() {
             focused_widget == widget_id
@@ -119,7 +119,7 @@ impl<'a> FocusManager<'a> {
             self.current_focus_id = self.get_next_focus_id(&id, -1).cloned();
         }
     }
-
+    #[cfg(test)]
     pub fn set_focus(&mut self, widget_id: &WidgetId<'a>) -> bool {
         if let Some(value) = self.widget_states.get(widget_id) {
             if *value {
@@ -131,11 +131,11 @@ impl<'a> FocusManager<'a> {
         }
         false
     }
-
+    #[cfg(test)]
     pub fn get_all_widgets(&self) -> &Vec<WidgetId<'a>> {
         &self.focusable_widgets
     }
-
+    #[cfg(test)]
     pub fn get_enabled_widgets(&self) -> Vec<&WidgetId<'a>> {
         self.focusable_widgets
             .iter()

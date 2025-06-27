@@ -6,7 +6,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style, Styled},
     text::{Line, Span, Text},
-    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
 pub struct TextWidget {
@@ -56,8 +56,8 @@ impl Draw for TextWidget {
             .split(area);
 
         // Update scrollbar state
-        self.vertical_scroll_state =
-            ScrollbarState::new(self.content.len()).position(self.scroll_offset);
+        self.vertical_scroll_state = ScrollbarState::new(self.content.len())
+            .position(self.scroll_offset + self.max_visible_height);
 
         frame.render_widget(paragraph, layout[0]);
         frame.render_stateful_widget(
@@ -142,12 +142,6 @@ impl TextWidget {
             follow_last: true,
             vertical_scroll_state: ScrollbarState::default(),
         }
-    }
-
-    pub fn set_content(&mut self, content: Vec<String>) {
-        self.content = content;
-        // Reset scroll if content changed
-        self.scroll_offset = 0;
     }
 
     pub fn add_line(&mut self, line: &str) {

@@ -1,8 +1,4 @@
-use ratatui::{
-    Frame,
-    crossterm::event::{Event, KeyEvent, MouseEvent},
-    layout::Rect,
-};
+use ratatui::{Frame, crossterm::event::Event, layout::Rect};
 use std::ops::{Deref, DerefMut};
 
 pub trait Draw {
@@ -13,7 +9,7 @@ pub trait EventHandler {
     fn handle_events(&mut self, event: &Event) -> Option<Message>;
     fn handle_actions(&mut self, event: &Message) -> Option<Message>;
 
-    fn set_focus(&mut self, focused: bool) {}
+    fn set_focus(&mut self, _focused: bool) {}
     fn has_focus(&self) -> bool;
 }
 

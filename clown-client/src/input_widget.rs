@@ -1,5 +1,5 @@
+use crate::Message;
 use crate::component::Draw;
-use crate::{Message, component::WidgetId};
 use ratatui::{
     Frame,
     crossterm::event::{Event, KeyCode},
@@ -69,7 +69,7 @@ impl crate::component::EventHandler for CInput {
         }
     }
 
-    fn handle_actions(&mut self, event: &Message) -> Option<Message> {
+    fn handle_actions(&mut self, _event: &Message) -> Option<Message> {
         None
     }
 

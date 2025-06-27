@@ -1,11 +1,6 @@
 use crate::Message;
 use crate::model::Model;
-use ratatui::{
-    Frame,
-    crossterm::event::{self, Event, KeyCode},
-    layout::{Constraint, Layout},
-    widgets::{Paragraph, Widget},
-};
+use ratatui::{Frame, crossterm::event::Event};
 pub trait WidgetView {
     fn view(&mut self, model: &mut Model, frame: &mut Frame);
     fn handle_event(

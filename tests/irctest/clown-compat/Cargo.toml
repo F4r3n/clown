@@ -8,7 +8,5 @@ anyhow = "1.0.86"
 clap = { version = "4.5.16", features = ["derive"] }
 tokio = { version = "1.39.2", features = ["full"] }
 
-clown-core = { path="../../../clown-core" }
-
 [lints]
 workspace = true
