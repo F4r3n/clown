@@ -17,10 +17,21 @@ use message::Message;
 mod main_view;
 mod model;
 mod widget_view;
+
 type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
 fn main() -> color_eyre::Result<()> {
     let mut terminal = tui::init()?;
-    let mut model = model::Model::new();
+
+    let option = clown_core::conn::ConnectionConfig {
+        address: "chat.freenode.net".into(),
+        nickname: "farine".into(),
+        password: None,
+        port: 6697,
+        real_name: "farine".into(),
+        username: "farine".into(),
+    };
+
+    let mut model = model::Model::new(option);
     let mut views: ViewMap = HashMap::new();
     views.insert(View::MainView, Box::new(main_view::MainView::new()));
 
