@@ -14,10 +14,10 @@ use model::RunningState;
 use model::View;
 mod message;
 use message::Message;
+mod command;
 mod main_view;
 mod model;
 mod widget_view;
-
 type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
 fn main() -> color_eyre::Result<()> {
     let mut terminal = tui::init()?;

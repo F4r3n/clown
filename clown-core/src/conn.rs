@@ -1,12 +1,74 @@
 use rustls::RootCertStore;
 use rustls::pki_types::ServerName;
 use std::net::ToSocketAddrs;
+use std::pin::Pin;
 use std::sync::Arc;
 
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
-use tokio_rustls::client::TlsStream;
+
+pub enum IRCStream {
+    TLS(tokio_rustls::client::TlsStream<tokio::net::TcpStream>),
+}
+
+impl AsyncRead for IRCStream {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        match self.get_mut() {
+            IRCStream::TLS(stream) => Pin::new(stream).poll_read(cx, buf),
+        }
+    }
+}
+
+impl AsyncWrite for IRCStream {
+    fn is_write_vectored(&self) -> bool {
+        match self {
+            IRCStream::TLS(stream) => stream.get_ref().0.is_write_vectored(),
+        }
+    }
+
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        match self.get_mut() {
+            IRCStream::TLS(stream) => Pin::new(stream).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        match self.get_mut() {
+            IRCStream::TLS(stream) => Pin::new(stream).poll_shutdown(cx),
+        }
+    }
+
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+        match self.get_mut() {
+            IRCStream::TLS(stream) => Pin::new(stream).poll_write(cx, buf),
+        }
+    }
+
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        bufs: &[std::io::IoSlice<'_>],
+    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+        match self.get_mut() {
+            IRCStream::TLS(stream) => Pin::new(stream).poll_write_vectored(cx, bufs),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct ConnectionConfig {
@@ -43,7 +105,7 @@ impl Connection {
         &self,
         host: &str,
         port: u16,
-    ) -> Result<TlsStream<TcpStream>, anyhow::Error> {
+    ) -> Result<IRCStream, anyhow::Error> {
         let addr = (host, port)
             .to_socket_addrs()?
             .next()
@@ -60,10 +122,10 @@ impl Connection {
 
         let domain = ServerName::try_from(host)?.to_owned();
         let stream = connector.connect(domain, stream).await?;
-        Ok(stream)
+        Ok(IRCStream::TLS(stream))
     }
 
-    pub async fn connect_tls(&self) -> Result<TlsStream<TcpStream>, anyhow::Error> {
+    pub async fn connect_tls(&self) -> Result<IRCStream, anyhow::Error> {
         rustls::crypto::ring::default_provider().install_default();
         let mut stream = self
             .establish_stream_tls(&self.connection_config.address, self.connection_config.port)

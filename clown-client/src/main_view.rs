@@ -54,16 +54,8 @@ impl<'a> MainView<'a> {
             }
         }
     }
-
-    pub fn parse_command(&self, message: &str) -> Option<Message> {
-        if message.eq("/quit") {
-            Some(Message::Quit)
-        } else {
-            None
-        }
-    }
 }
-
+use crate::command;
 impl<'a> widget_view::WidgetView for MainView<'a> {
     fn view(&mut self, _model: &mut Model, frame: &mut Frame) {
         // Create layout
@@ -128,12 +120,16 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
     fn update(&mut self, _model: &mut Model, msg: Message) -> Option<Message> {
         match msg {
             Message::SendMessage(content) => {
-                let parsed_message = self.parse_command(&content);
-                if parsed_message.is_none() {
+                if let Some(parsed_message) = command::parse_command(&content) {
+                    match parsed_message {
+                        command::Command::Connect => None,
+                        command::Command::Quit => Some(Message::Quit),
+                        _ => None,
+                    }
+                } else {
                     self.messages_display
-                        .handle_actions(&Message::AddMessage(content));
+                        .handle_actions(&Message::AddMessage(content))
                 }
-                parsed_message
             }
             _ => None,
         }
