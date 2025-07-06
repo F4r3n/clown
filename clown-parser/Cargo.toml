@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.98"
 nom = "8.0.0"
+ouroboros = "0.18.5"
 
 [lints]
 workspace = true

@@ -21,6 +21,12 @@ impl State {
     }
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct Client {
     pub sender: Sender,
     pub state: Arc<State>,
@@ -29,15 +35,21 @@ pub struct Client {
     message_receiver: MessageReceiver,
 }
 
+impl Default for Client {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Client {
     pub fn new() -> Self {
         let mut outgoing = Outgoing::new();
         let (sender, message_receiver) = outgoing.create_outgoing();
         Self {
-            sender: sender,
+            sender,
             outgoing,
             state: Arc::new(State::new()),
-            message_receiver: message_receiver,
+            message_receiver,
         }
     }
 

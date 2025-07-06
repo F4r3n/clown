@@ -1,5 +1,5 @@
+use clown_parser::IRCMessage;
 use tokio::sync::mpsc;
-
 pub struct MessageSender {
     pub inner: mpsc::UnboundedSender<String>,
 }
