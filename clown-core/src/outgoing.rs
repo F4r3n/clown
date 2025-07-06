@@ -1,8 +1,9 @@
-use std::sync::Arc;
-
 use crate::client::State;
 use crate::command::CommandReceiver;
+use crate::command::{self, Command};
 use crate::message::{MessageReceiver, MessageSender};
+use clown_parser::{Message, create_message};
+use std::sync::Arc;
 use tokio::io::BufReader;
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
@@ -51,7 +52,11 @@ impl Outgoing {
 
                             // Call user's handler (can borrow local data!)
                             if let Some(sender) = &self.message_sender {
-                            sender.inner.send(line)?;
+                                if let Ok(message) = create_message(line.as_bytes())
+                                {
+                            sender.inner.send(message)?;
+
+                                }
                             }
                         }
                         Err(e) => {
@@ -62,7 +67,7 @@ impl Outgoing {
                 }
                 command = self.receiver.as_mut().unwrap().inner.recv() => {
                     if let Some(cmd) = command {
-                        writer.write_all(cmd.as_bytes()).await?;
+                        writer.write_all(cmd.as_bytes().as_slice()).await?;
                         writer.flush().await?;
                     } else {
                         break; // Command channel closed
@@ -74,8 +79,8 @@ impl Outgoing {
     }
 
     pub fn create_outgoing(&mut self) -> (Sender, MessageReceiver) {
-        let (command_sender, command_receiver) = mpsc::unbounded_channel::<String>();
-        let (message_sender, message_receiver) = mpsc::unbounded_channel::<String>();
+        let (command_sender, command_receiver) = mpsc::unbounded_channel::<command::Command>();
+        let (message_sender, message_receiver) = mpsc::unbounded_channel::<Message>();
         self.receiver = Some(CommandReceiver {
             inner: command_receiver,
         });
@@ -95,7 +100,7 @@ impl Outgoing {
 
 #[derive(Clone)]
 pub struct Sender {
-    pub inner: Option<mpsc::UnboundedSender<String>>,
+    pub inner: Option<mpsc::UnboundedSender<Command>>,
 }
 
 impl Sender {

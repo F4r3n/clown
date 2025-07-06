@@ -10,6 +10,7 @@ mod tests {
     use tokio::join;
 
     use crate::client;
+    use crate::command;
     use crate::conn::Connection;
     use crate::conn::ConnectionConfig;
     use crate::outgoing::Outgoing;
@@ -34,7 +35,7 @@ mod tests {
         // Send commands after delay
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         if let Some(tx) = &sender.inner {
-            tx.send("NICK mybot\r\n".to_string())?;
+            tx.send(command::Command::nick())?;
             tx.send("USER mybot 0 * :Rust Bot\r\n".to_string())?;
         }
         Ok(())

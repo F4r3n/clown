@@ -2,27 +2,16 @@ use nom::{
     IResult, Parser,
     branch::alt,
     bytes::complete::{take_till, take_while_m_n, take_while1},
-    character::complete::{alpha1, char, space0, space1},
-    combinator::{map, opt, verify},
+    character::complete::{alpha1, space0, space1},
+    combinator::opt,
     sequence::{delimited, preceded},
 };
-#[derive(Debug, PartialEq, Eq)]
-enum SOURCE<'a> {
-    NICK(&'a [u8]),
-    SERVER(&'a [u8]),
-}
+mod source;
 use ouroboros::self_referencing;
 /// Note: Server sources (used for server-to-server communications) are not handled.
 #[derive(Debug, PartialEq, Eq)]
-pub struct Source<'s> {
-    source: Option<SOURCE<'s>>,
-    user: Option<&'s [u8]>,
-    host: Option<&'s [u8]>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub struct IRCMessage<'s> {
-    source: Option<Source<'s>>,
+    source: Option<source::Source<'s>>,
     command: Option<&'s [u8]>,
     parameters: Vec<&'s [u8]>,
 }
@@ -34,62 +23,6 @@ pub struct Message {
     #[borrows(data)]
     #[covariant]
     internal: IRCMessage<'this>,
-}
-
-fn nickname(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let valid_nick_char = |c: u8| !c.is_ascii_whitespace() && c != b'!' && c != b'@' && c != b':';
-    verify(take_while1(valid_nick_char), |s: &[u8]| !s.contains(&b'.')).parse(input)
-}
-
-fn nickname_opt(input: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
-    let not_space = |c: u8| !c.is_ascii_whitespace();
-    opt(nickname).parse(input)
-}
-
-fn server(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let not_space = |c: u8| !c.is_ascii_whitespace() && c != b'!';
-    verify(take_while1(not_space), |s: &[u8]| s.contains(&b'.')).parse(input)
-}
-
-fn server_opt(input: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
-    opt(server).parse(input)
-}
-
-fn user(buf: &[u8]) -> IResult<&[u8], &[u8]> {
-    let is_valid_user_char = |c: u8| c.is_ascii_alphanumeric();
-
-    let (buf, user) = take_while1(is_valid_user_char)(buf)?;
-    Ok((buf, user))
-}
-
-fn host(buf: &[u8]) -> IResult<&[u8], &[u8]> {
-    let is_valid_host_char = |c: u8| c.is_ascii_alphanumeric();
-
-    let (buf, user) = take_while1(is_valid_host_char)(buf)?;
-    Ok((buf, user))
-}
-
-fn parse_source_inner(buf: &[u8]) -> IResult<&[u8], Source<'_>> {
-    let (buf, source) =
-        alt((map(nickname, SOURCE::NICK), map(server, SOURCE::SERVER))).parse(buf)?;
-
-    let (buf, user) = opt(preceded(char('!'), user)).parse(buf)?;
-    let (buf, host) = opt(preceded(char('@'), host)).parse(buf)?;
-
-    let source = Source {
-        source: Some(source),
-        user,
-        host,
-    };
-    Ok((buf, source))
-}
-
-fn parse_source(buf: &[u8]) -> (&[u8], Option<Source<'_>>) {
-    let colon = char(':');
-    if let Ok((buf, source)) = preceded(colon, parse_source_inner).parse(buf) {
-        return (buf, Some(source));
-    }
-    (buf, None)
 }
 
 fn parse_command(buf: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
@@ -157,8 +90,8 @@ pub fn parse_parameters(input: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
     Ok((input, params))
 }
 
-pub fn parse_message(buf: &[u8]) -> anyhow::Result<IRCMessage<'_>> {
-    let (buf, parsed_source) = parse_source(buf);
+fn parse_message(buf: &[u8]) -> anyhow::Result<IRCMessage<'_>> {
+    let (buf, parsed_source) = source::parse_source(buf);
 
     let (buf, command) = match parse_command(buf) {
         Ok((buf, command)) => (buf, command),
@@ -190,87 +123,6 @@ pub fn create_message(buf: &[u8]) -> anyhow::Result<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_nickname() {
-        // Valid nickname
-        let input = b"nick rest";
-        let (rest, nick) = nickname_opt(input).unwrap();
-        assert_eq!(nick, Some(&b"nick"[..]));
-        assert_eq!(rest, b" rest");
-
-        // Nickname with dot (should not match)
-        let input = b"nick.name rest";
-        let (rest, nick) = nickname_opt(input).unwrap();
-        assert_eq!(nick, None);
-        assert_eq!(rest, b"nick.name rest");
-
-        let input = b"nick!name rest";
-        let (rest, nick) = nickname_opt(input).unwrap();
-        assert_eq!(nick, Some(&b"nick"[..]));
-        assert_eq!(rest, b"!name rest");
-    }
-
-    #[test]
-    fn test_server() {
-        // Valid server name
-        let input = b"irc.example.com ";
-        let (rest, _server) = server_opt(input).unwrap();
-        assert_eq!(_server, Some(&b"irc.example.com"[..]));
-        assert_eq!(rest, b" ");
-
-        // Server name without dot (should not match)
-        let input = b"ircserver ";
-        let (rest, server) = server_opt(input).unwrap();
-        assert_eq!(server, None);
-        assert_eq!(rest, b"ircserver ");
-    }
-
-    #[test]
-    fn test_user() {
-        let input = b"user123 rest";
-        let (rest, user) = user(input).unwrap();
-        assert_eq!(user, &b"user123"[..]);
-        assert_eq!(rest, b" rest");
-    }
-
-    #[test]
-    fn test_host() {
-        let input = b"host456 remain";
-        let (rest, host) = host(input).unwrap();
-        assert_eq!(host, &b"host456"[..]);
-        assert_eq!(rest, b" remain");
-    }
-
-    #[test]
-    fn test_parse_source_nick_user_host() {
-        let input = b":nick!user@host ";
-        let (rest, source) = parse_source(input);
-        assert_eq!(
-            source,
-            Some(Source {
-                source: Some(SOURCE::NICK(&b"nick"[..])),
-                user: Some(&b"user"[..]),
-                host: Some(&b"host"[..]),
-            })
-        );
-        assert_eq!(rest, b" ");
-    }
-
-    #[test]
-    fn test_parse_source_server() {
-        let input = b":irc.example.com ";
-        let (rest, source) = parse_source(input);
-        assert_eq!(
-            source,
-            Some(Source {
-                source: Some(SOURCE::SERVER(&b"irc.example.com"[..])),
-                user: None,
-                host: None,
-            })
-        );
-        assert_eq!(rest, b" ");
-    }
 
     #[test]
     fn test_parse_command_alpha() {
@@ -321,11 +173,11 @@ mod tests {
         let msg = parse_message(input).unwrap();
         assert_eq!(
             msg.source,
-            Some(Source {
-                source: Some(SOURCE::NICK(&b"nick"[..])),
-                user: Some(&b"user"[..]),
-                host: Some(&b"host"[..]),
-            })
+            Some(source::Source::new(
+                Some(source::SOURCE::Nick(&b"nick"[..])),
+                Some(&b"user"[..]),
+                Some(&b"host"[..])
+            ))
         );
         assert_eq!(msg.command, Some(&b"PRIVMSG"[..]));
         assert_eq!(msg.parameters, vec![&b"#chan"[..], &b"hello world"[..]]);
