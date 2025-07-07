@@ -8,19 +8,13 @@ use tokio::io::BufReader;
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
+#[derive(Default)]
 pub struct Outgoing {
     receiver: Option<CommandReceiver>,
     message_sender: Option<MessageSender>,
 }
 
 impl Outgoing {
-    pub fn new() -> Self {
-        Self {
-            receiver: None,
-            message_sender: None,
-        }
-    }
-
     pub async fn process<R, W>(
         &mut self,
         mut reader: BufReader<R>,
@@ -54,8 +48,7 @@ impl Outgoing {
                             if let Some(sender) = &self.message_sender {
                                 if let Ok(message) = create_message(line.as_bytes())
                                 {
-                            sender.inner.send(message)?;
-
+                                    sender.inner.send(message)?;
                                 }
                             }
                         }

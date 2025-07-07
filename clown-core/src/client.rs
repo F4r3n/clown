@@ -43,7 +43,7 @@ impl Default for Client {
 
 impl Client {
     pub fn new() -> Self {
-        let mut outgoing = Outgoing::new();
+        let mut outgoing = Outgoing::default();
         let (sender, message_receiver) = outgoing.create_outgoing();
         Self {
             sender,
@@ -79,5 +79,45 @@ impl Client {
 
     pub fn state(&self) -> Arc<State> {
         self.state.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use tokio::join;
+
+    use crate::client;
+    use crate::conn::ConnectionConfig;
+    use crate::conn::test::Action;
+    use crate::conn::test::StreamMock;
+
+    #[tokio::test]
+    async fn test_connect() -> anyhow::Result<()> {
+        let option = ConnectionConfig {
+            address: "chat.freenode.net".into(),
+            nickname: "farine".into(),
+            password: None,
+            port: 6697,
+            real_name: "farine".into(),
+            username: "farine".into(),
+        };
+        let client = client::Client::new();
+        let stream_mock = StreamMock::new(vec![
+            Action::Item("test\n".as_bytes().to_vec()),
+            Action::Item("HELLO\n".as_bytes().to_vec()),
+        ]);
+        let state = client.state();
+        let sender = client.sender();
+
+        let handle = client.spawn(stream_mock);
+        // Send commands after delay
+        /*tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        if let Some(tx) = &sender.inner {
+            tx.send(command::Command::nick())?;
+        }*/
+
+        join!(handle);
+        Ok(())
     }
 }
