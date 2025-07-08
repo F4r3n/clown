@@ -26,7 +26,7 @@ impl Outgoing {
         W: AsyncWrite + Unpin,
     {
         let mut buffer = String::new();
-
+        let mut has_connected = true;
         loop {
             tokio::select! {
                 response = reader.read_line(&mut buffer) => {
@@ -42,6 +42,10 @@ impl Outgoing {
                                 let response = line.replacen("PING", "PONG", 1);
                                 writer.write_all(response.as_bytes()).await?;
                                 writer.write_all(b"\r\n").await?;
+                                writer.flush().await?;
+                            }
+                            else if line.starts_with("CAP") {
+                                writer.write_all(Command::CAP("END".to_string()).as_bytes().as_slice()).await?;
                                 writer.flush().await?;
                             }
                             // Call user's handler (can borrow local data!)

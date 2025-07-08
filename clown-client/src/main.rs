@@ -105,6 +105,21 @@ fn handle_key(key: event::KeyEvent) -> Option<Message> {
     }
 }
 
+async fn connect_irc(model: &mut Model) {
+    if let Some(connection_config) = model.connection_config.clone() {
+        if let Some(irc_config) = model.irc_config.clone() {
+            let mut client = Client::new(irc_config);
+            let reciever = client.message_receiver();
+            let command_sender = client.command_sender();
+
+            model.command_sender = Some(command_sender);
+            model.message_reciever = reciever;
+
+            client.spawn(connection_config);
+        }
+    }
+}
+
 async fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<Message> {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         match msg {
@@ -114,24 +129,7 @@ async fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<
                 None
             }
             Message::Connect => {
-                if let Some(connection_config) = model.connection_config.clone() {
-                    let connect = Connection::new(connection_config);
-                    if let Ok(stream) = connect.connect().await {
-                        if let Some(irc_config) = model.irc_config.clone() {
-                            let mut client = Client::new(irc_config);
-                            let reciever = client.message_receiver();
-                            let command_sender = client.command_sender();
-
-                            model.command_sender = Some(command_sender);
-                            model.message_reciever = reciever;
-
-                            client.spawn(stream);
-                        }
-                    } else {
-                        return None;
-                    }
-                }
-
+                connect_irc(model).await;
                 None
             }
             _ => current_view.update(model, msg),

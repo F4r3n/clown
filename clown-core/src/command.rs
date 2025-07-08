@@ -12,7 +12,7 @@ pub enum Command {
     PING(String /*token */),
     PONG(String /*token */),
     QUIT(Option<String>),
-    CAP(),
+    CAP(String),
 
     /*Error code */
     //001
@@ -26,7 +26,7 @@ impl Command {
                 .as_bytes()
                 .to_vec(),
             Command::NICK(target) => format!("NICK {target}\r\n").as_bytes().to_vec(),
-            Command::CAP() => b"CAP LS 302\r\n".to_vec(),
+            Command::CAP(content) => format! {"CAP {content}\r\n"}.as_bytes().to_vec(),
             Command::PASS(password) => format!("PASS {password}\r\n").as_bytes().to_vec(),
             Command::USER(username, realname) => format!("USER {username} 0 * :{realname}\r\n")
                 .as_bytes()

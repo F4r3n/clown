@@ -2,6 +2,7 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::io::{BufReader, BufWriter};
 use tokio::task::JoinHandle;
 
+use crate::conn::{self, Connection};
 use crate::message::MessageReceiver;
 use crate::outgoing::CommandSender;
 use crate::outgoing::Outgoing;
@@ -61,7 +62,7 @@ impl Client {
     fn try_connect(&mut self) -> anyhow::Result<()> {
         let mut command_sender = self.command_sender();
 
-        command_sender.send(crate::command::Command::CAP())?;
+        //command_sender.send(crate::command::Command::CAP("LS 302".to_string()))?;
         if let Some(password) = &self.irc_config.password {
             command_sender.send(crate::command::Command::PASS(password.clone()))?;
         }
@@ -76,7 +77,7 @@ impl Client {
         Ok(())
     }
 
-    pub async fn start<T>(mut self, stream: T) -> anyhow::Result<()>
+    async fn start<T>(mut self, stream: T) -> anyhow::Result<()>
     where
         T: AsyncRead + AsyncWrite + Unpin + 'static,
     {
@@ -89,11 +90,14 @@ impl Client {
             .await
     }
 
-    pub fn spawn<T>(self, stream: T) -> JoinHandle<anyhow::Result<()>>
-    where
-        T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-    {
-        tokio::spawn(async move { self.start(stream).await })
+    pub fn spawn(
+        self,
+        connection_config: conn::ConnectionConfig,
+    ) -> JoinHandle<anyhow::Result<()>> {
+        tokio::spawn(async move {
+            let conn = Connection::new(connection_config).connect().await?;
+            self.start(conn).await
+        })
     }
 
     pub fn command_sender(&self) -> CommandSender {
@@ -125,23 +129,22 @@ mod tests {
     async fn test_connect() -> anyhow::Result<()> {
         println!("TEST");
         let option = ConnectionConfig {
-            address: "i.chevalier.io".into(),
-            port: 6697,
+            address: "localhost".into(),
+            port: 6667,
         };
         let irc_config = IRCConfig {
-            nickname: "farine".into(),
-            password: Some("share-chan".into()),
-            real_name: "farine".into(),
-            username: "farine".into(),
+            nickname: "farine_".into(),
+            password: None,
+            real_name: "farine_".into(),
+            username: "farine_".into(),
             channel: "#rust-spam".into(),
         };
 
         let client = client::Client::new(irc_config);
-        let stream = Connection::new(option).connect().await?;
         let state = client.state();
         let sender = client.command_sender();
 
-        let handle = client.spawn(stream);
+        let handle = client.spawn(option);
         // Send commands after delay
         /*tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         if let Some(tx) = &sender.inner {
