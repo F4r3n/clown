@@ -1,8 +1,8 @@
 use crate::client::State;
 use crate::command::CommandReceiver;
 use crate::command::{self, Command};
-use crate::message::{MessageReceiver, MessageSender};
-use clown_parser::{Message, create_message};
+use crate::message::{MessageReceiver, MessageSender, ServerMessage};
+use clown_parser::message::create_message;
 use std::sync::Arc;
 use tokio::io::BufReader;
 use tokio::io::{AsyncBufReadExt, AsyncRead};
@@ -48,12 +48,12 @@ impl Outgoing {
                             if let Some(sender) = &self.message_sender {
                                 if let Ok(message) = create_message(line.as_bytes())
                                 {
-                                    sender.inner.send(message)?;
+                                    sender.inner.send(ServerMessage::new(message))?;
                                 }
                             }
                         }
                         Err(e) => {
-                            eprintln!("Read error: {}", e);
+                            eprintln!("Read error: {e}");
                             break;
                         }
                     }
@@ -73,7 +73,7 @@ impl Outgoing {
 
     pub fn create_outgoing(&mut self) -> (Sender, MessageReceiver) {
         let (command_sender, command_receiver) = mpsc::unbounded_channel::<command::Command>();
-        let (message_sender, message_receiver) = mpsc::unbounded_channel::<Message>();
+        let (message_sender, message_receiver) = mpsc::unbounded_channel::<ServerMessage>();
         self.receiver = Some(CommandReceiver {
             inner: command_receiver,
         });

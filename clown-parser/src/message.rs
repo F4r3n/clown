@@ -1,0 +1,107 @@
+use crate::parser::{parse_command, parse_parameters};
+use crate::source;
+use ouroboros::self_referencing;
+/// Note: Server sources (used for server-to-server communications) are not handled.
+#[derive(Debug, PartialEq, Eq)]
+pub struct IRCMessage<'s> {
+    source: Option<source::Source<'s>>,
+    command: Option<&'s [u8]>,
+    parameters: Vec<&'s [u8]>,
+}
+
+#[self_referencing]
+#[derive(Debug, PartialEq, Eq)]
+pub struct Message {
+    data: Vec<u8>,
+    #[borrows(data)]
+    #[covariant]
+    internal: IRCMessage<'this>,
+}
+
+impl Message {
+    pub fn get_command_name(&self) -> Option<&str> {
+        let irc = self.borrow_internal();
+        irc.command.and_then(|value| str::from_utf8(value).ok())
+    }
+
+    pub fn get_trailling(&self) -> Vec<&str> {
+        let irc = self.borrow_internal();
+        irc.parameters
+            .iter()
+            .map(|value| str::from_utf8(value).unwrap_or_default())
+            .collect()
+    }
+}
+
+fn parse_message(buf: &[u8]) -> anyhow::Result<IRCMessage<'_>> {
+    let (buf, parsed_source) = source::parse_source(buf);
+
+    let (buf, command) = match parse_command(buf) {
+        Ok((buf, command)) => (buf, command),
+        Err(_) => (buf, None),
+    };
+
+    let (_buf, parameters) = match parse_parameters(buf) {
+        Ok((buf, parameters)) => (buf, parameters),
+        Err(_) => (buf, vec![]),
+    };
+
+    Ok(IRCMessage {
+        source: parsed_source,
+        command,
+        parameters,
+    })
+}
+
+pub fn create_message(buf: &[u8]) -> anyhow::Result<Message> {
+    MessageTryBuilder {
+        data: buf.to_owned(),
+        internal_builder: |data: &Vec<u8>| -> anyhow::Result<IRCMessage<'_>> {
+            let slice: &[u8] = data.as_slice();
+            parse_message(slice)
+        },
+    }
+    .try_build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_message_full() {
+        let input = b":nick!user@host PRIVMSG #chan :hello world\r\n";
+        let msg = parse_message(input).unwrap();
+        assert_eq!(
+            msg.source,
+            Some(source::Source::new(
+                Some(source::SOURCE::Nick(&b"nick"[..])),
+                Some(&b"user"[..]),
+                Some(&b"host"[..])
+            ))
+        );
+        assert_eq!(msg.command, Some(&b"PRIVMSG"[..]));
+        assert_eq!(msg.parameters, vec![&b"#chan"[..], &b"hello world"[..]]);
+    }
+
+    #[test]
+    fn test_parse_message_no_source() {
+        let input = b"PING :server\r\n";
+        let msg = parse_message(input).unwrap();
+        assert_eq!(msg.source, None);
+        assert_eq!(msg.command, Some(&b"PING"[..]));
+        assert_eq!(msg.parameters, vec![&b"server"[..]]);
+    }
+
+    #[test]
+    fn test_create_message() {
+        let input = b":nick!user@host PRIVMSG #chan :hello world\r\n";
+        let msg = create_message(input).unwrap();
+        let internal = msg.borrow_internal();
+        assert_eq!(internal.command, Some(&b"PRIVMSG"[..]));
+        assert_eq!(
+            internal.parameters,
+            vec![&b"#chan"[..], &b"hello world"[..]]
+        );
+    }
+}

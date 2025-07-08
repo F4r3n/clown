@@ -12,7 +12,6 @@ pub mod test {
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-    use tokio::time::Sleep;
 
     pub enum Action {
         Item(Vec<u8>),
@@ -106,7 +105,7 @@ pub mod test {
 }
 
 pub enum IRCStream {
-    TLS(tokio_rustls::client::TlsStream<tokio::net::TcpStream>),
+    TLS(Box<tokio_rustls::client::TlsStream<tokio::net::TcpStream>>),
     PLAIN(tokio::net::TcpStream),
     #[cfg(test)]
     MOCK(test::StreamMock),
@@ -220,12 +219,12 @@ impl Connection {
         &self,
         in_address: &str,
         port: u16,
-    ) -> Result<TcpStream, anyhow::Error> {
+    ) -> Result<IRCStream, anyhow::Error> {
         let stream = TcpStream::connect(format!("{in_address}:{port}")).await?;
-        Ok(stream)
+        Ok(IRCStream::PLAIN(stream))
     }
 
-    pub async fn establish_stream_tls(
+    async fn establish_stream_tls(
         &self,
         host: &str,
         port: u16,
@@ -246,16 +245,18 @@ impl Connection {
 
         let domain = ServerName::try_from(host)?.to_owned();
         let stream = connector.connect(domain, stream).await?;
-        Ok(IRCStream::TLS(stream))
+        Ok(IRCStream::TLS(Box::new(stream)))
     }
 
-    pub async fn connect_tls(&self) -> Result<IRCStream, anyhow::Error> {
+    pub async fn connect(&self) -> Result<IRCStream, anyhow::Error> {
         let _result = rustls::crypto::ring::default_provider().install_default();
-        let mut stream = self
-            .establish_stream_tls(&self.connection_config.address, self.connection_config.port)
-            .await?;
-        //let (read_half, mut write_half) = split(stream);
-        //let mut reader = BufReader::new(stream.r);
+        let mut stream = if self.connection_config.port == 6697 {
+            self.establish_stream_tls(&self.connection_config.address, self.connection_config.port)
+                .await?
+        } else {
+            self.establish_stream(&self.connection_config.address, self.connection_config.port)
+                .await?
+        };
 
         stream.write_all(b"CAP LS 302\r\n").await?;
 
@@ -291,7 +292,6 @@ mod tests {
 
     use tokio::io::BufReader;
 
-    use crate::conn::ConnectionConfig;
     use crate::conn::test::Action;
     use crate::conn::test::StreamMock;
     use tokio::io::AsyncBufReadExt;
