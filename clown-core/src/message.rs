@@ -1,5 +1,3 @@
-use std::ops::Not;
-
 use clown_parser::message::Message;
 use tokio::sync::mpsc;
 
@@ -29,6 +27,13 @@ impl ServerMessage {
         } else {
             None
         }
+    }
+    //Command: PONG
+    //Parameters: [<server>] <token>
+    fn pong(&self, parameters: Vec<&str>) -> Option<Command> {
+        Some(Command::PONG(
+            parameters.last().map(|v| v.to_string()).unwrap_or_default(),
+        ))
     }
 
     fn quit(&self, parameters: Vec<&str>) -> Option<Command> {
@@ -60,6 +65,7 @@ impl ServerMessage {
             Some("PASS") => self.make_command_1(self.message.get_trailling(), Command::PASS),
             Some("QUIT") => self.quit(self.message.get_trailling()),
             Some("PING") => self.make_command_1(self.message.get_trailling(), Command::PING),
+            Some("PONG") => self.pong(self.message.get_trailling()),
             Some("USER") => self.user(self.message.get_trailling()),
             Some("PRIVMSG") => self.make_command_2(self.message.get_trailling(), Command::PRIVMSG),
             Some("001") => self.make_command_2(self.message.get_trailling(), Command::WELCOME),
@@ -159,6 +165,20 @@ mod tests {
             assert_eq!(token, "123456789", "PING token mismatch");
         } else {
             panic!("Expected PING command, got {command:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_pong() -> anyhow::Result<()> {
+        let message = create_message("PONG serverName :123456789\r\n".as_bytes())?;
+        let server_message = ServerMessage::new(message);
+        let command = server_message.get_command();
+        assert!(command.is_some());
+        if let Some(crate::command::Command::PONG(token)) = command {
+            assert_eq!(token, "123456789", "PONG token mismatch");
+        } else {
+            panic!("Expected PONG command, got {command:?}");
         }
         Ok(())
     }

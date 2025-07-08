@@ -1,4 +1,4 @@
-use crate::client::State;
+use crate::client::{IRCConfig, State};
 use crate::command::CommandReceiver;
 use crate::command::{self, Command};
 use crate::message::{MessageReceiver, MessageSender, ServerMessage};
@@ -19,7 +19,7 @@ impl Outgoing {
         &mut self,
         mut reader: BufReader<R>,
         mut writer: BufWriter<W>,
-        state: Arc<State>,
+        _state: Arc<State>,
     ) -> anyhow::Result<()>
     where
         R: AsyncRead + Unpin,
@@ -35,6 +35,7 @@ impl Outgoing {
                         Ok(_) => {
                             let line = buffer.trim_end().to_string();
                             buffer.clear();
+                            dbg!(line.clone());
 
                             // Handle PING immediately
                             if line.starts_with("PING") {
@@ -43,7 +44,6 @@ impl Outgoing {
                                 writer.write_all(b"\r\n").await?;
                                 writer.flush().await?;
                             }
-
                             // Call user's handler (can borrow local data!)
                             if let Some(sender) = &self.message_sender {
                                 if let Ok(message) = create_message(line.as_bytes())
@@ -60,6 +60,7 @@ impl Outgoing {
                 }
                 command = self.receiver.as_mut().unwrap().inner.recv() => {
                     if let Some(cmd) = command {
+                        dbg!(std::str::from_utf8(cmd.as_bytes().as_slice())?);
                         writer.write_all(cmd.as_bytes().as_slice()).await?;
                         writer.flush().await?;
                     } else {
@@ -71,7 +72,7 @@ impl Outgoing {
         Ok(())
     }
 
-    pub fn create_outgoing(&mut self) -> (Sender, MessageReceiver) {
+    pub fn create_outgoing(&mut self) -> (CommandSender, MessageReceiver) {
         let (command_sender, command_receiver) = mpsc::unbounded_channel::<command::Command>();
         let (message_sender, message_receiver) = mpsc::unbounded_channel::<ServerMessage>();
         self.receiver = Some(CommandReceiver {
@@ -81,7 +82,7 @@ impl Outgoing {
             inner: message_sender,
         });
         (
-            Sender {
+            CommandSender {
                 inner: Some(command_sender),
             },
             MessageReceiver {
@@ -91,15 +92,16 @@ impl Outgoing {
     }
 }
 
-#[derive(Clone)]
-pub struct Sender {
+#[derive(Clone, Default)]
+pub struct CommandSender {
     pub inner: Option<mpsc::UnboundedSender<Command>>,
 }
 
-impl Sender {
-    pub fn new() -> Self {
-        Self { inner: None }
+impl CommandSender {
+    pub fn send(&mut self, in_command: Command) -> Result<(), anyhow::Error> {
+        if let Some(inner) = &self.inner {
+            inner.send(in_command)?
+        }
+        Ok(())
     }
 }
-
-impl Sender {}

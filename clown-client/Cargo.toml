@@ -9,3 +9,6 @@ clown-core = { version = "0.1.0", path = "../clown-core" }
 color-eyre = "0.6.5"
 ratatui = "0.30.0-alpha.2"
 tui-input = "0.12.1"
+tokio = { version = "1.46.1", features = ["full"] }
+tokio-util = "0.7.9"
+futures = "0.3.28"

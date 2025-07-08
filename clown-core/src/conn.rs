@@ -193,14 +193,10 @@ impl AsyncWrite for IRCStream {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConnectionConfig {
     pub address: String,
     pub port: u16,
-    pub nickname: String,
-    pub real_name: String,
-    pub username: String,
-    pub password: Option<String>,
 }
 
 #[derive(Debug)]
@@ -250,39 +246,13 @@ impl Connection {
 
     pub async fn connect(&self) -> Result<IRCStream, anyhow::Error> {
         let _result = rustls::crypto::ring::default_provider().install_default();
-        let mut stream = if self.connection_config.port == 6697 {
+        let stream = if self.connection_config.port == 6697 {
             self.establish_stream_tls(&self.connection_config.address, self.connection_config.port)
                 .await?
         } else {
             self.establish_stream(&self.connection_config.address, self.connection_config.port)
                 .await?
         };
-
-        stream.write_all(b"CAP LS 302\r\n").await?;
-
-        if let Some(password) = &self.connection_config.password {
-            stream
-                .write_all(format!("PASS {password}\r\n").as_bytes())
-                .await?;
-        }
-
-        stream
-            .write_all(format!("NICK {}\r\n", self.connection_config.nickname).as_bytes())
-            .await?;
-
-        stream
-            .write_all(
-                format!(
-                    "USER {} 0 * :{}\r\n",
-                    self.connection_config.username, self.connection_config.real_name
-                )
-                .as_bytes(),
-            )
-            .await?;
-
-        stream.flush().await?;
-
-        //capabilities_negotiation(&mut reader, &mut writer).await?;
         Ok(stream)
     }
 }

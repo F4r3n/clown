@@ -1,3 +1,7 @@
+use clown_core::{
+    client::{Client, IRCConfig},
+    conn::Connection,
+};
 use ratatui::{
     Frame,
     crossterm::event::{self, Event, KeyCode},
@@ -19,19 +23,35 @@ mod main_view;
 mod model;
 mod widget_view;
 type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
-fn main() -> color_eyre::Result<()> {
+#[tokio::main]
+async fn main() -> color_eyre::Result<()> {
     let mut terminal = tui::init()?;
 
-    let option = clown_core::conn::ConnectionConfig {
-        address: "chat.freenode.net".into(),
+    /*
+        let connect = Connection::new(option);
+    connect.connect();
+
+    let client = Client::new(IRCConfig {
         nickname: "farine".into(),
         password: None,
-        port: 6697,
         real_name: "farine".into(),
         username: "farine".into(),
-    };
+    });
+     */
 
-    let mut model = model::Model::new(option);
+    let mut model = model::Model::new(
+        Some(clown_core::conn::ConnectionConfig {
+            address: "chat.freenode.net".into(),
+            port: 6697,
+        }),
+        Some(IRCConfig {
+            nickname: "farine".into(),
+            password: None,
+            real_name: "farine".into(),
+            username: "farine".into(),
+            channel: "#rust-spam".into(),
+        }),
+    );
     let mut views: ViewMap = HashMap::new();
     views.insert(View::MainView, Box::new(main_view::MainView::new()));
 
@@ -44,7 +64,7 @@ fn main() -> color_eyre::Result<()> {
 
         // Process updates as long as they return a non-None message
         while current_msg.is_some() {
-            current_msg = update(&mut model, &mut views, current_msg.unwrap());
+            current_msg = update(&mut model, &mut views, current_msg.unwrap()).await;
         }
     }
 
@@ -85,7 +105,7 @@ fn handle_key(key: event::KeyEvent) -> Option<Message> {
     }
 }
 
-fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<Message> {
+async fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<Message> {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         match msg {
             Message::Quit => {
@@ -93,9 +113,42 @@ fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<Messag
                 model.running_state = RunningState::Done;
                 None
             }
+            Message::Connect => {
+                if let Some(connection_config) = model.connection_config.clone() {
+                    let connect = Connection::new(connection_config);
+                    if let Ok(stream) = connect.connect().await {
+                        if let Some(irc_config) = model.irc_config.clone() {
+                            let mut client = Client::new(irc_config);
+                            let reciever = client.message_receiver();
+                            let command_sender = client.command_sender();
+
+                            model.command_sender = Some(command_sender);
+                            model.message_reciever = reciever;
+
+                            client.spawn(stream);
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+
+                None
+            }
             _ => current_view.update(model, msg),
         }
     } else {
+        if let Some(reciever) = model.message_reciever.as_mut() {
+            if let Ok(recieved) = reciever.inner.try_recv() {
+                if let Some(command) = recieved.get_command() {
+                    match command {
+                        clown_core::command::Command::PRIVMSG(_target, content) => {
+                            return Some(Message::AddMessage(content));
+                        }
+                        _ => return None,
+                    }
+                }
+            }
+        }
         None
     }
 }

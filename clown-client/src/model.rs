@@ -1,5 +1,5 @@
 use clown_core;
-
+use clown_core::client;
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub enum View {
     #[default]
@@ -16,15 +16,25 @@ pub enum RunningState {
 pub struct Model {
     pub running_state: RunningState,
     pub current_view: View,
-    pub config: clown_core::conn::ConnectionConfig,
+    pub connection_config: Option<clown_core::conn::ConnectionConfig>,
+    pub irc_config: Option<clown_core::client::IRCConfig>,
+
+    pub message_reciever: Option<clown_core::message::MessageReceiver>,
+    pub command_sender: Option<clown_core::outgoing::CommandSender>,
 }
 
 impl Model {
-    pub fn new(config: clown_core::conn::ConnectionConfig) -> Self {
+    pub fn new(
+        connection_config: Option<clown_core::conn::ConnectionConfig>,
+        irc_config: Option<clown_core::client::IRCConfig>,
+    ) -> Self {
         Self {
             running_state: RunningState::Running,
             current_view: View::MainView,
-            config,
+            connection_config,
+            irc_config,
+            message_reciever: None,
+            command_sender: None,
         }
     }
 }

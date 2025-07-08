@@ -117,19 +117,33 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
         Ok(message)
     }
 
-    fn update(&mut self, _model: &mut Model, msg: Message) -> Option<Message> {
+    fn update(&mut self, model: &mut Model, msg: Message) -> Option<Message> {
         match msg {
             Message::SendMessage(content) => {
                 if let Some(parsed_message) = command::parse_command(&content) {
                     match parsed_message {
-                        command::Command::Connect => None,
+                        command::Command::Connect => Some(Message::Connect),
                         command::Command::Quit => Some(Message::Quit),
                         _ => None,
                     }
                 } else {
+                    if let Some(command_sender) = model.command_sender.as_mut() {
+                        if let Some(irc_config) = &model.irc_config {
+                            let _ = command_sender.send(clown_core::command::Command::PRIVMSG(
+                                irc_config.channel.to_string(),
+                                content.clone(),
+                            ));
+                        }
+                    }
                     self.messages_display
                         .handle_actions(&Message::AddMessage(content))
                 }
+            }
+            Message::Quit => {
+                if let Some(command_sender) = model.command_sender.as_mut() {
+                    let _ = command_sender.send(clown_core::command::Command::QUIT(None));
+                }
+                None
             }
             _ => None,
         }
