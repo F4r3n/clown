@@ -14,63 +14,103 @@ pub struct ServerMessage {
     message: Message,
 }
 
+use lazy_static::lazy_static;
+use std::collections::HashMap;
+
+//USER alice 0 * :Alice Example
+fn user(parameters: Vec<String>) -> Option<Command> {
+    if let Some(target) = parameters.first() {
+        let message_to_send = parameters[3..].join(" ");
+        Some(Command::USER(target.to_string(), message_to_send))
+    } else {
+        None
+    }
+}
+//Command: PONG
+//Parameters: [<server>] <token>
+fn pong(parameters: Vec<String>) -> Option<Command> {
+    Some(Command::PONG(
+        parameters.last().map(|v| v.to_string()).unwrap_or_default(),
+    ))
+}
+
+fn quit(parameters: Vec<String>) -> Option<Command> {
+    Some(Command::QUIT(parameters.first().map(|v| v.to_string())))
+}
+
+fn make_command_1<F>(parameters: Vec<String>, ctor: F) -> Option<Command>
+where
+    F: Fn(String) -> Command,
+{
+    parameters.first().map(|target| ctor(target.to_string()))
+}
+
+fn make_command_2<F>(parameters: Vec<String>, ctor: F) -> Option<Command>
+where
+    F: Fn(String, String) -> Command,
+{
+    if let Some(target) = parameters.first() {
+        let message_to_send = parameters[1..].join(" ");
+        Some(ctor(target.to_string(), message_to_send))
+    } else {
+        None
+    }
+}
+
+type CommandFn = dyn Fn(Vec<String>) -> Option<Command> + Send + Sync;
+
+lazy_static! {
+    static ref HASHMAP: HashMap<String, Box<CommandFn>> = {
+        let mut m = HashMap::new();
+        m.insert(
+            "NICK".to_string(),
+            Box::new(|params| make_command_1(params, Command::NICK)) as Box<CommandFn>,
+        );
+        m.insert(
+            "PASS".to_string(),
+            Box::new(|params| make_command_1(params, Command::PASS)) as Box<CommandFn>,
+        );
+        m.insert("QUIT".to_string(), Box::new(quit) as Box<CommandFn>);
+
+        m.insert(
+            "PING".to_string(),
+            Box::new(|params| make_command_1(params, Command::PING)) as Box<CommandFn>,
+        );
+
+        m.insert("PONG".to_string(), Box::new(pong) as Box<CommandFn>);
+
+        m.insert("USER".to_string(), Box::new(user) as Box<CommandFn>);
+
+        m.insert(
+            "PRIVMSG".to_string(),
+            Box::new(|params| make_command_2(params, Command::PRIVMSG)) as Box<CommandFn>,
+        );
+
+        m.insert(
+            "001".to_string(),
+            Box::new(|params| make_command_2(params, Command::WELCOME)) as Box<CommandFn>,
+        );
+        m
+    };
+}
+
 impl ServerMessage {
     pub fn new(message: Message) -> Self {
         Self { message }
     }
 
-    //USER alice 0 * :Alice Example
-    fn user(&self, parameters: Vec<&str>) -> Option<Command> {
-        if let Some(target) = parameters.first() {
-            let message_to_send = parameters[3..].join(" ");
-            Some(Command::USER(target.to_string(), message_to_send))
-        } else {
-            None
-        }
-    }
-    //Command: PONG
-    //Parameters: [<server>] <token>
-    fn pong(&self, parameters: Vec<&str>) -> Option<Command> {
-        Some(Command::PONG(
-            parameters.last().map(|v| v.to_string()).unwrap_or_default(),
-        ))
-    }
-
-    fn quit(&self, parameters: Vec<&str>) -> Option<Command> {
-        Some(Command::QUIT(parameters.first().map(|v| v.to_string())))
-    }
-
-    fn make_command_1<F>(&self, parameters: Vec<&str>, ctor: F) -> Option<Command>
-    where
-        F: Fn(String) -> Command,
-    {
-        parameters.first().map(|target| ctor(target.to_string()))
-    }
-
-    fn make_command_2<F>(&self, parameters: Vec<&str>, ctor: F) -> Option<Command>
-    where
-        F: Fn(String, String) -> Command,
-    {
-        if let Some(target) = parameters.first() {
-            let message_to_send = parameters[1..].join(" ");
-            Some(ctor(target.to_string(), message_to_send))
-        } else {
-            None
-        }
-    }
-
     pub fn get_command(&self) -> Option<Command> {
-        match self.message.get_command_name() {
-            Some("NICK") => self.make_command_1(self.message.get_trailling(), Command::NICK),
-            Some("PASS") => self.make_command_1(self.message.get_trailling(), Command::PASS),
-            Some("QUIT") => self.quit(self.message.get_trailling()),
-            Some("PING") => self.make_command_1(self.message.get_trailling(), Command::PING),
-            Some("PONG") => self.pong(self.message.get_trailling()),
-            Some("USER") => self.user(self.message.get_trailling()),
-            Some("PRIVMSG") => self.make_command_2(self.message.get_trailling(), Command::PRIVMSG),
-            Some("001") => self.make_command_2(self.message.get_trailling(), Command::WELCOME),
-            Some(_) => None,
-            None => None,
+        if let Some(name) = self.message.get_command_name() {
+            let name = name.to_string();
+            let trailing = self
+                .message
+                .get_trailling()
+                .iter()
+                .map(|v| v.to_string())
+                .collect();
+            HASHMAP.get(&name).and_then(|value| (value)(trailing))
+        } else {
+            None
         }
     }
 }

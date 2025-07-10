@@ -352,6 +352,7 @@ dependencies = [
  "anyhow",
  "clown-parser",
  "futures-core",
+ "lazy_static",
  "rustls",
  "tokio",
  "tokio-rustls",
