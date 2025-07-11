@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
     crossterm::event::{self, Event, KeyCode},
 };
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, fs::File, time::Duration};
 
 mod component;
 mod focus_manager;
@@ -41,8 +41,8 @@ async fn main() -> color_eyre::Result<()> {
 
     let mut model = model::Model::new(
         Some(clown_core::conn::ConnectionConfig {
-            address: "chat.freenode.net".into(),
-            port: 6697,
+            address: "localhost".into(),
+            port: 6667,
         }),
         Some(IRCConfig {
             nickname: "farine".into(),
@@ -108,7 +108,7 @@ fn handle_key(key: event::KeyEvent) -> Option<Message> {
 async fn connect_irc(model: &mut Model) {
     if let Some(connection_config) = model.connection_config.clone() {
         if let Some(irc_config) = model.irc_config.clone() {
-            let mut client = Client::new(irc_config);
+            let mut client = Client::new(irc_config, File::create("log.txt").ok());
             let reciever = client.message_receiver();
             let command_sender = client.command_sender();
 

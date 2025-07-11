@@ -3,6 +3,8 @@ use crate::command::CommandReceiver;
 use crate::command::{self, Command};
 use crate::message::{MessageReceiver, MessageSender, ServerMessage};
 use clown_parser::message::create_message;
+use std::fs::File;
+use std::io::Write;
 use std::sync::Arc;
 use tokio::io::BufReader;
 use tokio::io::{AsyncBufReadExt, AsyncRead};
@@ -17,6 +19,7 @@ pub struct Outgoing {
 impl Outgoing {
     pub async fn process<R, W>(
         &mut self,
+        mut log_writer: Option<std::io::BufWriter<File>>,
         mut reader: BufReader<R>,
         mut writer: BufWriter<W>,
         _state: Arc<State>,
@@ -26,7 +29,6 @@ impl Outgoing {
         W: AsyncWrite + Unpin,
     {
         let mut buffer = String::new();
-        let mut has_connected = true;
         loop {
             tokio::select! {
                 response = reader.read_line(&mut buffer) => {
@@ -35,7 +37,6 @@ impl Outgoing {
                         Ok(_) => {
                             let line = buffer.trim_end().to_string();
                             buffer.clear();
-                            dbg!(line.clone());
 
                             // Handle PING immediately
                             if line.starts_with("PING") {
@@ -47,6 +48,10 @@ impl Outgoing {
                             else if line.starts_with("CAP") {
                                 writer.write_all(Command::CAP("END".to_string()).as_bytes().as_slice()).await?;
                                 writer.flush().await?;
+                            }
+                            if let Some(log) = log_writer.as_mut() {
+                                writeln!(log, "{}", line.clone())?;
+                                log.flush()?;
                             }
                             // Call user's handler (can borrow local data!)
                             if let Some(sender) = &self.message_sender {
@@ -64,7 +69,13 @@ impl Outgoing {
                 }
                 command = self.receiver.as_mut().unwrap().inner.recv() => {
                     if let Some(cmd) = command {
-                        dbg!(std::str::from_utf8(cmd.as_bytes().as_slice())?);
+                        if let Some(log) = log_writer.as_mut() {
+                            if let Ok( string )= std::str::from_utf8(cmd.as_bytes().as_slice()) {
+                            writeln!(log, "{string}")?;
+                            log.flush()?;
+
+                            }
+                        }
                         writer.write_all(cmd.as_bytes().as_slice()).await?;
                         writer.flush().await?;
                     } else {

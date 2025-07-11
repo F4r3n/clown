@@ -6,6 +6,7 @@ use crate::conn::{self, Connection};
 use crate::message::MessageReceiver;
 use crate::outgoing::CommandSender;
 use crate::outgoing::Outgoing;
+use std::fs::File;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -44,10 +45,11 @@ pub struct Client {
     irc_config: IRCConfig,
     outgoing: Outgoing,
     message_receiver: Option<MessageReceiver>,
+    log: Option<std::io::BufWriter<File>>,
 }
 
 impl Client {
-    pub fn new(irc_config: IRCConfig) -> Self {
+    pub fn new(irc_config: IRCConfig, in_file: Option<std::fs::File>) -> Self {
         let mut outgoing = Outgoing::default();
         let (sender, message_receiver) = outgoing.create_outgoing();
         Self {
@@ -56,6 +58,7 @@ impl Client {
             outgoing,
             state: Arc::new(State::new()),
             message_receiver: Some(message_receiver),
+            log: in_file.map(std::io::BufWriter::new),
         }
     }
 
@@ -86,7 +89,7 @@ impl Client {
         let writer = BufWriter::new(writer);
         self.try_connect()?;
         self.outgoing
-            .process(reader, writer, self.state.clone())
+            .process(self.log, reader, writer, self.state.clone())
             .await
     }
 
@@ -140,7 +143,7 @@ mod tests {
             channel: "#rust-spam".into(),
         };
 
-        let client = client::Client::new(irc_config);
+        let client = client::Client::new(irc_config, None);
         let state = client.state();
         let sender = client.command_sender();
 
