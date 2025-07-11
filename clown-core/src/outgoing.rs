@@ -46,7 +46,7 @@ impl Outgoing {
                                 writer.flush().await?;
                             }
                             else if line.starts_with("CAP") {
-                                writer.write_all(Command::CAP("END".to_string()).as_bytes().as_slice()).await?;
+                                writer.write_all(Command::Cap("END".to_string()).as_bytes().as_slice()).await?;
                                 writer.flush().await?;
                             }
                             if let Some(log) = log_writer.as_mut() {

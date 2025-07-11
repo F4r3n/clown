@@ -67,12 +67,12 @@ impl Client {
 
         //command_sender.send(crate::command::Command::CAP("LS 302".to_string()))?;
         if let Some(password) = &self.irc_config.password {
-            command_sender.send(crate::command::Command::PASS(password.clone()))?;
+            command_sender.send(crate::command::Command::Pass(password.clone()))?;
         }
-        command_sender.send(crate::command::Command::NICK(
+        command_sender.send(crate::command::Command::Nick(
             self.irc_config.nickname.clone(),
         ))?;
-        command_sender.send(crate::command::Command::USER(
+        command_sender.send(crate::command::Command::User(
             self.irc_config.username.clone(),
             self.irc_config.real_name.clone(),
         ))?;

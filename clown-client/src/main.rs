@@ -137,12 +137,15 @@ async fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<
     } else {
         if let Some(reciever) = model.message_reciever.as_mut() {
             if let Ok(recieved) = reciever.inner.try_recv() {
-                if let Some(command) = recieved.get_command() {
-                    match command {
-                        clown_core::command::Command::PRIVMSG(_target, content) => {
-                            return Some(Message::AddMessage(content));
-                        }
-                        _ => return None,
+                if let Some(reply) = recieved.get_reply() {
+                    match reply {
+                        clown_core::reply::Reply::Cmd(command) => match command {
+                            clown_core::command::Command::PrivMsg(_target, content) => {
+                                return Some(Message::AddMessage(content));
+                            }
+                            _ => return None,
+                        },
+                        clown_core::reply::Reply::Rpl(reply) => return None,
                     }
                 }
             }

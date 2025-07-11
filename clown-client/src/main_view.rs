@@ -129,7 +129,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 } else {
                     if let Some(command_sender) = model.command_sender.as_mut() {
                         if let Some(irc_config) = &model.irc_config {
-                            let _ = command_sender.send(clown_core::command::Command::PRIVMSG(
+                            let _ = command_sender.send(clown_core::command::Command::PrivMsg(
                                 irc_config.channel.to_string(),
                                 content.clone(),
                             ));
@@ -141,7 +141,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
             }
             Message::Quit => {
                 if let Some(command_sender) = model.command_sender.as_mut() {
-                    let _ = command_sender.send(clown_core::command::Command::QUIT(None));
+                    let _ = command_sender.send(clown_core::command::Command::Quit(None));
                 }
                 None
             }
