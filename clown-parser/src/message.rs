@@ -1,4 +1,4 @@
-use crate::parser::{parse_command, parse_parameters};
+use crate::parser::{parse_command, parse_parameters, parse_trailing};
 use crate::source;
 use ouroboros::self_referencing;
 /// Note: Server sources (used for server-to-server communications) are not handled.
@@ -7,6 +7,7 @@ pub struct IRCMessage<'s> {
     source: Option<source::Source<'s>>,
     command: Option<&'s [u8]>,
     parameters: Vec<&'s [u8]>,
+    trailing: Option<&'s [u8]>,
 }
 
 #[self_referencing]
@@ -24,32 +25,43 @@ impl Message {
         irc.command.and_then(|value| str::from_utf8(value).ok())
     }
 
-    pub fn get_trailling(&self) -> Vec<&str> {
+    pub fn get_parameters(&self) -> Vec<&str> {
         let irc = self.borrow_internal();
         irc.parameters
             .iter()
             .map(|value| str::from_utf8(value).unwrap_or_default())
             .collect()
     }
+
+    pub fn get_trailing(&self) -> Option<&str> {
+        let irc = self.borrow_internal();
+        irc.trailing.and_then(|value| str::from_utf8(value).ok())
+    }
 }
 
 fn parse_message(buf: &[u8]) -> anyhow::Result<IRCMessage<'_>> {
-    let (buf, parsed_source) = source::parse_source(buf);
+    let (buf, source) = source::parse_source(buf);
 
     let (buf, command) = match parse_command(buf) {
         Ok((buf, command)) => (buf, command),
         Err(_) => (buf, None),
     };
 
-    let (_buf, parameters) = match parse_parameters(buf) {
+    let (buf, parameters) = match parse_parameters(buf) {
         Ok((buf, parameters)) => (buf, parameters),
         Err(_) => (buf, vec![]),
     };
 
+    let (_buf, trailing) = match parse_trailing(buf) {
+        Ok((buf, trailing)) => (buf, trailing),
+        Err(_) => (buf, None),
+    };
+
     Ok(IRCMessage {
-        source: parsed_source,
+        source,
         command,
         parameters,
+        trailing,
     })
 }
 
@@ -81,7 +93,8 @@ mod tests {
             ))
         );
         assert_eq!(msg.command, Some(&b"PRIVMSG"[..]));
-        assert_eq!(msg.parameters, vec![&b"#chan"[..], &b"hello world"[..]]);
+        assert_eq!(msg.parameters, vec![&b"#chan"[..]]);
+        assert_eq!(msg.trailing, Some(&b"hello world"[..]));
     }
 
     #[test]
@@ -90,7 +103,7 @@ mod tests {
         let msg = parse_message(input).unwrap();
         assert_eq!(msg.source, None);
         assert_eq!(msg.command, Some(&b"PING"[..]));
-        assert_eq!(msg.parameters, vec![&b"server"[..]]);
+        assert_eq!(msg.trailing, Some(&b"server"[..]));
     }
 
     #[test]
@@ -99,9 +112,7 @@ mod tests {
         let msg = create_message(input).unwrap();
         let internal = msg.borrow_internal();
         assert_eq!(internal.command, Some(&b"PRIVMSG"[..]));
-        assert_eq!(
-            internal.parameters,
-            vec![&b"#chan"[..], &b"hello world"[..]]
-        );
+        assert_eq!(internal.parameters, vec![&b"#chan"[..]]);
+        assert_eq!(internal.trailing, Some(&b"hello world"[..]));
     }
 }

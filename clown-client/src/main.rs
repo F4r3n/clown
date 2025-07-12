@@ -1,3 +1,5 @@
+use clown_core::command::Command;
+use clown_core::reply::{Reply, ReplyNumber};
 use clown_core::{
     client::{Client, IRCConfig},
     conn::Connection,
@@ -139,13 +141,18 @@ async fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<
             if let Ok(recieved) = reciever.inner.try_recv() {
                 if let Some(reply) = recieved.get_reply() {
                     match reply {
-                        clown_core::reply::Reply::Cmd(command) => match command {
-                            clown_core::command::Command::PrivMsg(_target, content) => {
+                        Reply::Cmd(command) => match command {
+                            Command::PrivMsg(_target, content) => {
                                 return Some(Message::AddMessage(content));
                             }
                             _ => return None,
                         },
-                        clown_core::reply::Reply::Rpl(reply) => return None,
+                        Reply::Rpl(reply) => match reply {
+                            ReplyNumber::Welcome(content) => {
+                                return Some(Message::AddMessage(content));
+                            }
+                            _ => return None,
+                        },
                     }
                 }
             }

@@ -84,6 +84,7 @@ impl Command {
             Command::Part(channel, Some(reason)) => {
                 format!("PART {channel} :{reason}\r\n").into_bytes()
             }
+            Command::Part(channel, None) => format!("PART {channel}\r\n").into_bytes(),
             Command::Notice(target, message) => {
                 format!("NOTICE {target} :{message}\r\n").into_bytes()
             }
@@ -91,11 +92,22 @@ impl Command {
             Command::Mode(target, mode) => format!("MODE {target} {mode}\r\n").into_bytes(),
             Command::Who(mask) => format!("WHO {mask}\r\n").into_bytes(),
             Command::List(Some(channel)) => format!("LIST {channel}\r\n").into_bytes(),
+            Command::List(None) => "LIST\r\n".to_string().into_bytes(),
             Command::Invite(nick, channel) => format!("INVITE {nick} {channel}\r\n").into_bytes(),
             Command::Kick(channel, nick, Some(reason)) => {
                 format!("KICK {channel} {nick} :{reason}\r\n").into_bytes()
             }
-            _ => panic!("Not a supported command"),
+            Command::Kick(channel, nick, None) => format!("KICK {channel} {nick}\r\n").into_bytes(),
+            Command::Nick(nickname) => format!("NICK {nickname}\r\n").into_bytes(),
+            Command::Pass(pass) => format!("PASS {pass}\r\n").into_bytes(),
+            Command::User(username, realname) => {
+                format!("USER {username} 0 * {realname}\r\n").into_bytes()
+            }
+            Command::Ping(token) => format!("PING {token}\r\n").into_bytes(),
+            Command::Pong(token) => format!("PONG {token}\r\n").into_bytes(),
+            Command::Cap(cap) => format!("CAP {cap}\r\n").into_bytes(),
+            Command::Quit(Some(reason)) => format!("QUIT {reason}\r\n").into_bytes(),
+            Command::Quit(None) => "QUIT\r\n".to_string().into_bytes(),
         }
     }
 }
@@ -104,13 +116,10 @@ pub struct CommandBuilder;
 
 impl CommandBuilder {
     //USER alice 0 * :Alice Example
-    fn user(parameters: Vec<&str>) -> Option<Command> {
-        if let Some(target) = parameters.first() {
-            let message_to_send = parameters[3..].join(" ");
-            Some(Command::User(target.to_string(), message_to_send))
-        } else {
-            None
-        }
+    fn user(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+        parameters.first().map(|target| {
+            Command::User(target.to_string(), trailing.unwrap_or_default().to_string())
+        })
     }
 
     //Command: PONG
@@ -121,8 +130,8 @@ impl CommandBuilder {
         ))
     }
 
-    fn quit(parameters: Vec<&str>) -> Option<Command> {
-        Some(Command::Quit(parameters.first().map(|v| v.to_string())))
+    fn quit(trailing: Option<&str>) -> Option<Command> {
+        Some(Command::Quit(trailing.map(|v| v.to_string())))
     }
 
     fn make_command_1<F>(parameters: Vec<&str>, ctor: F) -> Option<Command>
@@ -132,26 +141,19 @@ impl CommandBuilder {
         parameters.first().map(|target| ctor(target.to_string()))
     }
 
-    fn make_command_2<F>(parameters: Vec<&str>, ctor: F) -> Option<Command>
+    fn make_command_2<F>(parameters: Vec<&str>, trailing: Option<&str>, ctor: F) -> Option<Command>
     where
         F: Fn(String, String) -> Command,
     {
-        if let Some(target) = parameters.first() {
-            let message_to_send = parameters[1..].join(" ");
-            Some(ctor(target.to_string(), message_to_send))
-        } else {
-            None
-        }
+        parameters
+            .first()
+            .map(|target| ctor(target.to_string(), trailing.unwrap_or_default().to_string()))
     }
 
     // PART <channel> [:reason]
-    fn part(parameters: Vec<&str>) -> Option<Command> {
+    fn part(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
         if let Some(channel) = parameters.first() {
-            let reason = if parameters.len() > 1 {
-                Some(parameters[1..].join(" "))
-            } else {
-                None
-            };
+            let reason = trailing.map(|v| v.to_string());
             Some(Command::Part(channel.to_string(), reason))
         } else {
             None
@@ -159,11 +161,11 @@ impl CommandBuilder {
     }
 
     // NOTICE <target> :<message>
-    fn notice(parameters: Vec<&str>) -> Option<Command> {
-        if parameters.len() >= 2 {
+    fn notice(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+        if !parameters.is_empty() {
             Some(Command::Notice(
                 parameters[0].to_string(),
-                parameters[1..].join(" "),
+                trailing.unwrap_or_default().to_string(),
             ))
         } else {
             None
@@ -171,11 +173,11 @@ impl CommandBuilder {
     }
 
     // TOPIC <channel> :<topic>
-    fn topic(parameters: Vec<&str>) -> Option<Command> {
+    fn topic(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
         if parameters.len() >= 2 {
             Some(Command::Topic(
                 parameters[0].to_string(),
-                parameters[1..].join(" "),
+                trailing.unwrap_or_default().to_string(),
             ))
         } else {
             None
@@ -223,40 +225,43 @@ impl CommandBuilder {
     }
 
     // KICK <channel> <nick> [:reason]
-    fn kick(parameters: Vec<&str>) -> Option<Command> {
+    fn kick(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
         if parameters.len() >= 2 {
             let channel = parameters[0].to_string();
             let nick = parameters[1].to_string();
-            let reason = if parameters.len() > 2 {
-                Some(parameters[2..].join(" "))
-            } else {
-                None
-            };
-            Some(Command::Kick(channel, nick, reason))
+            Some(Command::Kick(
+                channel,
+                nick,
+                trailing.map(|v| v.to_string()),
+            ))
         } else {
             None
         }
     }
 
-    pub fn get_command(command_name: &str, trailing: Vec<&str>) -> Option<Command> {
+    pub fn get_command(
+        command_name: &str,
+        parameters: Vec<&str>,
+        trailing: Option<&str>,
+    ) -> Option<Command> {
         match command_name {
-            "NICK" => CommandBuilder::make_command_1(trailing, Command::Nick),
-            "PASS" => CommandBuilder::make_command_1(trailing, Command::Pass),
+            "NICK" => CommandBuilder::make_command_1(parameters, Command::Nick),
+            "PASS" => CommandBuilder::make_command_1(parameters, Command::Pass),
             "QUIT" => CommandBuilder::quit(trailing),
-            "PING" => CommandBuilder::make_command_1(trailing, Command::Ping),
-            "PONG" => CommandBuilder::pong(trailing),
-            "USER" => CommandBuilder::user(trailing),
-            "PRIVMSG" => CommandBuilder::make_command_2(trailing, Command::PrivMsg),
-            "JOIN" => CommandBuilder::make_command_1(trailing, Command::Join),
-            "PART" => CommandBuilder::part(trailing),
-            "NOTICE" => CommandBuilder::notice(trailing),
-            "TOPIC" => CommandBuilder::topic(trailing),
-            "MODE" => CommandBuilder::mode(trailing),
-            "WHO" => CommandBuilder::who(trailing),
-            "LIST" => CommandBuilder::list(trailing),
-            "INVITE" => CommandBuilder::invite(trailing),
-            "KICK" => CommandBuilder::kick(trailing),
-            "CAP" => CommandBuilder::make_command_1(trailing, Command::Cap),
+            "PING" => CommandBuilder::make_command_1(parameters, Command::Ping),
+            "PONG" => CommandBuilder::pong(parameters),
+            "USER" => CommandBuilder::user(parameters, trailing),
+            "PRIVMSG" => CommandBuilder::make_command_2(parameters, trailing, Command::PrivMsg),
+            "JOIN" => CommandBuilder::make_command_1(parameters, Command::Join),
+            "PART" => CommandBuilder::part(parameters, trailing),
+            "NOTICE" => CommandBuilder::notice(parameters, trailing),
+            "TOPIC" => CommandBuilder::topic(parameters, trailing),
+            "MODE" => CommandBuilder::mode(parameters),
+            "WHO" => CommandBuilder::who(parameters),
+            "LIST" => CommandBuilder::list(parameters),
+            "INVITE" => CommandBuilder::invite(parameters),
+            "KICK" => CommandBuilder::kick(parameters, trailing),
+            "CAP" => CommandBuilder::make_command_1(parameters, Command::Cap),
             _ => None,
         }
     }

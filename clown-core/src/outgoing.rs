@@ -71,7 +71,7 @@ impl Outgoing {
                     if let Some(cmd) = command {
                         if let Some(log) = log_writer.as_mut() {
                             if let Ok( string )= std::str::from_utf8(cmd.as_bytes().as_slice()) {
-                            writeln!(log, "{string}")?;
+                            write!(log, "{string}")?;
                             log.flush()?;
 
                             }
