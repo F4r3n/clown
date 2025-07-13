@@ -1,7 +1,8 @@
 #[derive(PartialEq)]
 pub enum Message {
     SendMessage(String),
-    AddMessage(String),
+    AddMessageView(String),
+    PullIRC,
     Connect,
     Quit,
 }

@@ -1,13 +1,8 @@
+use crate::event_handler::Event;
+use clown_core::client::{Client, IRCConfig};
 use clown_core::command::Command;
-use clown_core::reply::{Reply, ReplyNumber};
-use clown_core::{
-    client::{Client, IRCConfig},
-    conn::Connection,
-};
-use ratatui::{
-    Frame,
-    crossterm::event::{self, Event, KeyCode},
-};
+use clown_core::response::{Response, ResponseNumber};
+use ratatui::Frame;
 use std::{collections::HashMap, fs::File, time::Duration};
 
 mod component;
@@ -20,13 +15,17 @@ use model::RunningState;
 use model::View;
 mod message;
 use message::Message;
+
+use crate::event_handler::EventHandler;
 mod command;
+mod event_handler;
 mod main_view;
 mod model;
 mod widget_view;
 type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
+    let mut events = EventHandler::new(); // new
     let mut terminal = tui::init()?;
 
     /*
@@ -58,11 +57,12 @@ async fn main() -> color_eyre::Result<()> {
     views.insert(View::MainView, Box::new(main_view::MainView::new()));
 
     while model.running_state != RunningState::Done {
+        let event = events.next().await?; // new
         // Render the current view
         terminal.draw(|f| view(&mut model, &mut views, f))?;
 
         // Handle events and map to a Message
-        let mut current_msg = handle_event(&mut model, &mut views)?;
+        let mut current_msg = handle_event(&mut model, &mut views, event)?;
 
         // Process updates as long as they return a non-None message
         while current_msg.is_some() {
@@ -84,27 +84,16 @@ fn view(model: &mut Model, views: &mut ViewMap, frame: &mut Frame) {
 ///
 /// We don't need to pass in a `model` to this function in this example
 /// but you might need it as your project evolves
-fn handle_event(model: &mut Model, views: &mut ViewMap) -> color_eyre::Result<Option<Message>> {
-    if event::poll(Duration::from_millis(250))? {
-        let event = event::read()?;
-        if let Some(current_view) = views.get_mut(&model.current_view) {
-            return current_view.handle_event(model, &event);
-        }
-        if let Event::Key(key) = event {
-            if key.kind == event::KeyEventKind::Press {
-                return Ok(handle_key(key));
-            }
-        }
+fn handle_event(
+    model: &mut Model,
+    views: &mut ViewMap,
+    event: Event,
+) -> color_eyre::Result<Option<Message>> {
+    if let Some(current_view) = views.get_mut(&model.current_view) {
+        return current_view.handle_event(model, &event);
     }
-    Ok(None)
-}
 
-fn handle_key(key: event::KeyEvent) -> Option<Message> {
-    match key.code {
-        KeyCode::Esc => Some(Message::Quit),
-        // Tab navigation is now handled in the view, so we don't need to handle it here
-        _ => None,
-    }
+    Ok(None)
 }
 
 async fn connect_irc(model: &mut Model) {
@@ -137,26 +126,6 @@ async fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<
             _ => current_view.update(model, msg),
         }
     } else {
-        if let Some(reciever) = model.message_reciever.as_mut() {
-            if let Ok(recieved) = reciever.inner.try_recv() {
-                if let Some(reply) = recieved.get_reply() {
-                    match reply {
-                        Reply::Cmd(command) => match command {
-                            Command::PrivMsg(_target, content) => {
-                                return Some(Message::AddMessage(content));
-                            }
-                            _ => return None,
-                        },
-                        Reply::Rpl(reply) => match reply {
-                            ReplyNumber::Welcome(content) => {
-                                return Some(Message::AddMessage(content));
-                            }
-                            _ => return None,
-                        },
-                    }
-                }
-            }
-        }
         None
     }
 }

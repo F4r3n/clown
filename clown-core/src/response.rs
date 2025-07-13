@@ -1,14 +1,14 @@
 use crate::command::Command;
 
 #[derive(Debug)]
-pub enum Reply {
+pub enum Response {
     Cmd(Command),
-    Rpl(ReplyNumber),
+    Rpl(ResponseNumber),
 }
 /// All standard IRC RPL (Reply) numerics.
 /// See: RFC 1459, RFC 2812
 #[derive(Debug)]
-pub enum ReplyNumber {
+pub enum ResponseNumber {
     /// 001: Welcome to the network
     Welcome(String),
     /// 002: Your host is...
@@ -252,11 +252,11 @@ pub enum ReplyNumber {
     Unknown(u16, String),
 }
 
-pub struct ReplyBuilder;
+pub struct ResponseBuilder;
 
-impl ReplyBuilder {
-    pub fn get_reply(reply_number: u16, trailing: Option<&str>) -> Option<ReplyNumber> {
-        use ReplyNumber::*;
+impl ResponseBuilder {
+    pub fn get_reply(reply_number: u16, trailing: Option<&str>) -> Option<ResponseNumber> {
+        use ResponseNumber::*;
         match reply_number {
             1 => trailing.map(|v| Welcome(v.to_string())),
             2 => trailing.map(|v| YourHost(v.to_string())),

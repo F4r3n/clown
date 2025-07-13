@@ -1,10 +1,10 @@
 use nom::{
     IResult, Parser,
     branch::alt,
-    bytes::complete::{take_till, take_while_m_n, take_while1},
-    character::complete::{alpha1, space0, space1},
+    bytes::complete::{take_till, take_while_m_n},
+    character::complete::{alpha1, space0},
     combinator::opt,
-    sequence::{delimited, preceded},
+    sequence::preceded,
 };
 
 pub fn parse_command(buf: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
@@ -47,9 +47,12 @@ mod tests {
     #[test]
     fn test_parse_command_alpha() {
         let input = b"PRIVMSG ";
-        let (rest, cmd) = parse_command(input).unwrap();
-        assert_eq!(cmd, Some(&b"PRIVMSG"[..]));
-        assert_eq!(rest, b" ");
+        if let Ok((rest, cmd)) = parse_command(input) {
+            assert_eq!(cmd, Some(&b"PRIVMSG"[..]));
+            assert_eq!(rest, b" ");
+        } else {
+            panic!("Failed");
+        }
     }
 
     #[test]

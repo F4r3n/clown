@@ -1,4 +1,4 @@
-use crate::client::{IRCConfig, State};
+use crate::client::State;
 use crate::command::CommandReceiver;
 use crate::command::{self, Command};
 use crate::message::{MessageReceiver, MessageSender, ServerMessage};

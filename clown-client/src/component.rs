@@ -1,4 +1,5 @@
-use ratatui::{Frame, crossterm::event::Event, layout::Rect};
+use crate::event_handler::Event;
+use ratatui::{Frame, layout::Rect};
 use std::ops::{Deref, DerefMut};
 
 pub trait Draw {

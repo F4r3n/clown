@@ -1,6 +1,7 @@
 use crate::Message;
+use crate::event_handler::Event;
 use crate::model::Model;
-use ratatui::{Frame, crossterm::event::Event};
+use ratatui::Frame;
 pub trait WidgetView {
     fn view(&mut self, model: &mut Model, frame: &mut Frame);
     fn handle_event(

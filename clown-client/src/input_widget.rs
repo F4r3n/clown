@@ -1,14 +1,16 @@
 use crate::Message;
 use crate::component::Draw;
+
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+
 use ratatui::{
     Frame,
-    crossterm::event::{Event, KeyCode},
     layout::Rect,
     style::{Color, Style},
     widgets::{Block, Paragraph},
 };
-use tui_input::Input;
-use tui_input::backend::crossterm::EventHandler;
+use tui_input::{Input, backend::crossterm::EventHandler};
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum InputMode {
     Normal,
@@ -40,7 +42,7 @@ impl Draw for CInput {
         };
 
         let title = if focus {
-            format!("Input [FOCUSED]")
+            "Input [FOCUSED]".to_string()
         } else {
             "Input".to_string()
         };
@@ -76,9 +78,9 @@ impl crate::component::EventHandler for CInput {
     fn has_focus(&self) -> bool {
         self.input_mode == InputMode::Editing
     }
-    fn handle_events(&mut self, event: &Event) -> Option<Message> {
+    fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<Message> {
         let mut message = None;
-        if let Some(key_event) = event.as_key_event() {
+        if let Some(key_event) = event.get_key() {
             message = match self.input_mode {
                 InputMode::Normal => match key_event.code {
                     KeyCode::Enter => {
@@ -102,12 +104,18 @@ impl crate::component::EventHandler for CInput {
                         None
                     }
                     _ => {
-                        self.input.handle_event(&event);
+                        match &event {
+                            crate::event_handler::Event::CrosstermEvent(cross) => {
+                                self.input.handle_event(&cross);
+                            }
+                            _ => {}
+                        }
                         None
                     }
                 },
-            }
+            };
         }
+
         message
     }
 }

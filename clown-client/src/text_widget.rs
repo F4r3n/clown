@@ -1,8 +1,10 @@
 use crate::Message;
 use crate::component::Draw;
+use crate::event_handler::Event;
+use crossterm::event::KeyCode;
+
 use ratatui::{
     Frame,
-    crossterm::event::{Event, KeyCode},
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style, Styled},
     text::{Line, Span, Text},
@@ -77,7 +79,7 @@ impl crate::component::EventHandler for TextWidget {
 
     fn handle_actions(&mut self, event: &Message) -> Option<Message> {
         match event {
-            Message::AddMessage(content) => {
+            Message::AddMessageView(content) => {
                 self.add_line(content);
                 None
             }
@@ -88,13 +90,9 @@ impl crate::component::EventHandler for TextWidget {
     fn set_focus(&mut self, focused: bool) {
         self.focus = focused;
     }
-    fn handle_events(&mut self, event: &Event) -> Option<Message> {
-        if event.is_key_release() {
-            return None;
-        }
-        // Only handle events if this widget has focus
-        if let Some(key_event) = event.as_key_event() {
-            match key_event.code {
+    fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<Message> {
+        if let Some(key) = event.get_key() {
+            match key.code {
                 KeyCode::Up => {
                     self.scroll_up();
                     None
@@ -105,7 +103,6 @@ impl crate::component::EventHandler for TextWidget {
                     }
                     None
                 }
-
                 KeyCode::Down => {
                     self.scroll_down();
                     None

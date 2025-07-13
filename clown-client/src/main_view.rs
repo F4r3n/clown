@@ -1,15 +1,21 @@
 use crate::Message;
 use crate::component::Child;
 use crate::component::Component;
+use crate::event_handler::Event;
 use crate::focus_manager::FocusManager;
 use crate::input_widget;
 use crate::input_widget::CInput;
 use crate::model::Model;
 use crate::text_widget;
 use crate::widget_view;
+use clown_core::command::Command;
+use clown_core::response::Response;
+use clown_core::response::ResponseNumber;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 use ratatui::{
     Frame,
-    crossterm::event::{Event, KeyCode, KeyEventKind},
     layout::{Constraint, Direction, Layout},
 };
 
@@ -81,38 +87,59 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
 
     fn handle_event(
         &mut self,
-        _model: &mut Model,
+        model: &mut Model,
         event: &Event,
     ) -> color_eyre::Result<Option<Message>> {
         // Handle focus switching first
-        if let Event::Key(key) = event {
-            if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Tab => {
-                        if key
-                            .modifiers
-                            .contains(ratatui::crossterm::event::KeyModifiers::SHIFT)
-                        {
-                            self.focus_manager.focus_previous();
-                        } else {
-                            self.focus_manager.focus_next();
-                        }
-                        self.update_widget_focus();
-                        return Ok(None);
+        let mut message = None;
+
+        message = match event {
+            Event::CrosstermEvent(crossterm::event::Event::Key(key_event)) => {
+                if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Tab {
+                    if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                        self.focus_manager.focus_previous();
+                    } else {
+                        self.focus_manager.focus_next();
                     }
-                    _ => {}
+                    self.update_widget_focus();
+                    None
+                } else {
+                    let mut new_message = None;
+                    // Pass event to focused widget
+                    for child in self.children().iter_mut() {
+                        if child.has_focus() {
+                            new_message = child.handle_events(event);
+                            break;
+                        }
+                    }
+                    new_message
                 }
             }
-        }
-
-        // Pass event to focused widget
-        let mut message = None;
-        for child in self.children().iter_mut() {
-            if child.has_focus() {
-                message = child.handle_events(event);
-                break;
+            Event::Tick => {
+                if let Some(reciever) = model.message_reciever.as_mut() {
+                    if let Ok(recieved) = reciever.inner.try_recv() {
+                        if let Some(reply) = recieved.get_reply() {
+                            match reply {
+                                Response::Cmd(Command::PrivMsg(_target, content)) => {
+                                    Some(Message::AddMessageView(content))
+                                }
+                                Response::Rpl(ResponseNumber::Welcome(content)) => {
+                                    Some(Message::AddMessageView(content))
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             }
-        }
+            _ => None,
+        };
 
         Ok(message)
     }
@@ -136,7 +163,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                         }
                     }
                     self.messages_display
-                        .handle_actions(&Message::AddMessage(content))
+                        .handle_actions(&Message::AddMessageView(content))
                 }
             }
             Message::Quit => {
@@ -144,6 +171,38 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                     let _ = command_sender.send(clown_core::command::Command::Quit(None));
                 }
                 None
+            }
+            Message::AddMessageView(content) => self
+                .messages_display
+                .handle_actions(&Message::AddMessageView(content)),
+            Message::PullIRC => {
+                if let Some(reciever) = model.message_reciever.as_mut() {
+                    if let Ok(recieved) = reciever.inner.try_recv() {
+                        if let Some(reply) = recieved.get_reply() {
+                            match reply {
+                                Response::Cmd(command) => match command {
+                                    Command::PrivMsg(_target, content) => {
+                                        Some(Message::AddMessageView(content))
+                                    }
+                                    _ => None,
+                                },
+                                Response::Rpl(reply) => match reply {
+                                    ResponseNumber::Welcome(content) => {
+                                        dbg!(content.clone());
+                                        Some(Message::AddMessageView(content))
+                                    }
+                                    _ => None,
+                                },
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             }
             _ => None,
         }
