@@ -105,7 +105,7 @@ impl crate::component::EventHandler for CInput {
                     }
                     _ => {
                         match &event {
-                            crate::event_handler::Event::CrosstermEvent(cross) => {
+                            crate::event_handler::Event::Crossterm(cross) => {
                                 self.input.handle_event(&cross);
                             }
                             _ => {}

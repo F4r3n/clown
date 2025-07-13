@@ -1,9 +1,7 @@
 use crate::event_handler::Event;
-use clown_core::client::{Client, IRCConfig};
-use clown_core::command::Command;
-use clown_core::response::{Response, ResponseNumber};
+use clown_core::client::IRCConfig;
 use ratatui::Frame;
-use std::{collections::HashMap, fs::File, time::Duration};
+use std::collections::HashMap;
 
 mod component;
 mod focus_manager;
@@ -69,7 +67,11 @@ async fn main() -> color_eyre::Result<()> {
             current_msg = update(&mut model, &mut views, current_msg.unwrap()).await;
         }
     }
-
+    /*events
+        .join()
+        .await
+        .map_err(|e| color_eyre::eyre::eyre!(e))?;
+    */
     tui::restore()?;
     Ok(())
 }
@@ -96,31 +98,12 @@ fn handle_event(
     Ok(None)
 }
 
-async fn connect_irc(model: &mut Model) {
-    if let Some(connection_config) = model.connection_config.clone() {
-        if let Some(irc_config) = model.irc_config.clone() {
-            let mut client = Client::new(irc_config, File::create("log.txt").ok());
-            let reciever = client.message_receiver();
-            let command_sender = client.command_sender();
-
-            model.command_sender = Some(command_sender);
-            model.message_reciever = reciever;
-
-            client.spawn(connection_config);
-        }
-    }
-}
-
 async fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<Message> {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         match msg {
             Message::Quit => {
                 // You can handle cleanup and exit here
                 model.running_state = RunningState::Done;
-                None
-            }
-            Message::Connect => {
-                connect_irc(model).await;
                 None
             }
             _ => current_view.update(model, msg),

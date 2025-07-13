@@ -4,5 +4,6 @@ pub enum Message {
     AddMessageView(String),
     PullIRC,
     Connect,
+    Join,
     Quit,
 }

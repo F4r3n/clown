@@ -1,18 +1,18 @@
 use color_eyre::eyre::Result;
-use futures::{FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt, join};
 use tokio::{sync::mpsc, task::JoinHandle};
 
 #[derive(Clone, Debug)]
 pub enum Event {
     Error,
     Tick,
-    CrosstermEvent(crossterm::event::Event),
+    Crossterm(crossterm::event::Event),
 }
 
 impl Event {
     pub fn get_key(&self) -> Option<crossterm::event::KeyEvent> {
         match self {
-            Self::CrosstermEvent(event) => event.as_key_event(),
+            Self::Crossterm(event) => event.as_key_event(),
             _ => None,
         }
     }
@@ -42,16 +42,22 @@ impl EventHandler {
                   maybe_event = crossterm_event => {
                     match maybe_event {
                       Some(Ok(evt)) => {
-                        tx.send(Event::CrosstermEvent(evt)).unwrap();
+                        if tx.send(Event::Crossterm(evt)).is_err() {
+                            break;
+                        }
                       }
                       Some(Err(_)) => {
-                        tx.send(Event::Error).unwrap();
+                        if tx.send(Event::Error).is_err() {
+                            break;
+                        }
                       }
                       None => {},
                     }
                   },
                   _ = delay => {
-                      tx.send(Event::Tick).unwrap();
+                      if tx.send(Event::Tick).is_err() {
+                        break;
+                      }
                   },
                 }
             }
@@ -69,5 +75,14 @@ impl EventHandler {
             .recv()
             .await
             .ok_or(color_eyre::eyre::eyre!("Unable to get event"))
+    }
+
+    pub async fn join(&mut self) -> anyhow::Result<()> {
+        if let Some(task) = self.task.take() {
+            if let Err(e) = join!(task).0 {
+                return Err(anyhow::Error::msg("Failed to stop"));
+            }
+        }
+        Ok(())
     }
 }

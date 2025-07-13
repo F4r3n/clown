@@ -45,10 +45,6 @@ impl<'a, T> Component<'a, T> {
         self.inner.has_focus()
     }
 
-    pub fn can_focus(&self) -> bool {
-        true
-    }
-
     pub fn handle_events(&mut self, event: &Event) -> Option<Message>
     where
         T: EventHandler,
