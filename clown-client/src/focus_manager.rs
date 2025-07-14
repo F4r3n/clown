@@ -62,7 +62,7 @@ impl<'a> FocusManager<'a> {
                 }
             }
         }
-        return None;
+        None
     }
 
     fn get_next_focus_id(&self, in_id: &WidgetId<'a>, direction: i8) -> Option<&WidgetId<'a>> {
@@ -78,7 +78,7 @@ impl<'a> FocusManager<'a> {
             .iter()
             .position(|id| *id == *widget_id)
         {
-            self.current_focus_id = self.get_next_focus_id(&widget_id, 1).cloned();
+            self.current_focus_id = self.get_next_focus_id(widget_id, 1).cloned();
 
             self.focusable_widgets.remove(pos);
             self.widget_states.remove(widget_id);
@@ -90,7 +90,7 @@ impl<'a> FocusManager<'a> {
     }
 
     pub fn get_focused_widget(&self) -> Option<&WidgetId<'a>> {
-        return self.current_focus_id.as_ref();
+        self.current_focus_id.as_ref()
     }
     #[cfg(test)]
     pub fn has_focus(&self, widget_id: &WidgetId<'a>) -> bool {
@@ -106,7 +106,7 @@ impl<'a> FocusManager<'a> {
             return;
         }
         if let Some(id) = &self.current_focus_id {
-            self.current_focus_id = self.get_next_focus_id(&id, 1).cloned();
+            self.current_focus_id = self.get_next_focus_id(id, 1).cloned();
         }
     }
 
@@ -116,7 +116,7 @@ impl<'a> FocusManager<'a> {
         }
 
         if let Some(id) = &self.current_focus_id {
-            self.current_focus_id = self.get_next_focus_id(&id, -1).cloned();
+            self.current_focus_id = self.get_next_focus_id(id, -1).cloned();
         }
     }
     #[cfg(test)]

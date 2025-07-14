@@ -1,7 +1,6 @@
-use crate::Message;
+use crate::MessageEvent;
 use crate::component::Draw;
 
-use crossterm::event::Event;
 use crossterm::event::KeyCode;
 
 use ratatui::{
@@ -71,14 +70,14 @@ impl crate::component::EventHandler for CInput {
         }
     }
 
-    fn handle_actions(&mut self, _event: &Message) -> Option<Message> {
+    fn handle_actions(&mut self, _event: &MessageEvent) -> Option<MessageEvent> {
         None
     }
 
     fn has_focus(&self) -> bool {
         self.input_mode == InputMode::Editing
     }
-    fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<Message> {
+    fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
         let mut message = None;
         if let Some(key_event) = event.get_key() {
             message = match self.input_mode {
@@ -94,7 +93,7 @@ impl crate::component::EventHandler for CInput {
                         let m = self.get_current_input();
                         self.reset_value();
                         if !m.is_empty() {
-                            Some(Message::SendMessage(m))
+                            Some(MessageEvent::MessageInput(m))
                         } else {
                             None
                         }
@@ -104,11 +103,8 @@ impl crate::component::EventHandler for CInput {
                         None
                     }
                     _ => {
-                        match &event {
-                            crate::event_handler::Event::Crossterm(cross) => {
-                                self.input.handle_event(&cross);
-                            }
-                            _ => {}
+                        if let crate::event_handler::Event::Crossterm(cross) = &event {
+                            self.input.handle_event(cross);
                         }
                         None
                     }

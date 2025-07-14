@@ -87,7 +87,7 @@ mod tests {
         assert_eq!(
             msg.source,
             Some(source::Source::new(
-                Some(source::SOURCE::Nick(&b"nick"[..])),
+                Some(source::SourceKind::Nick(&b"nick"[..])),
                 Some(&b"user"[..]),
                 Some(&b"host"[..])
             ))

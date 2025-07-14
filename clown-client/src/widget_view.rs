@@ -1,4 +1,4 @@
-use crate::Message;
+use crate::MessageEvent;
 use crate::event_handler::Event;
 use crate::model::Model;
 use ratatui::Frame;
@@ -8,7 +8,7 @@ pub trait WidgetView {
         &mut self,
         model: &mut Model,
         event: &Event,
-    ) -> color_eyre::Result<Option<Message>>;
+    ) -> color_eyre::Result<Option<MessageEvent>>;
 
-    fn update(&mut self, model: &mut Model, msg: Message) -> Option<Message>;
+    fn update(&mut self, model: &mut Model, msg: MessageEvent) -> Option<MessageEvent>;
 }

@@ -8,14 +8,14 @@ use nom::{
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum SOURCE<'a> {
+pub enum SourceKind<'a> {
     Nick(&'a [u8]),
     Server(&'a [u8]),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Source<'s> {
-    source: Option<SOURCE<'s>>,
+    source: Option<SourceKind<'s>>,
     user: Option<&'s [u8]>,
     host: Option<&'s [u8]>,
 }
@@ -23,7 +23,7 @@ pub struct Source<'s> {
 #[cfg(test)]
 impl<'a> Source<'a> {
     pub fn new(
-        in_source_type: Option<SOURCE<'a>>,
+        in_source_type: Option<SourceKind<'a>>,
         user: Option<&'a [u8]>,
         host: Option<&'a [u8]>,
     ) -> Self {
@@ -70,8 +70,11 @@ fn host(buf: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 fn parse_source_inner(buf: &[u8]) -> IResult<&[u8], Source<'_>> {
-    let (buf, source) =
-        alt((map(nickname, SOURCE::Nick), map(server, SOURCE::Server))).parse(buf)?;
+    let (buf, source) = alt((
+        map(nickname, SourceKind::Nick),
+        map(server, SourceKind::Server),
+    ))
+    .parse(buf)?;
 
     let (buf, user) = opt(preceded(char('!'), user)).parse(buf)?;
     let (buf, host) = opt(preceded(char('@'), host)).parse(buf)?;
@@ -154,7 +157,7 @@ mod tests {
         assert_eq!(
             source,
             Some(Source {
-                source: Some(SOURCE::Nick(&b"nick"[..])),
+                source: Some(SourceKind::Nick(&b"nick"[..])),
                 user: Some(&b"user"[..]),
                 host: Some(&b"host"[..]),
             })
@@ -169,7 +172,7 @@ mod tests {
         assert_eq!(
             source,
             Some(Source {
-                source: Some(SOURCE::Server(&b"irc.example.com"[..])),
+                source: Some(SourceKind::Server(&b"irc.example.com"[..])),
                 user: None,
                 host: None,
             })

@@ -22,12 +22,12 @@ impl Event {
 pub struct EventHandler {
     _tx: mpsc::UnboundedSender<Event>,
     rx: mpsc::UnboundedReceiver<Event>,
-    task: Option<JoinHandle<()>>,
+    _task: Option<JoinHandle<()>>,
 }
 
 impl EventHandler {
     pub fn new() -> Self {
-        let tick_rate = std::time::Duration::from_millis(250);
+        let tick_rate = std::time::Duration::from_millis(60);
 
         let (tx, rx) = mpsc::unbounded_channel();
         let _tx = tx.clone();
@@ -66,7 +66,7 @@ impl EventHandler {
         Self {
             _tx,
             rx,
-            task: Some(task),
+            _task: Some(task),
         }
     }
 
@@ -77,9 +77,9 @@ impl EventHandler {
             .ok_or(color_eyre::eyre::eyre!("Unable to get event"))
     }
 
-    pub async fn join(&mut self) -> anyhow::Result<()> {
-        if let Some(task) = self.task.take() {
-            if let Err(e) = join!(task).0 {
+    pub async fn _join(&mut self) -> anyhow::Result<()> {
+        if let Some(task) = self._task.take() {
+            if let Err(_e) = join!(task).0 {
                 return Err(anyhow::Error::msg("Failed to stop"));
             }
         }

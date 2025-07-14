@@ -7,8 +7,8 @@ pub trait Draw {
 }
 
 pub trait EventHandler {
-    fn handle_events(&mut self, event: &Event) -> Option<Message>;
-    fn handle_actions(&mut self, event: &Message) -> Option<Message>;
+    fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>;
+    fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent>;
 
     fn set_focus(&mut self, _focused: bool) {}
     fn has_focus(&self) -> bool;
@@ -20,7 +20,7 @@ pub struct Component<'a, T> {
 }
 
 pub type WidgetId<'a> = &'a str;
-use crate::Message;
+use crate::MessageEvent;
 impl<'a, T> Component<'a, T> {
     pub fn new(id: WidgetId<'a>, inner: T) -> Self {
         Self { id, inner }
@@ -45,7 +45,7 @@ impl<'a, T> Component<'a, T> {
         self.inner.has_focus()
     }
 
-    pub fn handle_events(&mut self, event: &Event) -> Option<Message>
+    pub fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>
     where
         T: EventHandler,
     {
@@ -56,7 +56,7 @@ impl<'a, T> Component<'a, T> {
         }
     }
 
-    pub fn handle_actions(&mut self, event: &Message) -> Option<Message>
+    pub fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent>
     where
         T: EventHandler,
     {
@@ -116,7 +116,7 @@ impl<'a> DerefMut for Child<'a> {
 }
 
 impl EventHandler for Child<'_> {
-    fn handle_events(&mut self, event: &Event) -> Option<Message> {
+    fn handle_events(&mut self, event: &Event) -> Option<MessageEvent> {
         self.deref_mut().handle_events(event)
     }
 
@@ -128,7 +128,7 @@ impl EventHandler for Child<'_> {
         self.deref_mut().set_focus(focused);
     }
 
-    fn handle_actions(&mut self, event: &Message) -> Option<Message> {
+    fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         self.deref_mut().handle_actions(event)
     }
 }

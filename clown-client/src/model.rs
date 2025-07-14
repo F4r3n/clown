@@ -1,7 +1,5 @@
 use std::io::Write;
 
-use clown_core;
-use clown_core::client;
 use clown_core::command::Command;
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub enum View {
@@ -49,10 +47,11 @@ impl Model {
             .map(|value| value.send(in_command));
     }
 
-    pub fn log(&mut self, in_content: &str) {
+    pub fn log(&mut self, in_content: &str) -> anyhow::Result<()> {
         if let Some(file) = self.logger.as_mut() {
-            file.write_all(in_content.as_bytes());
-            file.flush();
+            file.write_all(in_content.as_bytes())?;
+            file.flush()?;
         }
+        Ok(())
     }
 }

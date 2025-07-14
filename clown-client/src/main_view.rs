@@ -1,7 +1,6 @@
 use std::fs::File;
-use std::io::Write;
 
-use crate::Message;
+use crate::MessageEvent;
 use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
@@ -64,6 +63,55 @@ impl<'a> MainView<'a> {
             }
         }
     }
+
+    fn update_input(&mut self, model: &mut Model, content: String) -> Option<MessageEvent> {
+        if let Some(parsed_message) = command::parse_command(&content) {
+            match parsed_message {
+                command::ClientCommand::Connect => Some(MessageEvent::Connect),
+                command::ClientCommand::Join => Some(MessageEvent::Join),
+                command::ClientCommand::Quit => Some(MessageEvent::Quit),
+            }
+        } else if let Some(irc_config) = &model.irc_config {
+            model.send_command(clown_core::command::Command::PrivMsg(
+                irc_config.channel.to_string(),
+                content.clone(),
+            ));
+            return self
+                .messages_display
+                .handle_actions(&MessageEvent::AddMessageView(content));
+        } else {
+            None
+        }
+    }
+
+    fn update_pull_irc(&mut self, model: &mut Model) -> Option<MessageEvent> {
+        if let Some(reciever) = model.message_reciever.as_mut()
+            && let Ok(recieved) = reciever.inner.try_recv()
+            && let Some(reply) = recieved.get_reply()
+        {
+            match reply {
+                Response::Cmd(command) => match command {
+                    Command::PrivMsg(_target, content) => {
+                        Some(MessageEvent::AddMessageView(content))
+                    }
+                    _ => None,
+                },
+                Response::Rpl(reply) => match reply {
+                    ResponseNumber::Welcome(content) => {
+                        if let Some(irc_config) = &model.irc_config {
+                            model.send_command(clown_core::command::Command::Join(
+                                irc_config.channel.to_string(),
+                            ));
+                        }
+                        Some(MessageEvent::AddMessageView(content))
+                    }
+                    _ => None,
+                },
+            }
+        } else {
+            None
+        }
+    }
 }
 
 fn connect_irc(model: &mut Model) {
@@ -109,11 +157,10 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
         &mut self,
         _model: &mut Model,
         event: &Event,
-    ) -> color_eyre::Result<Option<Message>> {
+    ) -> color_eyre::Result<Option<MessageEvent>> {
         // Handle focus switching first
-        let mut message = None;
 
-        message = match event {
+        let message = match event {
             Event::Crossterm(crossterm::event::Event::Key(key_event)) => {
                 if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Tab {
                     if key_event.modifiers.contains(KeyModifiers::SHIFT) {
@@ -135,73 +182,28 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                     new_message
                 }
             }
-            Event::Tick => Some(Message::PullIRC),
+            Event::Tick => Some(MessageEvent::PullIRC),
             _ => None,
         };
 
         Ok(message)
     }
 
-    fn update(&mut self, model: &mut Model, msg: Message) -> Option<Message> {
+    fn update(&mut self, model: &mut Model, msg: MessageEvent) -> Option<MessageEvent> {
         match msg {
-            Message::SendMessage(content) => {
-                if let Some(parsed_message) = command::parse_command(&content) {
-                    match parsed_message {
-                        command::ClientCommand::Connect => Some(Message::Connect),
-                        command::ClientCommand::Join => Some(Message::Connect),
-                        command::ClientCommand::Quit => Some(Message::Quit),
-                    }
-                } else if let Some(irc_config) = &model.irc_config {
-                    model.send_command(clown_core::command::Command::PrivMsg(
-                        irc_config.channel.to_string(),
-                        content.clone(),
-                    ));
-                    return self
-                        .messages_display
-                        .handle_actions(&Message::AddMessageView(content));
-                } else {
-                    None
-                }
-            }
-            Message::Quit => {
+            MessageEvent::MessageInput(content) => self.update_input(model, content),
+            MessageEvent::Quit => {
                 model.send_command(clown_core::command::Command::Quit(None));
                 None
             }
-            Message::Connect => {
+            MessageEvent::Connect => {
                 connect_irc(model);
                 None
             }
-            Message::AddMessageView(content) => self
+            MessageEvent::AddMessageView(content) => self
                 .messages_display
-                .handle_actions(&Message::AddMessageView(content)),
-            Message::PullIRC => {
-                if let Some(reciever) = model.message_reciever.as_mut()
-                    && let Ok(recieved) = reciever.inner.try_recv()
-                    && let Some(reply) = recieved.get_reply()
-                {
-                    match reply {
-                        Response::Cmd(command) => match command {
-                            Command::PrivMsg(_target, content) => {
-                                Some(Message::AddMessageView(content))
-                            }
-                            _ => None,
-                        },
-                        Response::Rpl(reply) => match reply {
-                            ResponseNumber::Welcome(content) => {
-                                if let Some(irc_config) = &model.irc_config {
-                                    model.send_command(clown_core::command::Command::Join(
-                                        irc_config.channel.to_string(),
-                                    ));
-                                }
-                                Some(Message::AddMessageView(content))
-                            }
-                            _ => None,
-                        },
-                    }
-                } else {
-                    None
-                }
-            }
+                .handle_actions(&MessageEvent::AddMessageView(content)),
+            MessageEvent::PullIRC => self.update_pull_irc(model),
             _ => None,
         }
     }

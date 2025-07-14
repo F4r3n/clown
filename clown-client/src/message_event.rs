@@ -1,6 +1,6 @@
 #[derive(PartialEq)]
-pub enum Message {
-    SendMessage(String),
+pub enum MessageEvent {
+    MessageInput(String),
     AddMessageView(String),
     PullIRC,
     Connect,

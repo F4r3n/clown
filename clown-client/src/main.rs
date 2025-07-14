@@ -11,8 +11,8 @@ mod tui;
 use model::Model;
 use model::RunningState;
 use model::View;
-mod message;
-use message::Message;
+mod message_event;
+use message_event::MessageEvent;
 
 use crate::event_handler::EventHandler;
 mod command;
@@ -25,18 +25,6 @@ type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
 async fn main() -> color_eyre::Result<()> {
     let mut events = EventHandler::new(); // new
     let mut terminal = tui::init()?;
-
-    /*
-        let connect = Connection::new(option);
-    connect.connect();
-
-    let client = Client::new(IRCConfig {
-        nickname: "farine".into(),
-        password: None,
-        real_name: "farine".into(),
-        username: "farine".into(),
-    });
-     */
 
     let mut model = model::Model::new(
         Some(clown_core::conn::ConnectionConfig {
@@ -90,7 +78,7 @@ fn handle_event(
     model: &mut Model,
     views: &mut ViewMap,
     event: Event,
-) -> color_eyre::Result<Option<Message>> {
+) -> color_eyre::Result<Option<MessageEvent>> {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         return current_view.handle_event(model, &event);
     }
@@ -98,10 +86,10 @@ fn handle_event(
     Ok(None)
 }
 
-async fn update(model: &mut Model, views: &mut ViewMap, msg: Message) -> Option<Message> {
+async fn update(model: &mut Model, views: &mut ViewMap, msg: MessageEvent) -> Option<MessageEvent> {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         match msg {
-            Message::Quit => {
+            MessageEvent::Quit => {
                 // You can handle cleanup and exit here
                 model.running_state = RunningState::Done;
                 None
