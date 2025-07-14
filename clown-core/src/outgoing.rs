@@ -1,6 +1,6 @@
 use crate::client::State;
+use crate::command::Command;
 use crate::command::CommandReceiver;
-use crate::command::{self, Command};
 use crate::message::{MessageReceiver, MessageSender, ServerMessage};
 use clown_parser::message::create_message;
 use std::fs::File;
@@ -88,7 +88,7 @@ impl Outgoing {
     }
 
     pub fn create_outgoing(&mut self) -> (CommandSender, MessageReceiver) {
-        let (command_sender, command_receiver) = mpsc::unbounded_channel::<command::Command>();
+        let (command_sender, command_receiver) = mpsc::unbounded_channel::<Command>();
         let (message_sender, message_receiver) = mpsc::unbounded_channel::<ServerMessage>();
         self.receiver = Some(CommandReceiver {
             inner: command_receiver,

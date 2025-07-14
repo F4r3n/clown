@@ -5,11 +5,12 @@ use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
 use crate::focus_manager::FocusManager;
-use crate::input_widget;
-use crate::input_widget::CInput;
+use crate::irc_view::input_widget;
+use crate::irc_view::input_widget::CInput;
+use crate::irc_view::text_widget;
+use crate::irc_view::text_widget::MessageContent;
+use crate::irc_view::users_widget;
 use crate::model::Model;
-use crate::text_widget;
-use crate::text_widget::MessageContent;
 use crate::widget_view;
 use clown_core::client::Client;
 use clown_core::command::Command;
@@ -26,23 +27,29 @@ use ratatui::{
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
     messages_display: Component<'a, text_widget::TextWidget>,
+    list_users_view: Component<'a, users_widget::UsersWidget>,
     focus_manager: FocusManager<'a>,
 }
 impl<'a> MainView<'a> {
     pub fn new() -> Self {
         let mut focus_manager = FocusManager::new();
         let mut input = Component::new("input", input_widget::CInput::new());
+        let list_users_view: Component<'_, users_widget::UsersWidget> =
+            Component::new("users_view", users_widget::UsersWidget::new());
+
         //list_components.push()
         let messages_display = Component::new("messages", text_widget::TextWidget::new(vec![]));
 
         // Register widgets with focus manager
         focus_manager.register_widget(input.get_id());
         focus_manager.register_widget(messages_display.get_id());
+        focus_manager.register_widget(list_users_view.get_id());
 
         // Set initial focus to input
         input.set_focus(true);
 
         Self {
+            list_users_view,
             input,
             messages_display,
             focus_manager,
@@ -53,6 +60,7 @@ impl<'a> MainView<'a> {
         vec![
             self.input.to_child_mut(),
             self.messages_display.to_child_mut(),
+            self.list_users_view.to_child_mut(),
         ]
     }
 
@@ -113,6 +121,9 @@ impl<'a> MainView<'a> {
                             source, content,
                         )))
                     }
+                    ResponseNumber::NameReply(list_users) => {
+                        Some(MessageEvent::UpdateUsers(list_users))
+                    }
                     _ => None,
                 },
             }
@@ -152,12 +163,14 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
         let top_layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(70), // Messages
+                Constraint::Percentage(100), // Messages
+                Constraint::Min(30),         // List Users
             ])
             .split(main_layout[0]);
 
         // Render widgets
         self.messages_display.render(frame, top_layout[0]);
+        self.list_users_view.render(frame, top_layout[1]);
         self.input.render(frame, main_layout[1]);
     }
 
@@ -208,9 +221,8 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 connect_irc(model);
                 None
             }
-            MessageEvent::AddMessageView(content) => self
-                .messages_display
-                .handle_actions(&MessageEvent::AddMessageView(content)),
+            MessageEvent::AddMessageView(_) => self.messages_display.handle_actions(&msg),
+            MessageEvent::UpdateUsers(_) => self.list_users_view.handle_actions(&msg),
             MessageEvent::PullIRC => self.update_pull_irc(model),
             _ => None,
         }

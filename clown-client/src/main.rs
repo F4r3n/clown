@@ -5,8 +5,7 @@ use std::collections::HashMap;
 
 mod component;
 mod focus_manager;
-mod input_widget;
-mod text_widget;
+mod irc_view;
 mod tui;
 use model::Model;
 use model::RunningState;
@@ -17,7 +16,6 @@ use message_event::MessageEvent;
 use crate::event_handler::EventHandler;
 mod command;
 mod event_handler;
-mod main_view;
 mod model;
 mod widget_view;
 type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
@@ -40,7 +38,10 @@ async fn main() -> color_eyre::Result<()> {
         }),
     );
     let mut views: ViewMap = HashMap::new();
-    views.insert(View::MainView, Box::new(main_view::MainView::new()));
+    views.insert(
+        View::MainView,
+        Box::new(irc_view::main_view::MainView::new()),
+    );
 
     while model.running_state != RunningState::Done {
         let event = events.next().await?; // new

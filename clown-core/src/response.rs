@@ -197,7 +197,7 @@ pub enum ResponseNumber {
     /// 352: WHO reply
     WhoReply(String),
     /// 353: NAMES reply
-    NameReply(String),
+    NameReply(Vec<String>),
     /// 354: WHO reply extended
     WhoReplyExtended(String),
     /// 361: KILL done
@@ -342,7 +342,13 @@ impl ResponseBuilder {
             349 => trailing.map(|v| EndOfExceptionList(v.to_string())),
             351 => trailing.map(|v| Version(v.to_string())),
             352 => trailing.map(|v| WhoReply(v.to_string())),
-            353 => trailing.map(|v| NameReply(v.to_string())),
+            353 => trailing.map(|v| {
+                NameReply(
+                    v.split_ascii_whitespace()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<String>>(),
+                )
+            }),
             354 => trailing.map(|v| WhoReplyExtended(v.to_string())),
             361 => trailing.map(|v| KillDone(v.to_string())),
             362 => trailing.map(|v| Closing(v.to_string())),
