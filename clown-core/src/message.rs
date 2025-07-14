@@ -21,6 +21,11 @@ impl ServerMessage {
     pub fn new(message: Message) -> Self {
         Self { message }
     }
+
+    pub fn get_source(&self) -> Option<&str> {
+        self.message.get_source()
+    }
+
     pub fn get_reply(&self) -> Option<Response> {
         if let Some(command) = self.message.get_command_name() {
             if let Ok(command_number) = command.parse() {

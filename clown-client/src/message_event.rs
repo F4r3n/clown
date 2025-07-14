@@ -1,7 +1,9 @@
+use crate::text_widget::MessageContent;
+
 #[derive(PartialEq)]
 pub enum MessageEvent {
     MessageInput(String),
-    AddMessageView(String),
+    AddMessageView(MessageContent),
     PullIRC,
     Connect,
     Join,

@@ -1,10 +1,10 @@
 use crate::parser::{parse_command, parse_parameters, parse_trailing};
-use crate::source;
+use crate::source::{Source, SourceKind, parse_source};
 use ouroboros::self_referencing;
 /// Note: Server sources (used for server-to-server communications) are not handled.
 #[derive(Debug, PartialEq, Eq)]
 pub struct IRCMessage<'s> {
-    source: Option<source::Source<'s>>,
+    source: Option<Source<'s>>,
     command: Option<&'s [u8]>,
     parameters: Vec<&'s [u8]>,
     trailing: Option<&'s [u8]>,
@@ -33,6 +33,16 @@ impl Message {
             .collect()
     }
 
+    pub fn get_source(&self) -> Option<&str> {
+        use crate::source::Source;
+        let irc = self.borrow_internal();
+        if let Some(source_kind) = irc.source.as_ref() {
+            source_kind.get_source_kind()
+        } else {
+            None
+        }
+    }
+
     pub fn get_trailing(&self) -> Option<&str> {
         let irc = self.borrow_internal();
         irc.trailing.and_then(|value| str::from_utf8(value).ok())
@@ -40,7 +50,7 @@ impl Message {
 }
 
 fn parse_message(buf: &[u8]) -> anyhow::Result<IRCMessage<'_>> {
-    let (buf, source) = source::parse_source(buf);
+    let (buf, source) = parse_source(buf);
 
     let (buf, command) = match parse_command(buf) {
         Ok((buf, command)) => (buf, command),
@@ -86,8 +96,8 @@ mod tests {
         let msg = parse_message(input).unwrap();
         assert_eq!(
             msg.source,
-            Some(source::Source::new(
-                Some(source::SourceKind::Nick(&b"nick"[..])),
+            Some(Source::new(
+                Some(SourceKind::Nick(&b"nick"[..])),
                 Some(&b"user"[..]),
                 Some(&b"host"[..])
             ))

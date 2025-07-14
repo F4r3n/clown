@@ -1,7 +1,7 @@
 use crate::MessageEvent;
 use crate::component::Draw;
+use chrono::{DateTime, Local, Timelike};
 use crossterm::event::KeyCode;
-
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -9,10 +9,39 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
+#[derive(PartialEq, Debug, Clone)]
+pub struct MessageContent {
+    time: std::time::SystemTime, /*Generated time */
+    source: Option<String>,      /*Source*/
+    content: String,             /*Content */
+}
+
+impl MessageContent {
+    pub fn new(source: Option<String>, content: String) -> Self {
+        Self {
+            time: std::time::SystemTime::now(),
+            source,
+            content,
+        }
+    }
+
+    fn time_format(&self) -> String {
+        let datetime: DateTime<Local> = self.time.into();
+
+        // Format as HH:MM:SS
+        let formatted_time = format!(
+            "{:02}:{:02}:{:02}",
+            datetime.hour(),
+            datetime.minute(),
+            datetime.second()
+        );
+        formatted_time
+    }
+}
 
 pub struct TextWidget {
     vertical_scroll_state: ScrollbarState,
-    content: Vec<String>,
+    content: Vec<MessageContent>,
     scroll_offset: usize,
     max_visible_height: usize,
     follow_last: bool,
@@ -37,12 +66,35 @@ impl Draw for TextWidget {
         let max_scroll = self.content.len().saturating_sub(self.max_visible_height);
         let scroll = self.scroll_offset.min(max_scroll);
 
+        let time_width = 8;
+        let source_width = 9;
+
         let visible_lines: Vec<Line> = self
             .content
             .iter()
             .skip(scroll)
             .take(self.max_visible_height)
-            .map(|line| Line::from(vec![Span::styled(line, text_style)]))
+            .map(|line| {
+                let mut spans = vec![];
+
+                // Pad time (right align)
+                let time_str = format!("{:>width$}", line.time_format(), width = time_width);
+
+                // Pad source (left align, or all spaces if None)
+                let source_str = if let Some(source) = &line.source {
+                    format!("{:<width$}", source, width = source_width)
+                } else {
+                    " ".repeat(source_width)
+                };
+
+                spans.push(Span::styled(time_str, text_style));
+                spans.push(Span::raw(" ")); // Space after time
+                spans.push(Span::styled(source_str, text_style));
+                spans.push(Span::raw(" ")); // Space after source
+                spans.push(Span::styled(&line.content, text_style));
+
+                Line::from(spans)
+            })
             .collect();
 
         let text = Text::from(visible_lines);
@@ -79,7 +131,7 @@ impl crate::component::EventHandler for TextWidget {
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         match event {
             MessageEvent::AddMessageView(content) => {
-                self.add_line(content);
+                self.add_line(content.clone());
                 None
             }
             _ => None,
@@ -129,7 +181,7 @@ impl crate::component::EventHandler for TextWidget {
 }
 
 impl TextWidget {
-    pub fn new(content: Vec<String>) -> Self {
+    pub fn new(content: Vec<MessageContent>) -> Self {
         Self {
             content,
             focus: false,
@@ -140,8 +192,8 @@ impl TextWidget {
         }
     }
 
-    pub fn add_line(&mut self, line: &str) {
-        self.content.push(line.to_string());
+    pub fn add_line(&mut self, line: MessageContent) {
+        self.content.push(line);
         if self.follow_last {
             // Show last lines that fit the view
             self.scroll_offset = self.content.len().saturating_sub(self.max_visible_height);

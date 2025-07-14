@@ -9,6 +9,7 @@ use crate::input_widget;
 use crate::input_widget::CInput;
 use crate::model::Model;
 use crate::text_widget;
+use crate::text_widget::MessageContent;
 use crate::widget_view;
 use clown_core::client::Client;
 use clown_core::command::Command;
@@ -72,13 +73,17 @@ impl<'a> MainView<'a> {
                 command::ClientCommand::Quit => Some(MessageEvent::Quit),
             }
         } else if let Some(irc_config) = &model.irc_config {
+            let nickname = irc_config.nickname.clone();
             model.send_command(clown_core::command::Command::PrivMsg(
                 irc_config.channel.to_string(),
                 content.clone(),
             ));
             return self
                 .messages_display
-                .handle_actions(&MessageEvent::AddMessageView(content));
+                .handle_actions(&MessageEvent::AddMessageView(MessageContent::new(
+                    Some(nickname),
+                    content,
+                )));
         } else {
             None
         }
@@ -89,11 +94,12 @@ impl<'a> MainView<'a> {
             && let Ok(recieved) = reciever.inner.try_recv()
             && let Some(reply) = recieved.get_reply()
         {
+            let source = recieved.get_source().map(|v| v.to_string());
             match reply {
                 Response::Cmd(command) => match command {
-                    Command::PrivMsg(_target, content) => {
-                        Some(MessageEvent::AddMessageView(content))
-                    }
+                    Command::PrivMsg(_target, content) => Some(MessageEvent::AddMessageView(
+                        MessageContent::new(source, content),
+                    )),
                     _ => None,
                 },
                 Response::Rpl(reply) => match reply {
@@ -103,7 +109,9 @@ impl<'a> MainView<'a> {
                                 irc_config.channel.to_string(),
                             ));
                         }
-                        Some(MessageEvent::AddMessageView(content))
+                        Some(MessageEvent::AddMessageView(MessageContent::new(
+                            source, content,
+                        )))
                     }
                     _ => None,
                 },
