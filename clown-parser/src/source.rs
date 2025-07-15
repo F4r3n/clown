@@ -191,4 +191,26 @@ mod tests {
         );
         assert_eq!(rest, b" ");
     }
+
+    #[test]
+    fn test_source_server_kind() {
+        let input = b":irc.example.com ";
+        let (_rest, source) = parse_source(input);
+        if let Some(source) = source {
+            assert_eq!(source.get_source_kind(), Some("irc.example.com"));
+        } else {
+            assert_ne!(source, None)
+        }
+    }
+
+    #[test]
+    fn test_source_nick_kind() {
+        let input = b":jo!farine4@inspircd";
+        let (_rest, source) = parse_source(input);
+        if let Some(source) = source {
+            assert_eq!(source.get_source_kind(), Some("jo"));
+        } else {
+            assert_ne!(source, None)
+        }
+    }
 }

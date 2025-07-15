@@ -2,7 +2,6 @@ use crate::event_handler::Event;
 use clown_core::client::IRCConfig;
 use ratatui::Frame;
 use std::collections::HashMap;
-
 mod component;
 mod focus_manager;
 mod irc_view;
@@ -16,6 +15,7 @@ use message_event::MessageEvent;
 use crate::event_handler::EventHandler;
 mod command;
 mod event_handler;
+mod logger;
 mod model;
 mod widget_view;
 type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
@@ -56,11 +56,7 @@ async fn main() -> color_eyre::Result<()> {
             current_msg = update(&mut model, &mut views, current_msg.unwrap()).await;
         }
     }
-    /*events
-        .join()
-        .await
-        .map_err(|e| color_eyre::eyre::eyre!(e))?;
-    */
+
     tui::restore()?;
     Ok(())
 }
@@ -71,10 +67,6 @@ fn view(model: &mut Model, views: &mut ViewMap, frame: &mut Frame) {
     }
 }
 
-/// Convert Event to Message
-///
-/// We don't need to pass in a `model` to this function in this example
-/// but you might need it as your project evolves
 fn handle_event(
     model: &mut Model,
     views: &mut ViewMap,

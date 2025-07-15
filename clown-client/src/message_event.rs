@@ -1,10 +1,13 @@
 use crate::irc_view::text_widget::MessageContent;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum MessageEvent {
     MessageInput(String),
     AddMessageView(MessageContent),
     UpdateUsers(Vec<String>),
+    ReplaceUser(String /*old */, String /*new */),
+    JoinUser(String),
+    RemoveUser(String /*user */),
     PullIRC,
     Connect,
     Join,

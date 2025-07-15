@@ -103,11 +103,19 @@ impl<'a> MainView<'a> {
             && let Some(reply) = recieved.get_reply()
         {
             let source = recieved.get_source().map(|v| v.to_string());
-            match reply {
+
+            crate::logger::log_info_sync(format!("Response {:?} {}\n", &source, &reply).as_str());
+            let result = match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(_target, content) => Some(MessageEvent::AddMessageView(
                         MessageContent::new(source, content),
                     )),
+                    Command::Nick(new_user) => Some(MessageEvent::ReplaceUser(
+                        source.unwrap_or_default(),
+                        new_user,
+                    )),
+                    Command::Quit(_) => Some(MessageEvent::RemoveUser(source.unwrap_or_default())),
+                    Command::Join(_) => Some(MessageEvent::JoinUser(source.unwrap_or_default())),
                     _ => None,
                 },
                 Response::Rpl(reply) => match reply {
@@ -126,7 +134,10 @@ impl<'a> MainView<'a> {
                     }
                     _ => None,
                 },
-            }
+            };
+            crate::logger::log_info_sync(format!("Message {:?}\n", &result).as_str());
+
+            result
         } else {
             None
         }
@@ -221,10 +232,14 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 connect_irc(model);
                 None
             }
-            MessageEvent::AddMessageView(_) => self.messages_display.handle_actions(&msg),
-            MessageEvent::UpdateUsers(_) => self.list_users_view.handle_actions(&msg),
+
             MessageEvent::PullIRC => self.update_pull_irc(model),
-            _ => None,
+            _ => {
+                for mut child in self.children() {
+                    child.handle_actions(&msg);
+                }
+                None
+            }
         }
     }
 }

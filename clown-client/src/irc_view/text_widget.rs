@@ -1,14 +1,18 @@
-use crate::MessageEvent;
 use crate::component::Draw;
+use crate::{MessageEvent, component::EventHandler};
 use chrono::{DateTime, Local, Timelike};
 use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style, Styled},
     text::{Line, Span, Text},
-    widgets::{Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{
+        Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Table,
+    },
 };
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct MessageContent {
     time: std::time::SystemTime, /*Generated time */
@@ -58,66 +62,75 @@ impl Draw for TextWidget {
         };
 
         let text_style = Style::default().fg(Color::White);
-        let title = "Message";
 
-        // Adjust visible height and cache for scrolling logic
+        // Set how many lines can be shown
         self.max_visible_height = area.height.saturating_sub(2) as usize;
-
         let max_scroll = self.content.len().saturating_sub(self.max_visible_height);
         let scroll = self.scroll_offset.min(max_scroll);
 
-        let time_width = 8;
-        let source_width = 9;
+        let layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(20), // Meta (time + source)
+                Constraint::Length(1),  // Separator "┃"
+                Constraint::Min(10),    // Message
+                Constraint::Length(1),  // Scrollbar
+            ])
+            .split(area);
 
-        let visible_lines: Vec<Line> = self
+        let visible_rows: Vec<Row> = self
             .content
             .iter()
             .skip(scroll)
             .take(self.max_visible_height)
             .map(|line| {
-                let mut spans = vec![];
-
-                // Pad time (right align)
-                let time_str = format!("{:>width$}", line.time_format(), width = time_width);
-
-                // Pad source (left align, or all spaces if None)
-                let source_str = if let Some(source) = &line.source {
-                    format!("{:<width$}", source, width = source_width)
-                } else {
-                    " ".repeat(source_width)
-                };
-
-                spans.push(Span::styled(time_str, text_style));
-                spans.push(Span::raw(" ")); // Space after time
-                spans.push(Span::styled(source_str, text_style));
-                spans.push(Span::raw(" ")); // Space after source
-                spans.push(Span::styled(&line.content, text_style));
-
-                Line::from(spans)
+                let time_str = format!("{:>8}", line.time_format());
+                let source_str = line.source.clone().unwrap_or_default();
+                let meta = format!("{:<8} {:<10}", time_str, source_str);
+                Row::new(vec![Cell::from(meta), Cell::from(line.content.clone())])
             })
             .collect();
 
-        let text = Text::from(visible_lines);
+        let mut table = Table::new(
+            visible_rows,
+            [
+                Constraint::Length(20), // Meta
+                Constraint::Min(10),    // Content
+            ],
+        )
+        .column_spacing(1)
+        .style(text_style);
+        if self.has_focus() {
+            table = table
+                .block(Block::bordered().title("Messages"))
+                .set_style(border_style);
+        }
 
-        let paragraph = Paragraph::new(text.set_style(Style::default()))
-            .block(Block::bordered().title(title).border_style(border_style));
+        let height = layout[1].height as usize;
+        let binding = "┃\n".repeat(height);
+        let vertical_line = binding.trim_end(); // trim to avoid extra line
+        let line_paragraph = Paragraph::new(vertical_line)
+            .alignment(Alignment::Center) // optional
+            .style(Style::default().fg(Color::DarkGray));
 
-        // Split area for content and scrollbar
-        let layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Min(0), Constraint::Length(1)])
-            .split(area);
-
-        // Update scrollbar state
         self.vertical_scroll_state = ScrollbarState::new(self.content.len())
             .position(self.scroll_offset + self.max_visible_height);
 
-        frame.render_widget(paragraph, layout[0]);
+        frame.render_widget(
+            table,
+            Rect {
+                x: layout[0].x,
+                y: layout[0].y,
+                width: layout[0].width + layout[2].width, // table covers meta + content
+                height: layout[0].height,
+            },
+        );
+        frame.render_widget(line_paragraph, layout[1]);
         frame.render_stateful_widget(
             Scrollbar::default()
                 .orientation(ScrollbarOrientation::VerticalRight)
                 .thumb_style(Style::default().bg(Color::Cyan)),
-            layout[1],
+            layout[3],
             &mut self.vertical_scroll_state,
         );
     }

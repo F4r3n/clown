@@ -233,6 +233,7 @@ dependencies = [
  "color-eyre",
  "crossterm 0.29.0",
  "futures",
+ "once_cell",
  "ratatui",
  "tokio",
  "tokio-util",

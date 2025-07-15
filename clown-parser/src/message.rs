@@ -34,7 +34,6 @@ impl Message {
     }
 
     pub fn get_source(&self) -> Option<&str> {
-        use crate::source::Source;
         let irc = self.borrow_internal();
         if let Some(source_kind) = irc.source.as_ref() {
             source_kind.get_source_kind()

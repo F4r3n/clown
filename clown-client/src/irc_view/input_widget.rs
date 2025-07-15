@@ -40,11 +40,7 @@ impl Draw for CInput {
             Style::default()
         };
 
-        let title = if focus {
-            "Input [FOCUSED]".to_string()
-        } else {
-            "Input".to_string()
-        };
+        let title = "Input";
 
         let input = Paragraph::new(self.input.value())
             .style(style)

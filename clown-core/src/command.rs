@@ -73,6 +73,8 @@ pub enum Command {
     /// Request or negotiate IRC capabilities.
     /// CAP <subcommand>
     Cap(String),
+
+    Unknown(String),
 }
 impl Command {
     pub fn as_bytes(&self) -> Vec<u8> {
@@ -108,6 +110,7 @@ impl Command {
             Command::Cap(cap) => format!("CAP {cap}\r\n").into_bytes(),
             Command::Quit(Some(reason)) => format!("QUIT {reason}\r\n").into_bytes(),
             Command::Quit(None) => "QUIT\r\n".to_string().into_bytes(),
+            Command::Unknown(un) => format!("Unkwnon {un}\r\n").into_bytes(),
         }
     }
 }
@@ -128,6 +131,16 @@ impl CommandBuilder {
         Some(Command::Pong(
             parameters.last().map(|v| v.to_string()).unwrap_or_default(),
         ))
+    }
+
+    fn nick(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+        if !parameters.is_empty() {
+            Some(Command::Nick(
+                parameters.last().map(|v| v.to_string()).unwrap_or_default(),
+            ))
+        } else {
+            trailing.map(|trailing| Command::Nick(trailing.to_string()))
+        }
     }
 
     fn quit(trailing: Option<&str>) -> Option<Command> {
@@ -245,7 +258,7 @@ impl CommandBuilder {
         trailing: Option<&str>,
     ) -> Option<Command> {
         match command_name {
-            "NICK" => CommandBuilder::make_command_1(parameters, Command::Nick),
+            "NICK" => CommandBuilder::nick(parameters, trailing),
             "PASS" => CommandBuilder::make_command_1(parameters, Command::Pass),
             "QUIT" => CommandBuilder::quit(trailing),
             "PING" => CommandBuilder::make_command_1(parameters, Command::Ping),
@@ -262,7 +275,7 @@ impl CommandBuilder {
             "INVITE" => CommandBuilder::invite(parameters),
             "KICK" => CommandBuilder::kick(parameters, trailing),
             "CAP" => CommandBuilder::make_command_1(parameters, Command::Cap),
-            _ => None,
+            _ => CommandBuilder::make_command_1(parameters, Command::Unknown),
         }
     }
 }

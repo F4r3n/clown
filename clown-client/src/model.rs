@@ -22,7 +22,6 @@ pub struct Model {
 
     pub message_reciever: Option<clown_core::message::MessageReceiver>,
     pub command_sender: Option<clown_core::outgoing::CommandSender>,
-    pub logger: Option<std::fs::File>,
 }
 
 impl Model {
@@ -37,7 +36,6 @@ impl Model {
             irc_config,
             message_reciever: None,
             command_sender: None,
-            logger: std::fs::File::create("debug.txt").ok(),
         }
     }
 
@@ -45,13 +43,5 @@ impl Model {
         self.command_sender
             .as_mut()
             .map(|value| value.send(in_command));
-    }
-
-    pub fn log(&mut self, in_content: &str) -> anyhow::Result<()> {
-        if let Some(file) = self.logger.as_mut() {
-            file.write_all(in_content.as_bytes())?;
-            file.flush()?;
-        }
-        Ok(())
     }
 }

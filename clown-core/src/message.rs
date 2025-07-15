@@ -13,6 +13,7 @@ pub struct MessageReceiver {
     pub inner: mpsc::UnboundedReceiver<ServerMessage>,
 }
 
+#[derive(Debug)]
 pub struct ServerMessage {
     message: Message,
 }
@@ -132,6 +133,48 @@ mod tests {
             assert_eq!(token, "123456789", "PONG token mismatch");
         } else {
             panic!("Expected PONG command, got {command:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_nick_trailing() -> anyhow::Result<()> {
+        let message = create_message(":test!farine4@inspircd NICK :jo\r\n".as_bytes())?;
+        let server_message = ServerMessage::new(message);
+        assert_eq!(
+            server_message.get_source(),
+            Some("test"),
+            "{:?}",
+            server_message.get_source()
+        );
+        let command = server_message.get_reply();
+        assert!(command.is_some(), "{server_message:?}");
+
+        if let Some(Response::Cmd(Command::Nick(new_name))) = command {
+            assert_eq!(new_name, "jo", "NICK token mismatch");
+        } else {
+            panic!("Expected NICK command, got {command:?}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_nick_params() -> anyhow::Result<()> {
+        let message = create_message(":test!farine4@inspircd NICK jo\r\n".as_bytes())?;
+        let server_message = ServerMessage::new(message);
+        assert_eq!(
+            server_message.get_source(),
+            Some("test"),
+            "{:?}",
+            server_message.get_source()
+        );
+        let command = server_message.get_reply();
+        assert!(command.is_some(), "{server_message:?}");
+
+        if let Some(Response::Cmd(Command::Nick(new_name))) = command {
+            assert_eq!(new_name, "jo", "NICK token mismatch");
+        } else {
+            panic!("Expected NICK command, got {command:?}");
         }
         Ok(())
     }
