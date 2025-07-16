@@ -145,7 +145,7 @@ impl CommandBuilder {
 
     fn join(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
         if !parameters.is_empty() {
-            Some(Command::Nick(
+            Some(Command::Join(
                 parameters.last().map(|v| v.to_string()).unwrap_or_default(),
             ))
         } else {
@@ -157,11 +157,17 @@ impl CommandBuilder {
         Some(Command::Quit(trailing.map(|v| v.to_string())))
     }
 
-    fn make_command_1<F>(parameters: Vec<&str>, ctor: F) -> Option<Command>
+    fn make_command_1<F>(parameters: Vec<&str>, trailing: Option<&str>, ctor: F) -> Option<Command>
     where
         F: Fn(String) -> Command,
     {
-        parameters.first().map(|target| ctor(target.to_string()))
+        if !parameters.is_empty() {
+            Some(ctor(
+                parameters.last().map(|v| v.to_string()).unwrap_or_default(),
+            ))
+        } else {
+            trailing.map(|trailing| ctor(trailing.to_string()))
+        }
     }
 
     fn make_command_2<F>(parameters: Vec<&str>, trailing: Option<&str>, ctor: F) -> Option<Command>
@@ -269,9 +275,9 @@ impl CommandBuilder {
     ) -> Option<Command> {
         match command_name {
             "NICK" => CommandBuilder::nick(parameters, trailing),
-            "PASS" => CommandBuilder::make_command_1(parameters, Command::Pass),
+            "PASS" => CommandBuilder::make_command_1(parameters, trailing, Command::Pass),
             "QUIT" => CommandBuilder::quit(trailing),
-            "PING" => CommandBuilder::make_command_1(parameters, Command::Ping),
+            "PING" => CommandBuilder::make_command_1(parameters, trailing, Command::Ping),
             "PONG" => CommandBuilder::pong(parameters),
             "USER" => CommandBuilder::user(parameters, trailing),
             "PRIVMSG" => CommandBuilder::make_command_2(parameters, trailing, Command::PrivMsg),
@@ -284,8 +290,8 @@ impl CommandBuilder {
             "LIST" => CommandBuilder::list(parameters),
             "INVITE" => CommandBuilder::invite(parameters),
             "KICK" => CommandBuilder::kick(parameters, trailing),
-            "CAP" => CommandBuilder::make_command_1(parameters, Command::Cap),
-            _ => CommandBuilder::make_command_1(parameters, Command::Unknown),
+            "CAP" => CommandBuilder::make_command_1(parameters, trailing, Command::Cap),
+            _ => CommandBuilder::make_command_1(parameters, trailing, Command::Unknown),
         }
     }
 }

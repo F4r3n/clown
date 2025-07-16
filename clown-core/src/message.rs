@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_ping() -> anyhow::Result<()> {
-        let message = create_message("PING token\r\n".as_bytes())?;
+        let message = create_message(":token PING :token\r\n".as_bytes())?;
         let server_message = ServerMessage::new(message);
         let command = server_message.get_reply();
         assert!(command.is_some());

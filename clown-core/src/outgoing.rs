@@ -1,10 +1,10 @@
 use crate::command::Command;
 use crate::command::CommandReceiver;
 use crate::message::{MessageReceiver, MessageSender, ServerMessage};
+use crate::response::Response;
 use clown_parser::message::create_message;
 use std::fs::File;
 use std::io::Write;
-use std::sync::Arc;
 use tokio::io::BufReader;
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
@@ -16,6 +16,52 @@ pub struct Outgoing {
 }
 
 impl Outgoing {
+    pub async fn receive_message<W>(
+        &mut self,
+        writer: &mut BufWriter<W>,
+        server_message: ServerMessage,
+    ) -> anyhow::Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        // Handle PING immediately
+        /*
+        if line.starts_with("PING") {
+            let response = line.replacen("PING", "PONG", 1);
+            writer.write_all(response.as_bytes()).await?;
+            writer.write_all(b"\r\n").await?;
+            writer.flush().await?;
+        } else if line.starts_with("CAP") {
+            writer
+                .write_all(Command::Cap("END".to_string()).as_bytes().as_slice())
+                .await?;
+            writer.flush().await?;
+        }
+        */
+        if let Some(reply) = server_message.get_reply() {
+            match reply {
+                Response::Cmd(Command::Ping(token)) => {
+                    writer
+                        .write_all(Command::Pong(token).as_bytes().as_slice())
+                        .await?;
+                    writer.flush().await?;
+                }
+                Response::Cmd(Command::Cap(_)) => {
+                    writer
+                        .write_all(Command::Cap("END".into()).as_bytes().as_slice())
+                        .await?;
+                    writer.flush().await?;
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(sender) = &self.message_sender {
+            sender.inner.send(server_message)?;
+        }
+        Ok(())
+    }
+
     pub async fn process<R, W>(
         &mut self,
         mut log_writer: Option<std::io::BufWriter<File>>,
@@ -36,28 +82,16 @@ impl Outgoing {
                             let line = buffer.trim_end().to_string();
                             buffer.clear();
 
-                            // Handle PING immediately
-                            if line.starts_with("PING") {
-                                let response = line.replacen("PING", "PONG", 1);
-                                writer.write_all(response.as_bytes()).await?;
-                                writer.write_all(b"\r\n").await?;
-                                writer.flush().await?;
-                            }
-                            else if line.starts_with("CAP") {
-                                writer.write_all(Command::Cap("END".to_string()).as_bytes().as_slice()).await?;
-                                writer.flush().await?;
-                            }
                             if let Some(log) = log_writer.as_mut() {
                                 writeln!(log, "{}", line.clone())?;
                                 log.flush()?;
                             }
-                            // Call user's handler (can borrow local data!)
-                            if let Some(sender) = &self.message_sender {
-                                if let Ok(message) = create_message(line.as_bytes())
-                                {
-                                    sender.inner.send(ServerMessage::new(message))?;
-                                }
+                            if let Ok(message) = create_message(line.as_bytes())
+                            {
+                                let server_message = ServerMessage::new(message);
+                                self.receive_message(&mut writer, server_message).await?;
                             }
+
                         }
                         Err(e) => {
                             eprintln!("Read error: {e}");
