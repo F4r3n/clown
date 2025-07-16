@@ -9,6 +9,7 @@ use crate::irc_view::input_widget;
 use crate::irc_view::input_widget::CInput;
 use crate::irc_view::text_widget;
 use crate::irc_view::text_widget::MessageContent;
+use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
 use crate::model::Model;
 use crate::widget_view;
@@ -28,6 +29,8 @@ pub struct MainView<'a> {
     input: Component<'a, CInput>,
     messages_display: Component<'a, text_widget::TextWidget>,
     list_users_view: Component<'a, users_widget::UsersWidget>,
+    topic_view: Component<'a, topic_widget::TopicWidget>,
+
     focus_manager: FocusManager<'a>,
 }
 impl<'a> MainView<'a> {
@@ -36,7 +39,8 @@ impl<'a> MainView<'a> {
         let mut input = Component::new("input", input_widget::CInput::new());
         let list_users_view: Component<'_, users_widget::UsersWidget> =
             Component::new("users_view", users_widget::UsersWidget::new());
-
+        let topic_view: Component<'_, topic_widget::TopicWidget> =
+            Component::new("topic_view", topic_widget::TopicWidget::new());
         //list_components.push()
         let messages_display = Component::new("messages", text_widget::TextWidget::new(vec![]));
 
@@ -44,12 +48,14 @@ impl<'a> MainView<'a> {
         focus_manager.register_widget(input.get_id());
         focus_manager.register_widget(messages_display.get_id());
         focus_manager.register_widget(list_users_view.get_id());
+        //No topic focus
 
         // Set initial focus to input
         input.set_focus(true);
 
         Self {
             list_users_view,
+            topic_view,
             input,
             messages_display,
             focus_manager,
@@ -61,6 +67,7 @@ impl<'a> MainView<'a> {
             self.input.to_child_mut(),
             self.messages_display.to_child_mut(),
             self.list_users_view.to_child_mut(),
+            self.topic_view.to_child_mut(),
         ]
     }
 
@@ -114,6 +121,7 @@ impl<'a> MainView<'a> {
                         source.unwrap_or_default(),
                         new_user,
                     )),
+                    Command::Topic(_, topic) => Some(MessageEvent::SetTopic(topic)),
                     Command::Quit(_) => Some(MessageEvent::RemoveUser(source.unwrap_or_default())),
                     Command::Join(_) => Some(MessageEvent::JoinUser(source.unwrap_or_default())),
                     _ => None,
@@ -132,6 +140,7 @@ impl<'a> MainView<'a> {
                     ResponseNumber::NameReply(list_users) => {
                         Some(MessageEvent::UpdateUsers(list_users))
                     }
+                    ResponseNumber::Topic(topic) => Some(MessageEvent::SetTopic(topic)),
                     _ => None,
                 },
             };
@@ -166,6 +175,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
+                Constraint::Length(3), // Messages area
                 Constraint::Min(10),   // Messages area
                 Constraint::Length(4), // Input area
             ])
@@ -177,12 +187,13 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 Constraint::Percentage(100), // Messages
                 Constraint::Min(30),         // List Users
             ])
-            .split(main_layout[0]);
+            .split(main_layout[1]);
 
         // Render widgets
         self.messages_display.render(frame, top_layout[0]);
         self.list_users_view.render(frame, top_layout[1]);
-        self.input.render(frame, main_layout[1]);
+        self.input.render(frame, main_layout[2]);
+        self.topic_view.render(frame, main_layout[0]);
     }
 
     fn handle_event(
@@ -239,6 +250,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                     child.handle_actions(&msg);
                 }
                 None
+                //TODO: Manage returns of handle actions;
             }
         }
     }

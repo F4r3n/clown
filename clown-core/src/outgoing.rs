@@ -1,4 +1,3 @@
-use crate::client::State;
 use crate::command::Command;
 use crate::command::CommandReceiver;
 use crate::message::{MessageReceiver, MessageSender, ServerMessage};
@@ -22,7 +21,6 @@ impl Outgoing {
         mut log_writer: Option<std::io::BufWriter<File>>,
         mut reader: BufReader<R>,
         mut writer: BufWriter<W>,
-        _state: Arc<State>,
     ) -> anyhow::Result<()>
     where
         R: AsyncRead + Unpin,

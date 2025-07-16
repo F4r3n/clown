@@ -96,7 +96,7 @@ impl crate::component::EventHandler for UsersWidget {
 
     fn handle_events(
         &mut self,
-        event: &crate::event_handler::Event,
+        _event: &crate::event_handler::Event,
     ) -> Option<crate::message_event::MessageEvent> {
         None
     }

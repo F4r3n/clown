@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use clown_core::command::Command;
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub enum View {

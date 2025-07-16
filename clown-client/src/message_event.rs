@@ -8,6 +8,7 @@ pub enum MessageEvent {
     ReplaceUser(String /*old */, String /*new */),
     JoinUser(String),
     RemoveUser(String /*user */),
+    SetTopic(String /*topic */),
     PullIRC,
     Connect,
     Join,

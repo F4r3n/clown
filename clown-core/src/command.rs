@@ -143,6 +143,16 @@ impl CommandBuilder {
         }
     }
 
+    fn join(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+        if !parameters.is_empty() {
+            Some(Command::Nick(
+                parameters.last().map(|v| v.to_string()).unwrap_or_default(),
+            ))
+        } else {
+            trailing.map(|trailing| Command::Join(trailing.to_string()))
+        }
+    }
+
     fn quit(trailing: Option<&str>) -> Option<Command> {
         Some(Command::Quit(trailing.map(|v| v.to_string())))
     }
@@ -265,7 +275,7 @@ impl CommandBuilder {
             "PONG" => CommandBuilder::pong(parameters),
             "USER" => CommandBuilder::user(parameters, trailing),
             "PRIVMSG" => CommandBuilder::make_command_2(parameters, trailing, Command::PrivMsg),
-            "JOIN" => CommandBuilder::make_command_1(parameters, Command::Join),
+            "JOIN" => CommandBuilder::join(parameters, trailing),
             "PART" => CommandBuilder::part(parameters, trailing),
             "NOTICE" => CommandBuilder::notice(parameters, trailing),
             "TOPIC" => CommandBuilder::topic(parameters, trailing),

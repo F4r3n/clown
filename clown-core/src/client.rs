@@ -8,26 +8,6 @@ use crate::outgoing::CommandSender;
 use crate::outgoing::Outgoing;
 use std::fs::File;
 use std::sync::Arc;
-use std::sync::RwLock;
-
-#[derive(Clone)]
-pub struct State {
-    list_users: Arc<RwLock<Vec<String>>>,
-}
-
-impl State {
-    pub fn new() -> Self {
-        Self {
-            list_users: Arc::new(RwLock::new(vec![])),
-        }
-    }
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct IRCConfig {
@@ -40,7 +20,6 @@ pub struct IRCConfig {
 
 pub struct Client {
     sender: CommandSender,
-    state: Arc<State>,
 
     irc_config: IRCConfig,
     outgoing: Outgoing,
@@ -56,7 +35,6 @@ impl Client {
             sender,
             irc_config,
             outgoing,
-            state: Arc::new(State::new()),
             message_receiver: Some(message_receiver),
             log: in_file.map(std::io::BufWriter::new),
         }
@@ -88,9 +66,7 @@ impl Client {
         let reader = BufReader::new(reader);
         let writer = BufWriter::new(writer);
         self.try_connect()?;
-        self.outgoing
-            .process(self.log, reader, writer, self.state.clone())
-            .await
+        self.outgoing.process(self.log, reader, writer).await
     }
 
     pub fn spawn(
@@ -105,10 +81,6 @@ impl Client {
 
     pub fn command_sender(&self) -> CommandSender {
         self.sender.clone()
-    }
-
-    pub fn state(&self) -> Arc<State> {
-        self.state.clone()
     }
 
     pub fn message_receiver(&mut self) -> Option<MessageReceiver> {

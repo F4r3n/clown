@@ -6,10 +6,8 @@ use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style, Styled},
-    text::{Line, Span, Text},
     widgets::{
-        Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        Table,
+        Block, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table,
     },
 };
 
@@ -86,7 +84,7 @@ impl Draw for TextWidget {
             .map(|line| {
                 let time_str = format!("{:>8}", line.time_format());
                 let source_str = line.source.clone().unwrap_or_default();
-                let meta = format!("{:<8} {:<10}", time_str, source_str);
+                let meta = format!("{time_str:<8} {source_str:<10}");
                 Row::new(vec![Cell::from(meta), Cell::from(line.content.clone())])
             })
             .collect();
