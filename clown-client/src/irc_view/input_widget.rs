@@ -20,10 +20,12 @@ pub struct CInput {
     input: Input,
     /// Current input mode
     input_mode: InputMode,
+    area: Rect,
 }
 
 impl Draw for CInput {
     fn render(&mut self, frame: &mut Frame, area: Rect) {
+        self.area = area;
         let focus = self.has_focus();
         // keep 2 for borders and 1 for cursor
         let width = area.width.max(3) - 3;
@@ -58,6 +60,9 @@ impl Draw for CInput {
 }
 
 impl crate::component::EventHandler for CInput {
+    fn get_area(&self) -> Rect {
+        self.area
+    }
     fn set_focus(&mut self, focused: bool) {
         if !focused {
             self.stop_editing();
@@ -117,6 +122,7 @@ impl CInput {
         Self {
             input: Input::new(String::from("")),
             input_mode: InputMode::Editing,
+            area: Rect::default(),
         }
     }
     fn has_focus(&self) -> bool {

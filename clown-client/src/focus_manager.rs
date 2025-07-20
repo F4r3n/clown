@@ -119,11 +119,10 @@ impl<'a> FocusManager<'a> {
             self.current_focus_id = self.get_next_focus_id(id, -1).cloned();
         }
     }
-    #[cfg(test)]
-    pub fn set_focus(&mut self, widget_id: &WidgetId<'a>) -> bool {
-        if let Some(value) = self.widget_states.get(widget_id) {
+    pub fn set_focus(&mut self, widget_id: &str) -> bool {
+        if let Some((key, value)) = self.widget_states.get_key_value(widget_id) {
             if *value {
-                self.current_focus_id = Some(widget_id);
+                self.current_focus_id = Some(key);
                 return true;
             } else {
                 return false;

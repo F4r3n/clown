@@ -1,4 +1,5 @@
 use crate::component::Draw;
+use crate::irc_view::color_user::nickname_color;
 use crate::{MessageEvent, component::EventHandler};
 use chrono::{DateTime, Local, Timelike};
 use crossterm::event::KeyCode;
@@ -48,10 +49,12 @@ pub struct TextWidget {
     max_visible_height: usize,
     follow_last: bool,
     focus: bool,
+    area: Rect,
 }
 
 impl Draw for TextWidget {
     fn render(&mut self, frame: &mut Frame, area: Rect) {
+        self.area = area;
         let focused = self.focus;
         let border_style = if focused {
             Style::default().fg(Color::Cyan)
@@ -84,15 +87,19 @@ impl Draw for TextWidget {
             .map(|line| {
                 let time_str = format!("{:>8}", line.time_format());
                 let source_str = line.source.clone().unwrap_or_default();
-                let meta = format!("{time_str:<8} {source_str:<10}");
-                Row::new(vec![Cell::from(meta), Cell::from(line.content.clone())])
+                Row::new(vec![
+                    Cell::from(format!("{time_str:<8}")),
+                    Cell::from(format!("{source_str:<10}")).style(nickname_color(&source_str)),
+                    Cell::from(line.content.clone()),
+                ])
             })
             .collect();
 
         let mut table = Table::new(
             visible_rows,
             [
-                Constraint::Length(20), // Meta
+                Constraint::Length(9),  // time
+                Constraint::Length(11), // nickname
                 Constraint::Min(10),    // Content
             ],
         )
@@ -137,6 +144,10 @@ impl Draw for TextWidget {
 impl crate::component::EventHandler for TextWidget {
     fn has_focus(&self) -> bool {
         self.focus
+    }
+
+    fn get_area(&self) -> Rect {
+        self.area
     }
 
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
@@ -200,6 +211,7 @@ impl TextWidget {
             max_visible_height: 10,
             follow_last: true,
             vertical_scroll_state: ScrollbarState::default(),
+            area: Rect::default(),
         }
     }
 

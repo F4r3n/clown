@@ -1,3 +1,4 @@
+use ratatui::layout::Rect;
 use ratatui::text::Text;
 use ratatui::widgets::Paragraph;
 
@@ -29,6 +30,9 @@ impl TopicWidget {
 
 use crate::message_event::MessageEvent;
 impl EventHandler for TopicWidget {
+    fn get_area(&self) -> ratatui::prelude::Rect {
+        Rect::default()
+    }
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         match event {
             MessageEvent::SetTopic(topic) => {

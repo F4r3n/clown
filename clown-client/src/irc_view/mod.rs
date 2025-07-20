@@ -1,3 +1,4 @@
+mod color_user;
 pub mod input_widget;
 pub mod main_view;
 pub mod text_widget;

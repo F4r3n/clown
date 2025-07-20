@@ -12,6 +12,7 @@ pub trait EventHandler {
 
     fn set_focus(&mut self, _focused: bool) {}
     fn has_focus(&self) -> bool;
+    fn get_area(&self) -> Rect;
 }
 
 pub struct Component<'a, T> {
@@ -79,6 +80,12 @@ impl<'a, T> Component<'a, T> {
             inner: self.inner.to_child_mut(),
         }
     }
+    pub fn get_area(&self) -> Rect
+    where
+        T: EventHandler,
+    {
+        self.inner.get_area()
+    }
 }
 
 pub trait ToChild {
@@ -122,6 +129,10 @@ impl EventHandler for Child<'_> {
 
     fn has_focus(&self) -> bool {
         self.deref().has_focus()
+    }
+
+    fn get_area(&self) -> Rect {
+        self.deref().get_area()
     }
 
     fn set_focus(&mut self, focused: bool) {

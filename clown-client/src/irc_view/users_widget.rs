@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
-use crate::component::Draw;
+use crate::{component::Draw, irc_view::color_user::nickname_color};
 use ratatui::{
+    layout::Rect,
     style::{Color, Style, Styled},
     text::{Line, Span, Text},
     widgets::{Block, Paragraph},
@@ -9,6 +10,7 @@ use ratatui::{
 pub struct UsersWidget {
     list_users: HashSet<String>,
     focus: bool,
+    area: Rect,
 }
 
 impl UsersWidget {
@@ -16,6 +18,7 @@ impl UsersWidget {
         Self {
             list_users: HashSet::new(),
             focus: false,
+            area: Rect::default(),
         }
     }
     fn has_focus(&self) -> bool {
@@ -41,17 +44,21 @@ impl UsersWidget {
 
 impl Draw for UsersWidget {
     fn render(&mut self, frame: &mut ratatui::Frame, area: ratatui::prelude::Rect) {
-        let text_style = Style::default().fg(Color::White);
+        self.area = area;
         let border_style = if self.has_focus() {
             Style::default().fg(Color::Cyan)
         } else {
             Style::default()
         };
-
         let lines = self
             .list_users
             .iter()
-            .map(|content| Line::from(vec![Span::styled(content, text_style)]))
+            .map(|content| {
+                Line::from(vec![Span::styled(
+                    " ".to_string() + content,
+                    nickname_color(&content.replace("@", "").to_string()),
+                )])
+            })
             .collect::<Vec<Line>>();
 
         let text = Text::from(lines);
@@ -68,6 +75,9 @@ impl Draw for UsersWidget {
 }
 use crate::message_event::MessageEvent;
 impl crate::component::EventHandler for UsersWidget {
+    fn get_area(&self) -> Rect {
+        self.area
+    }
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         match event {
             MessageEvent::UpdateUsers(list_users) => {

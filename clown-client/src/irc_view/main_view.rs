@@ -20,6 +20,8 @@ use clown_core::response::ResponseNumber;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use crossterm::event::MouseEvent;
+use ratatui::layout::Position;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
@@ -175,7 +177,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Messages area
+                Constraint::Length(1), // Messages area
                 Constraint::Min(10),   // Messages area
                 Constraint::Length(4), // Input area
             ])
@@ -225,6 +227,26 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                     new_message
                 }
             }
+            Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => {
+                let mut id = None;
+                if crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                    == mouse_event.kind
+                {
+                    for child in self.children().iter_mut() {
+                        if child
+                            .get_area()
+                            .contains(Position::new(mouse_event.column, mouse_event.row))
+                        {
+                            id = Some(child.get_id().to_owned()); // only extract ID here
+                            break;
+                        }
+                    }
+                }
+                dbg!(id);
+                // Now use the ID — after mutable borrow ends
+                id.map(|id| MessageEvent::SetFocus(id.into()))
+            }
+
             Event::Tick => Some(MessageEvent::PullIRC),
             _ => None,
         };
@@ -234,6 +256,12 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
 
     fn update(&mut self, model: &mut Model, msg: MessageEvent) -> Option<MessageEvent> {
         match msg {
+            MessageEvent::SetFocus(focus_id) => {
+                self.focus_manager.set_focus(&focus_id);
+                self.update_widget_focus();
+
+                None
+            }
             MessageEvent::MessageInput(content) => self.update_input(model, content),
             MessageEvent::Quit => {
                 model.send_command(clown_core::command::Command::Quit(None));
