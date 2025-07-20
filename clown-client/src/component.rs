@@ -94,31 +94,22 @@ pub trait ToChild {
 
 impl<T: EventHandler> ToChild for T {
     fn to_child_mut(&mut self) -> Child<'_> {
-        Child::Borrowed(self)
+        Child(self)
     }
 }
 
-pub enum Child<'a> {
-    Borrowed(&'a mut dyn EventHandler),
-    Owned(Box<dyn 'a + EventHandler>),
-}
+pub struct Child<'a>(&'a mut dyn EventHandler);
 
 impl<'a> Deref for Child<'a> {
     type Target = dyn 'a + EventHandler;
     fn deref(&self) -> &Self::Target {
-        match self {
-            Child::Borrowed(inner) => *inner,
-            Child::Owned(inner) => inner.deref(),
-        }
+        self.0
     }
 }
 
 impl<'a> DerefMut for Child<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        match self {
-            Child::Borrowed(inner) => *inner,
-            Child::Owned(inner) => inner.deref_mut(),
-        }
+        self.0
     }
 }
 

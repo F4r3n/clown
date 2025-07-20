@@ -20,7 +20,6 @@ use clown_core::response::ResponseNumber;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
-use crossterm::event::MouseEvent;
 use ratatui::layout::Position;
 use ratatui::{
     Frame,
@@ -65,11 +64,11 @@ impl<'a> MainView<'a> {
     }
 
     fn get_id_event(&mut self, column: u16, row: u16) -> Option<String> {
-        let mut id = None;
+        let mut id: Option<String> = None;
 
         for child in self.children().iter() {
             if child.get_area().contains(Position::new(column, row)) {
-                id = Some(child.get_id().to_owned().to_string());
+                id = Some(child.get_id().to_string());
                 break;
             }
         }

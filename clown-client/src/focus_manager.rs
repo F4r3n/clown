@@ -78,10 +78,9 @@ impl<'a> FocusManager<'a> {
             .iter()
             .position(|id| *id == *widget_id)
         {
-            self.current_focus_id = self.get_next_focus_id(widget_id, 1).cloned();
-
             self.focusable_widgets.remove(pos);
             self.widget_states.remove(widget_id);
+            self.current_focus_id = self.get_next_focus_id(widget_id, 1).cloned();
         }
     }
     #[cfg(test)]
@@ -161,7 +160,7 @@ mod tests {
 
         // Register widgets
         let widget1 = "widget1";
-        let widget2 = "widget1";
+        let widget2 = "widget2";
 
         fm.register_widget(widget1);
         fm.register_widget(widget2);
@@ -221,15 +220,15 @@ mod tests {
         fm.register_widget(w3);
 
         // Set focus to widget3
-        assert!(fm.set_focus(&w3));
+        assert!(fm.set_focus(w3));
         assert_eq!(fm.get_focused_widget(), Some(&w3));
 
         // Try to set focus to disabled widget
         fm.set_widget_enabled(&w2, false);
-        assert!(!fm.set_focus(&w2));
+        assert!(!fm.set_focus(w2));
 
         // Try to set focus to non-existent widget
-        assert!(!fm.set_focus(&non_existent));
+        assert!(!fm.set_focus(non_existent));
     }
 
     #[test]
@@ -247,7 +246,7 @@ mod tests {
         assert_eq!(fm.get_focused_widget(), None);
 
         // Setting focus on non-existent widget should fail
-        assert!(!fm.set_focus(&any_widget));
+        assert!(!fm.set_focus(any_widget));
     }
 
     #[test]
@@ -354,9 +353,9 @@ mod tests {
         assert_eq!(fm.get_focused_widget(), initial_focus.as_ref());
 
         // Setting focus to disabled widget should fail
-        assert!(!fm.set_focus(&w1));
-        assert!(!fm.set_focus(&w2));
-        assert!(!fm.set_focus(&w3));
+        assert!(!fm.set_focus(w1));
+        assert!(!fm.set_focus(w2));
+        assert!(!fm.set_focus(w3));
     }
 
     #[test]
@@ -425,11 +424,11 @@ mod tests {
         assert_eq!(fm.get_focused_widget(), Some(&w1));
 
         // But we can't set focus to it explicitly
-        assert!(!fm.set_focus(&w1));
+        assert!(!fm.set_focus(w1));
 
         // Enable it again
         fm.set_widget_enabled(&w1, true);
-        assert!(fm.set_focus(&w1));
+        assert!(fm.set_focus(w1));
     }
 
     #[test]
