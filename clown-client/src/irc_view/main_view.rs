@@ -64,6 +64,18 @@ impl<'a> MainView<'a> {
         }
     }
 
+    fn get_id_event(&mut self, column: u16, row: u16) -> Option<String> {
+        let mut id = None;
+
+        for child in self.children().iter() {
+            if child.get_area().contains(Position::new(column, row)) {
+                id = Some(child.get_id().to_owned().to_string());
+                break;
+            }
+        }
+        id
+    }
+
     fn children(&mut self) -> Vec<Component<Child<'_>>> {
         vec![
             self.input.to_child_mut(),
@@ -232,19 +244,11 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 if crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
                     == mouse_event.kind
                 {
-                    for child in self.children().iter_mut() {
-                        if child
-                            .get_area()
-                            .contains(Position::new(mouse_event.column, mouse_event.row))
-                        {
-                            id = Some(child.get_id().to_owned()); // only extract ID here
-                            break;
-                        }
-                    }
+                    id = self.get_id_event(mouse_event.column, mouse_event.row);
                 }
-                dbg!(id);
-                // Now use the ID — after mutable borrow ends
-                id.map(|id| MessageEvent::SetFocus(id.into()))
+                id.map(|id| self.focus_manager.set_focus(&id));
+                self.update_widget_focus();
+                None
             }
 
             Event::Tick => Some(MessageEvent::PullIRC),
@@ -256,12 +260,6 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
 
     fn update(&mut self, model: &mut Model, msg: MessageEvent) -> Option<MessageEvent> {
         match msg {
-            MessageEvent::SetFocus(focus_id) => {
-                self.focus_manager.set_focus(&focus_id);
-                self.update_widget_focus();
-
-                None
-            }
             MessageEvent::MessageInput(content) => self.update_input(model, content),
             MessageEvent::Quit => {
                 model.send_command(clown_core::command::Command::Quit(None));
