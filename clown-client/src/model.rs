@@ -1,4 +1,5 @@
 use clown_core::command::Command;
+use tokio::task::JoinHandle;
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub enum View {
     #[default]
@@ -20,6 +21,8 @@ pub struct Model {
 
     pub message_reciever: Option<clown_core::message::MessageReceiver>,
     pub command_sender: Option<clown_core::outgoing::CommandSender>,
+
+    pub task : Option<JoinHandle<anyhow::Result<()>>>
 }
 
 impl Model {
@@ -34,6 +37,7 @@ impl Model {
             irc_config,
             message_reciever: None,
             command_sender: None,
+            task: None,
         }
     }
 
@@ -41,5 +45,9 @@ impl Model {
         self.command_sender
             .as_mut()
             .map(|value| value.send(in_command));
+    }
+
+    pub fn is_irc_finished(&self) -> bool {
+        self.task.as_ref().map(|v|v.is_finished()).unwrap_or(true)
     }
 }

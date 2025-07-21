@@ -151,4 +151,12 @@ impl CommandSender {
         }
         Ok(())
     }
+
+    pub fn is_closed(&self) -> bool {
+        if let Some(inner) = &self.inner {
+            inner.is_closed()
+        } else {
+            true
+        }
+    }
 }

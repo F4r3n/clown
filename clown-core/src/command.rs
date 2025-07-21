@@ -23,6 +23,7 @@ enum CommandName {
     Invite,
     Kick,
     Cap,
+    Error,
 }
 
 static COMMAND_NAME: phf::Map<&'static str, CommandName> = phf_map! {
@@ -43,6 +44,7 @@ static COMMAND_NAME: phf::Map<&'static str, CommandName> = phf_map! {
         "INVITE" => CommandName::Invite,
         "KICK" => CommandName::Kick,
         "CAP" => CommandName::Cap,
+        "ERROR" => CommandName::Error
 };
 
 #[derive(Debug)]
@@ -115,6 +117,10 @@ pub enum Command {
     /// CAP <subcommand>
     Cap(String),
 
+    /// Error command
+    /// ERROR :Connection timeout  ; Server closing a client connection because it is unresponsive.
+    Error(String),
+
     Unknown(String),
 }
 impl Command {
@@ -152,6 +158,7 @@ impl Command {
             Command::Quit(Some(reason)) => format!("QUIT {reason}\r\n").into_bytes(),
             Command::Quit(None) => "QUIT\r\n".to_string().into_bytes(),
             Command::Unknown(un) => format!("Unkwnon {un}\r\n").into_bytes(),
+            Command::Error(un) => format!("Error {un}\r\n").into_bytes(),
         }
     }
 }
@@ -338,6 +345,9 @@ impl CommandBuilder {
                 CommandName::List => CommandBuilder::list(parameters),
                 CommandName::Invite => CommandBuilder::invite(parameters),
                 CommandName::Kick => CommandBuilder::kick(parameters, trailing),
+                CommandName::Error => {
+                    CommandBuilder::make_command_1(parameters, trailing, Command::Ping)
+                }
                 CommandName::Cap => {
                     CommandBuilder::make_command_1(parameters, trailing, Command::Cap)
                 }

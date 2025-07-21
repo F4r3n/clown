@@ -137,6 +137,7 @@ impl<'a> MainView<'a> {
                     Command::Topic(_, topic) => Some(MessageEvent::SetTopic(topic)),
                     Command::Quit(_) => Some(MessageEvent::RemoveUser(source.unwrap_or_default())),
                     Command::Join(_) => Some(MessageEvent::JoinUser(source.unwrap_or_default())),
+                    Command::Error(_err) => Some(MessageEvent::DisConnect),
                     _ => None,
                 },
                 Response::Rpl(reply) => match reply {
@@ -176,7 +177,7 @@ fn connect_irc(model: &mut Model) {
             model.command_sender = Some(command_sender);
             model.message_reciever = reciever;
 
-            client.spawn(connection_config);
+            model.task = Some(client.spawn(connection_config));
         }
     }
 }
@@ -268,7 +269,16 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 connect_irc(model);
                 None
             }
-
+            MessageEvent::DisConnect => {
+                if !model.is_irc_finished() {
+                    model.send_command(clown_core::command::Command::Quit(None));
+                    None
+                }
+                else {
+                    Some(MessageEvent::AddMessageView(MessageContent::new(None, "Disconnected".into())))
+                }
+                
+            }
             MessageEvent::PullIRC => self.update_pull_irc(model),
             _ => {
                 for mut child in self.children() {

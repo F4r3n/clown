@@ -11,6 +11,7 @@ pub enum MessageEvent {
     SetTopic(String /*topic */),
     PullIRC,
     Connect,
+    DisConnect,
     Join,
     Quit,
 }

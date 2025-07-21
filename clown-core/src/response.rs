@@ -264,6 +264,8 @@ pub enum ResponseNumber {
     /// 395: No users
     NoUsers(String),
 
+    Err(u16, String),
+
     /// Any other reply not explicitly listed
     Unknown(u16, String),
 }
@@ -389,7 +391,10 @@ impl ResponseBuilder {
             393 => trailing.map(|v| Users(v.to_string())),
             394 => trailing.map(|v| EndOfUsers(v.to_string())),
             395 => trailing.map(|v| NoUsers(v.to_string())),
-            other => trailing.map(|v| Unknown(other, v.to_string())),
+            400..=502 | 524..=525 | 691 | 696 | 723 | 902 | 904..=907 => {
+                trailing.map(|v| Err(reply_number, v.to_string()))
+            }
+            _ => trailing.map(|v| Unknown(reply_number, v.to_string())),
         }
     }
 }
