@@ -5,8 +5,8 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
-nom = "8.0.0"
-ouroboros = "0.18.5"
+nom = { version = "8.0.0", default-features = false }
+ouroboros = { version = "0.18.5", default-features = false }
 
 [lints]
 workspace = true
