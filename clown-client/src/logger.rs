@@ -33,6 +33,8 @@ pub fn log_info_sync(msg: &str) {
     }
 }
 
+//used for debug
+#[allow(dead_code)]
 pub async fn log_info_async(msg: &str) {
     let message = msg.to_string();
     let _ = tokio::task::spawn_blocking(move || log_info_sync(&message)).await;
