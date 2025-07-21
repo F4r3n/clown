@@ -1,5 +1,5 @@
 use crate::parser::{parse_command, parse_parameters, parse_trailing};
-use crate::source::{Source, SourceKind, parse_source};
+use crate::source::{Source, parse_source};
 use ouroboros::self_referencing;
 /// Note: Server sources (used for server-to-server communications) are not handled.
 #[derive(Debug, PartialEq, Eq)]
@@ -88,7 +88,7 @@ pub fn create_message(buf: &[u8]) -> anyhow::Result<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use crate::source::SourceKind;
     #[test]
     fn test_parse_message_full() {
         let input = b":nick!user@host PRIVMSG #chan :hello world\r\n";

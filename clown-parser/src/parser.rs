@@ -81,8 +81,8 @@ mod tests {
     #[test]
     fn test_parse_parameters_trailing() {
         let input = b":nick!user@host PRIVMSG #chan :hello world\r\n";
-        let (rest, params) = parse_parameters(input).unwrap();
-        let (rest, trailing) = parse_trailing(rest).unwrap();
+        let (rest, _params) = parse_parameters(input).unwrap();
+        let (_rest, trailing) = parse_trailing(rest).unwrap();
 
         assert_eq!(trailing, Some(&b"hello world"[..]));
     }

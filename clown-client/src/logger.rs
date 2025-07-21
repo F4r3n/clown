@@ -28,7 +28,7 @@ pub fn log_info_sync(msg: &str) {
         Mutex::new(Logger::try_new("test_log.txt").expect("Failed to open log file"))
     });
 
-    if let Ok(mut logger) = logger_mutex.lock().map_err(|e| anyhow!("Error lock")) {
+    if let Ok(mut logger) = logger_mutex.lock().map_err(|_e| anyhow!("Error lock")) {
         let _ = logger.info(msg);
     }
 }

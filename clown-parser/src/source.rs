@@ -20,8 +20,8 @@ pub struct Source<'s> {
     host: Option<&'s [u8]>,
 }
 
+#[cfg(test)]
 impl<'a> Source<'a> {
-    #[cfg(test)]
     pub fn new(
         in_source_type: Option<SourceKind<'a>>,
         user: Option<&'a [u8]>,
@@ -33,13 +33,14 @@ impl<'a> Source<'a> {
             host,
         }
     }
+}
 
+impl Source<'_> {
     pub fn get_source_kind(&self) -> Option<&str> {
         if let Some(source_type) = &self.source {
             match source_type {
                 SourceKind::Nick(name) => std::str::from_utf8(name).ok(),
                 SourceKind::Server(name) => std::str::from_utf8(name).ok(),
-                _ => None,
             }
         } else {
             None

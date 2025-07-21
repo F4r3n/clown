@@ -1,8 +1,49 @@
+use phf::phf_map;
 use tokio::sync::mpsc;
 
 pub struct CommandReceiver {
     pub inner: mpsc::UnboundedReceiver<Command>,
 }
+
+enum CommandName {
+    Nick,
+    PrivMsg,
+    Pass,
+    User,
+    Ping,
+    Pong,
+    Quit,
+    Join,
+    Topic,
+    Part,
+    Notice,
+    Mode,
+    Who,
+    List,
+    Invite,
+    Kick,
+    Cap,
+}
+
+static COMMAND_NAME: phf::Map<&'static str, CommandName> = phf_map! {
+        "NICK" => CommandName::Nick,
+        "PASS" => CommandName::Pass,
+        "QUIT" => CommandName::Quit,
+        "PING" => CommandName::Ping,
+        "PONG" => CommandName::Pong,
+        "USER" => CommandName::User,
+        "PRIVMSG" => CommandName::PrivMsg,
+        "JOIN" => CommandName::Join,
+        "PART" => CommandName::Part,
+        "NOTICE" => CommandName::Notice,
+        "TOPIC" => CommandName::Topic,
+        "MODE" => CommandName::Mode,
+        "WHO" => CommandName::Who,
+        "LIST" => CommandName::List,
+        "INVITE" => CommandName::Invite,
+        "KICK" => CommandName::Kick,
+        "CAP" => CommandName::Cap,
+};
 
 #[derive(Debug)]
 pub enum Command {
@@ -273,25 +314,36 @@ impl CommandBuilder {
         parameters: Vec<&str>,
         trailing: Option<&str>,
     ) -> Option<Command> {
-        match command_name {
-            "NICK" => CommandBuilder::nick(parameters, trailing),
-            "PASS" => CommandBuilder::make_command_1(parameters, trailing, Command::Pass),
-            "QUIT" => CommandBuilder::quit(trailing),
-            "PING" => CommandBuilder::make_command_1(parameters, trailing, Command::Ping),
-            "PONG" => CommandBuilder::pong(parameters),
-            "USER" => CommandBuilder::user(parameters, trailing),
-            "PRIVMSG" => CommandBuilder::make_command_2(parameters, trailing, Command::PrivMsg),
-            "JOIN" => CommandBuilder::join(parameters, trailing),
-            "PART" => CommandBuilder::part(parameters, trailing),
-            "NOTICE" => CommandBuilder::notice(parameters, trailing),
-            "TOPIC" => CommandBuilder::topic(parameters, trailing),
-            "MODE" => CommandBuilder::mode(parameters),
-            "WHO" => CommandBuilder::who(parameters),
-            "LIST" => CommandBuilder::list(parameters),
-            "INVITE" => CommandBuilder::invite(parameters),
-            "KICK" => CommandBuilder::kick(parameters, trailing),
-            "CAP" => CommandBuilder::make_command_1(parameters, trailing, Command::Cap),
-            _ => CommandBuilder::make_command_1(parameters, trailing, Command::Unknown),
+        if let Some(command_name) = COMMAND_NAME.get(command_name) {
+            match command_name {
+                CommandName::Nick => CommandBuilder::nick(parameters, trailing),
+                CommandName::Pass => {
+                    CommandBuilder::make_command_1(parameters, trailing, Command::Pass)
+                }
+                CommandName::Quit => CommandBuilder::quit(trailing),
+                CommandName::Ping => {
+                    CommandBuilder::make_command_1(parameters, trailing, Command::Ping)
+                }
+                CommandName::Pong => CommandBuilder::pong(parameters),
+                CommandName::User => CommandBuilder::user(parameters, trailing),
+                CommandName::PrivMsg => {
+                    CommandBuilder::make_command_2(parameters, trailing, Command::PrivMsg)
+                }
+                CommandName::Join => CommandBuilder::join(parameters, trailing),
+                CommandName::Part => CommandBuilder::part(parameters, trailing),
+                CommandName::Notice => CommandBuilder::notice(parameters, trailing),
+                CommandName::Topic => CommandBuilder::topic(parameters, trailing),
+                CommandName::Mode => CommandBuilder::mode(parameters),
+                CommandName::Who => CommandBuilder::who(parameters),
+                CommandName::List => CommandBuilder::list(parameters),
+                CommandName::Invite => CommandBuilder::invite(parameters),
+                CommandName::Kick => CommandBuilder::kick(parameters, trailing),
+                CommandName::Cap => {
+                    CommandBuilder::make_command_1(parameters, trailing, Command::Cap)
+                }
+            }
+        } else {
+            None
         }
     }
 }

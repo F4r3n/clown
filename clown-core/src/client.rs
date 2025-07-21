@@ -7,7 +7,6 @@ use crate::message::MessageReceiver;
 use crate::outgoing::CommandSender;
 use crate::outgoing::Outgoing;
 use std::fs::File;
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct IRCConfig {
