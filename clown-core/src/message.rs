@@ -393,7 +393,7 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::Unknown(422, msg))) if msg == "There is no message of the day.")
+            matches!(reply, Some(Response::Rpl(ResponseNumber::Err(422, msg))) if msg == "There is no message of the day.")
         );
         Ok(())
     }
