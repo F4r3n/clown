@@ -147,6 +147,7 @@ dependencies = [
  "crossterm 0.29.0",
  "directories",
  "futures",
+ "hashlink",
  "once_cell",
  "ratatui",
  "tokio",

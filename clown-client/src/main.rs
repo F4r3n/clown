@@ -27,6 +27,7 @@ async fn main() -> color_eyre::Result<()> {
     let mut terminal = tui::init()?;
 
     let mut model = model::Model::new();
+    model.save()?;
     let mut views: ViewMap = HashMap::new();
     views.insert(
         View::MainView,

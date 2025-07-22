@@ -16,3 +16,4 @@ chrono = {version="0.4.41", default-features = false, features = ["clock", "std"
 once_cell = {version="1.21.3", default-features = false}
 yaml-rust2 = {git = "https://github.com/Ethiraric/yaml-rust2", rev = "52ac5bc2e68a86a9b8ba3c555e62270763bb5b5c", default-features = false}
 directories = "6.0.0"
+hashlink = "0.10.0"

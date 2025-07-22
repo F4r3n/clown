@@ -38,6 +38,10 @@ impl Model {
         }
     }
 
+    pub fn save(&self) -> color_eyre::Result<()> {
+        self.config.save()
+    }
+
     pub fn send_command(&mut self, in_command: Command) {
         self.command_sender
             .as_mut()
