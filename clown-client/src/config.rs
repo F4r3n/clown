@@ -1,4 +1,4 @@
-use clown_core::client::ClownConfig;
+use clown_core::client::LoginConfig;
 use clown_core::conn::ConnectionConfig;
 use directories::ProjectDirs;
 use hashlink::LinkedHashMap;
@@ -18,7 +18,7 @@ impl Default for ClientConfig {
 
 pub struct Config {
     pub connection_config: ConnectionConfig,
-    pub clown_config: ClownConfig,
+    pub login_config: LoginConfig,
     pub client_config: ClientConfig,
 }
 
@@ -41,7 +41,7 @@ impl Config {
             value
         } else {
             Self {
-                clown_config: ClownConfig {
+                login_config: LoginConfig {
                     nickname: "nickname".into(),
                     password: None,
                     real_name: "real".into(),
@@ -74,8 +74,8 @@ impl Config {
         Yaml::Hash(map)
     }
 
-    // Convert ClownConfig to Yaml::Hash
-    fn to_yaml_clown(clown: &ClownConfig) -> Yaml {
+    // Convert LoginConfig to Yaml::Hash
+    fn to_yaml_login_config(clown: &LoginConfig) -> Yaml {
         let mut map = LinkedHashMap::new();
         map.insert(Yaml::from_str("nickname"), Yaml::from_str(&clown.nickname));
         map.insert(
@@ -98,8 +98,8 @@ impl Config {
             Self::to_yaml_connection(&self.connection_config),
         );
         map.insert(
-            Yaml::from_str("clown"),
-            Self::to_yaml_clown(&self.clown_config),
+            Yaml::from_str("login"),
+            Self::to_yaml_login_config(&self.login_config),
         );
         map.insert(
             Yaml::from_str("option"),
@@ -133,11 +133,15 @@ impl Config {
             let doc = yamls
                 .first()
                 .ok_or(color_eyre::eyre::Error::msg("No yaml"))?;
-            if let Some(connection_config) = Self::read_connection_config(doc)
-                && let Some(clown_config) = Self::read_clown_config(doc)
-            {
+            if let Some(connection_config) = Self::read_connection_config(doc) {
                 Ok(Self {
-                    clown_config,
+                    login_config: Self::read_login_config(doc).unwrap_or(LoginConfig {
+                        nickname: "nickname".into(),
+                        password: None,
+                        real_name: "real".into(),
+                        username: "username".into(),
+                        channel: "#rust-spam".into(),
+                    }),
                     connection_config,
                     client_config: Self::read_client_config(doc).unwrap_or_default(),
                 })
@@ -168,16 +172,16 @@ impl Config {
             .map(|auto_join| ClientConfig { auto_join })
     }
 
-    fn read_clown_config(doc: &Yaml) -> Option<ClownConfig> {
-        if let Some(channel) = yaml_path!(doc, "clown", "channel").as_str()
-            && let Some(nickname) = yaml_path!(doc, "clown", "nickname").as_str()
-            && let Some(real_name) = yaml_path!(doc, "clown", "real_name").as_str()
-            && let Some(username) = yaml_path!(doc, "clown", "username").as_str()
+    fn read_login_config(doc: &Yaml) -> Option<LoginConfig> {
+        if let Some(channel) = yaml_path!(doc, "login", "channel").as_str()
+            && let Some(nickname) = yaml_path!(doc, "login", "nickname").as_str()
+            && let Some(real_name) = yaml_path!(doc, "login", "real_name").as_str()
+            && let Some(username) = yaml_path!(doc, "login", "username").as_str()
         {
-            Some(ClownConfig {
+            Some(LoginConfig {
                 channel: channel.into(),
                 nickname: nickname.into(),
-                password: yaml_path!(doc, "clown", "nickname")
+                password: yaml_path!(doc, "login", "nickname")
                     .as_str()
                     .map(|v| v.to_string()),
                 real_name: real_name.into(),

@@ -9,7 +9,7 @@ use crate::outgoing::Outgoing;
 use std::fs::File;
 
 #[derive(Debug, Clone)]
-pub struct ClownConfig {
+pub struct LoginConfig {
     pub nickname: String,
     pub real_name: String,
     pub username: String,
@@ -20,19 +20,19 @@ pub struct ClownConfig {
 pub struct Client {
     sender: CommandSender,
 
-    irc_config: ClownConfig,
+    login_config: LoginConfig,
     outgoing: Outgoing,
     message_receiver: Option<MessageReceiver>,
     log: Option<std::io::BufWriter<File>>,
 }
 
 impl Client {
-    pub fn new(irc_config: &ClownConfig, in_file: Option<std::fs::File>) -> Self {
+    pub fn new(login_config: &LoginConfig, in_file: Option<std::fs::File>) -> Self {
         let mut outgoing = Outgoing::default();
         let (sender, message_receiver) = outgoing.create_outgoing();
         Self {
             sender,
-            irc_config: irc_config.clone(),
+            login_config: login_config.clone(),
             outgoing,
             message_receiver: Some(message_receiver),
             log: in_file.map(std::io::BufWriter::new),
@@ -43,15 +43,15 @@ impl Client {
         let mut command_sender = self.command_sender();
 
         //command_sender.send(crate::command::Command::CAP("LS 302".to_string()))?;
-        if let Some(password) = &self.irc_config.password {
+        if let Some(password) = &self.login_config.password {
             command_sender.send(crate::command::Command::Pass(password.clone()))?;
         }
         command_sender.send(crate::command::Command::Nick(
-            self.irc_config.nickname.clone(),
+            self.login_config.nickname.clone(),
         ))?;
         command_sender.send(crate::command::Command::User(
-            self.irc_config.username.clone(),
-            self.irc_config.real_name.clone(),
+            self.login_config.username.clone(),
+            self.login_config.real_name.clone(),
         ))?;
 
         Ok(())

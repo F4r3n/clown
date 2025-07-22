@@ -102,9 +102,9 @@ impl<'a> MainView<'a> {
                 command::ClientCommand::Quit => Some(MessageEvent::Quit),
             }
         } else {
-            let nickname = model.config.clown_config.nickname.clone();
+            let nickname = model.config.login_config.nickname.clone();
             model.send_command(clown_core::command::Command::PrivMsg(
-                model.config.clown_config.channel.to_string(),
+                model.config.login_config.channel.to_string(),
                 content.clone(),
             ));
             self.messages_display
@@ -141,7 +141,7 @@ impl<'a> MainView<'a> {
                 Response::Rpl(reply) => match reply {
                     ResponseNumber::Welcome(content) => {
                         model.send_command(clown_core::command::Command::Join(
-                            model.config.clown_config.channel.to_string(),
+                            model.config.login_config.channel.to_string(),
                         ));
 
                         Some(MessageEvent::AddMessageView(MessageContent::new(
@@ -166,9 +166,9 @@ impl<'a> MainView<'a> {
 
 fn connect_irc(model: &mut Model) {
     let connection_config = model.config.connection_config.clone();
-    let clown_config = &model.config.clown_config;
+    let login_config = &model.config.login_config;
 
-    let mut client = Client::new(clown_config, File::create("log.txt").ok());
+    let mut client = Client::new(login_config, File::create("log.txt").ok());
     let reciever = client.message_receiver();
     let command_sender = client.command_sender();
 
