@@ -1,6 +1,15 @@
 use crate::parser::{parse_command, parse_parameters, parse_trailing};
 use crate::source::{Source, parse_source};
 use ouroboros::self_referencing;
+
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ParsingError {
+    #[error("Cannot parse message")]
+    Parse,
+}
+
 /// Note: Server sources (used for server-to-server communications) are not handled.
 #[derive(Debug, PartialEq, Eq)]
 pub struct IRCMessage<'s> {
@@ -48,7 +57,7 @@ impl Message {
     }
 }
 
-fn parse_message(buf: &[u8]) -> anyhow::Result<IRCMessage<'_>> {
+fn parse_message(buf: &[u8]) -> Result<IRCMessage<'_>, ParsingError> {
     let (buf, source) = parse_source(buf);
 
     let (buf, command) = match parse_command(buf) {
@@ -74,10 +83,10 @@ fn parse_message(buf: &[u8]) -> anyhow::Result<IRCMessage<'_>> {
     })
 }
 
-pub fn create_message(buf: &[u8]) -> anyhow::Result<Message> {
+pub fn create_message(buf: &[u8]) -> Result<Message, ParsingError> {
     MessageTryBuilder {
         data: buf.to_owned(),
-        internal_builder: |data: &Vec<u8>| -> anyhow::Result<IRCMessage<'_>> {
+        internal_builder: |data: &Vec<u8>| -> Result<IRCMessage<'_>, ParsingError> {
             let slice: &[u8] = data.as_slice();
             parse_message(slice)
         },

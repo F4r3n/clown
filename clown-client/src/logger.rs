@@ -1,7 +1,6 @@
 use std::fs::OpenOptions;
 use std::{fs::File, io::Write};
 
-use anyhow::anyhow;
 use once_cell::sync::OnceCell;
 use std::sync::Mutex;
 pub static LOGGER: OnceCell<Mutex<Logger>> = OnceCell::new();
@@ -11,12 +10,12 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn try_new(path: &str) -> anyhow::Result<Self> {
+    pub fn try_new(path: &str) -> color_eyre::Result<Self> {
         let file = OpenOptions::new().create(true).append(true).open(path)?;
         Ok(Self { file })
     }
 
-    pub fn info(&mut self, in_info: &str) -> anyhow::Result<()> {
+    pub fn info(&mut self, in_info: &str) -> color_eyre::Result<()> {
         self.file.write_all(in_info.as_bytes())?;
         self.file.flush()?;
         Ok(())
@@ -28,7 +27,10 @@ pub fn log_info_sync(msg: &str) {
         Mutex::new(Logger::try_new("test_log.txt").expect("Failed to open log file"))
     });
 
-    if let Ok(mut logger) = logger_mutex.lock().map_err(|_e| anyhow!("Error lock")) {
+    if let Ok(mut logger) = logger_mutex
+        .lock()
+        .map_err(|_e| color_eyre::eyre::Error::msg("Error lock"))
+    {
         let _ = logger.info(msg);
     }
 }

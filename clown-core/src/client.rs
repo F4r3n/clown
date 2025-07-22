@@ -3,6 +3,7 @@ use tokio::io::{BufReader, BufWriter};
 use tokio::task::JoinHandle;
 
 use crate::conn::{self, Connection};
+use crate::error::ClownError;
 use crate::message::MessageReceiver;
 use crate::outgoing::CommandSender;
 use crate::outgoing::Outgoing;
@@ -39,7 +40,7 @@ impl Client {
         }
     }
 
-    fn try_connect(&mut self) -> anyhow::Result<()> {
+    fn try_connect(&mut self) -> Result<(), ClownError> {
         let mut command_sender = self.command_sender();
 
         //command_sender.send(crate::command::Command::CAP("LS 302".to_string()))?;
@@ -57,7 +58,7 @@ impl Client {
         Ok(())
     }
 
-    async fn start<T>(mut self, stream: T) -> anyhow::Result<()>
+    async fn start<T>(mut self, stream: T) -> Result<(), ClownError>
     where
         T: AsyncRead + AsyncWrite + Unpin + 'static,
     {
@@ -65,17 +66,25 @@ impl Client {
         let reader = BufReader::new(reader);
         let writer = BufWriter::new(writer);
         self.try_connect()?;
-        self.outgoing.process(self.log, reader, writer).await
+        self.outgoing
+            .process(self.log, reader, writer)
+            .await
+            .map_err(ClownError::IRCIOError)
     }
 
     pub fn spawn(
         self,
         connection_config: conn::ConnectionConfig,
-    ) -> JoinHandle<anyhow::Result<()>> {
+    ) -> JoinHandle<Result<(), ClownError>> {
         tokio::spawn(async move {
             let conn = Connection::new(connection_config).connect().await?;
             self.start(conn).await
         })
+    }
+
+    pub async fn launch(self, connection_config: conn::ConnectionConfig) -> Result<(), ClownError> {
+        let conn = Connection::new(connection_config).connect().await?;
+        self.start(conn).await
     }
 
     pub fn command_sender(&self) -> CommandSender {

@@ -124,7 +124,7 @@ impl<'a> MainView<'a> {
         {
             let source = recieved.get_source().map(|v| v.to_string());
 
-            crate::logger::log_info_sync(format!("Response {:?} {}\n", &source, &reply).as_str());
+            crate::logger::log_info_sync(format!("Response {:?} {:?}\n", &source, &reply).as_str());
             let result = match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(_target, content) => Some(MessageEvent::AddMessageView(
@@ -177,7 +177,9 @@ fn connect_irc(model: &mut Model) {
             model.command_sender = Some(command_sender);
             model.message_reciever = reciever;
 
-            model.task = Some(client.spawn(connection_config));
+            model.task = Some(tokio::spawn(async move {
+                client.launch(connection_config).await.map_err(Into::into)
+            }));
         }
     }
 }
@@ -273,11 +275,12 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 if !model.is_irc_finished() {
                     model.send_command(clown_core::command::Command::Quit(None));
                     None
+                } else {
+                    Some(MessageEvent::AddMessageView(MessageContent::new(
+                        None,
+                        "Disconnected".into(),
+                    )))
                 }
-                else {
-                    Some(MessageEvent::AddMessageView(MessageContent::new(None, "Disconnected".into())))
-                }
-                
             }
             MessageEvent::PullIRC => self.update_pull_irc(model),
             _ => {

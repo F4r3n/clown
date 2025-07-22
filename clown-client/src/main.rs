@@ -21,7 +21,9 @@ mod widget_view;
 type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
+    color_eyre::install()?;
     let mut events = EventHandler::new(); // new
+    EventHandler::enable_mouse_event()?;
     let mut terminal = tui::init()?;
 
     let mut model = model::Model::new(

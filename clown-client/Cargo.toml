@@ -4,9 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.98"
 clown-core = { version = "0.1.0", path = "../clown-core" }
-color-eyre = "0.6.5"
+color-eyre = {version="0.6.5", default-features = false}
 ratatui = { version="0.29.0", default-features = false, features = ["crossterm"]}
 tui-input = { version="0.14.0", default-features = false, features = ["crossterm"]}
 tokio = { version = "1.46.1", default-features = false, features = ["full"] }
@@ -14,4 +13,5 @@ tokio-util = {version="0.7.9", default-features = false}
 futures = {version="0.3.28", default-features = false, features = ["async-await"]}
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 chrono = {version="0.4.41", default-features = false, features = ["clock", "std"]}
-once_cell = "1.21.3"
+once_cell = {version="1.21.3", default-features = false}
+yaml-rust2 = {git = "https://github.com/Ethiraric/yaml-rust2", rev = "52ac5bc2e68a86a9b8ba3c555e62270763bb5b5c", default-features = false}

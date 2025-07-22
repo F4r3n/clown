@@ -1,5 +1,6 @@
 use crate::command::Command;
 use crate::command::CommandReceiver;
+use crate::error::IRCIOError;
 use crate::message::{MessageReceiver, MessageSender, ServerMessage};
 use crate::response::Response;
 use clown_parser::message::create_message;
@@ -9,6 +10,7 @@ use tokio::io::BufReader;
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
+
 #[derive(Default)]
 pub struct Outgoing {
     receiver: Option<CommandReceiver>,
@@ -20,24 +22,10 @@ impl Outgoing {
         &mut self,
         writer: &mut BufWriter<W>,
         server_message: ServerMessage,
-    ) -> anyhow::Result<()>
+    ) -> Result<(), IRCIOError>
     where
         W: AsyncWrite + Unpin,
     {
-        // Handle PING immediately
-        /*
-        if line.starts_with("PING") {
-            let response = line.replacen("PING", "PONG", 1);
-            writer.write_all(response.as_bytes()).await?;
-            writer.write_all(b"\r\n").await?;
-            writer.flush().await?;
-        } else if line.starts_with("CAP") {
-            writer
-                .write_all(Command::Cap("END".to_string()).as_bytes().as_slice())
-                .await?;
-            writer.flush().await?;
-        }
-        */
         if let Some(reply) = server_message.get_reply() {
             match reply {
                 Response::Cmd(Command::Ping(token)) => {
@@ -57,7 +45,10 @@ impl Outgoing {
         }
 
         if let Some(sender) = &self.message_sender {
-            sender.inner.send(server_message)?;
+            sender
+                .inner
+                .send(server_message)
+                .map_err(|_| IRCIOError::SendMessage)?;
         }
         Ok(())
     }
@@ -67,7 +58,7 @@ impl Outgoing {
         mut log_writer: Option<std::io::BufWriter<File>>,
         mut reader: BufReader<R>,
         mut writer: BufWriter<W>,
-    ) -> anyhow::Result<()>
+    ) -> Result<(), IRCIOError>
     where
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
@@ -145,9 +136,11 @@ pub struct CommandSender {
 }
 
 impl CommandSender {
-    pub fn send(&mut self, in_command: Command) -> Result<(), anyhow::Error> {
+    pub fn send(&mut self, in_command: Command) -> Result<(), IRCIOError> {
         if let Some(inner) = &self.inner {
-            inner.send(in_command)?
+            inner
+                .send(in_command)
+                .map_err(|_| IRCIOError::SendCommand)?
         }
         Ok(())
     }

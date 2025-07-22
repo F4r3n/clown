@@ -1,4 +1,5 @@
 use color_eyre::eyre::Result;
+use crossterm::ExecutableCommand;
 use futures::{FutureExt, StreamExt, join};
 use tokio::{sync::mpsc, task::JoinHandle};
 
@@ -70,6 +71,11 @@ impl EventHandler {
         }
     }
 
+    pub fn enable_mouse_event() -> color_eyre::Result<()> {
+        std::io::stdout().execute(crossterm::event::EnableMouseCapture)?;
+        Ok(())
+    }
+
     pub async fn next(&mut self) -> Result<Event> {
         self.rx
             .recv()
@@ -77,10 +83,10 @@ impl EventHandler {
             .ok_or(color_eyre::eyre::eyre!("Unable to get event"))
     }
 
-    pub async fn _join(&mut self) -> anyhow::Result<()> {
+    pub async fn _join(&mut self) -> color_eyre::Result<()> {
         if let Some(task) = self._task.take() {
             if let Err(_e) = join!(task).0 {
-                return Err(anyhow::Error::msg("Failed to stop"));
+                return Err(color_eyre::eyre::Error::msg("Failed to stop"));
             }
         }
         Ok(())

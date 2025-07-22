@@ -22,7 +22,7 @@ pub struct Model {
     pub message_reciever: Option<clown_core::message::MessageReceiver>,
     pub command_sender: Option<clown_core::outgoing::CommandSender>,
 
-    pub task : Option<JoinHandle<anyhow::Result<()>>>
+    pub task: Option<JoinHandle<Result<(), color_eyre::Report>>>,
 }
 
 impl Model {
@@ -48,6 +48,6 @@ impl Model {
     }
 
     pub fn is_irc_finished(&self) -> bool {
-        self.task.as_ref().map(|v|v.is_finished()).unwrap_or(true)
+        self.task.as_ref().map(|v| v.is_finished()).unwrap_or(true)
     }
 }
