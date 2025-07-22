@@ -37,40 +37,50 @@ impl<'a> FocusManager<'a> {
             _ => current,
         }
     }
-    fn get_next_focus(&self, in_id: &WidgetId<'a>, direction: i8) -> Option<usize> {
+    fn get_next_focus(&self, in_pos: usize, direction: i8) -> Option<usize> {
         let len = self.focusable_widgets.len();
         if len == 0 {
             return None;
         }
-        if let Some(mut current) = self.focusable_widgets.iter().position(|id| *id == *in_id) {
-            let start_pos = current;
-            current = self.next_index(current, direction);
-            loop {
-                if let Some(widget_id) = self.focusable_widgets.get(current) {
-                    if let Some(is_valid) = self.widget_states.get(widget_id) {
-                        if *is_valid {
-                            return Some(current);
-                        } else {
-                            current = self.next_index(current, direction);
-                        }
+        //if let Some(mut current) = self.focusable_widgets.iter().position(|id| *id == *in_id) {
+        let start_pos = in_pos;
+        let mut current = self.next_index(in_pos, direction);
+        loop {
+            if let Some(widget_id) = self.focusable_widgets.get(current) {
+                if let Some(is_valid) = self.widget_states.get(widget_id) {
+                    if *is_valid {
+                        return Some(current);
                     } else {
                         current = self.next_index(current, direction);
                     }
-                }
-                if start_pos == current {
-                    return None;
+                } else {
+                    current = self.next_index(current, direction);
                 }
             }
+
+            if start_pos == current {
+                return Some(current);
+            }
         }
-        None
     }
 
     fn get_next_focus_id(&self, in_id: &WidgetId<'a>, direction: i8) -> Option<&WidgetId<'a>> {
-        if let Some(index) = self.get_next_focus(in_id, direction) {
-            return self.focusable_widgets.get(index);
+        if let Some(current) = self.focusable_widgets.iter().position(|id| *id == *in_id) {
+            if let Some(index) = self.get_next_focus(current, direction) {
+                self.focusable_widgets.get(index)
+            } else {
+                None
+            }
+        } else {
+            None
         }
-        None
     }
+
+    #[cfg(test)]
+    fn get_id(&self, index: usize) -> Option<&WidgetId<'a>> {
+        self.focusable_widgets.get(index)
+    }
+
     #[cfg(test)]
     pub fn unregister_widget(&mut self, widget_id: &WidgetId<'a>) {
         if let Some(pos) = self
@@ -78,9 +88,16 @@ impl<'a> FocusManager<'a> {
             .iter()
             .position(|id| *id == *widget_id)
         {
+            self.current_focus_id = self
+                .get_next_focus(pos, 1)
+                .and_then(|v| self.get_id(v))
+                .cloned();
             self.focusable_widgets.remove(pos);
             self.widget_states.remove(widget_id);
-            self.current_focus_id = self.get_next_focus_id(widget_id, 1).cloned();
+
+            if self.focusable_widgets.is_empty() {
+                self.current_focus_id = None
+            }
         }
     }
     #[cfg(test)]
@@ -104,6 +121,7 @@ impl<'a> FocusManager<'a> {
         if self.focusable_widgets.is_empty() {
             return;
         }
+
         if let Some(id) = &self.current_focus_id {
             self.current_focus_id = self.get_next_focus_id(id, 1).cloned();
         }
