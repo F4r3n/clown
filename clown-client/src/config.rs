@@ -181,7 +181,7 @@ impl Config {
             Some(LoginConfig {
                 channel: channel.into(),
                 nickname: nickname.into(),
-                password: yaml_path!(doc, "login", "nickname")
+                password: yaml_path!(doc, "login", "password")
                     .as_str()
                     .map(|v| v.to_string()),
                 real_name: real_name.into(),
