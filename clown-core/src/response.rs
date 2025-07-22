@@ -12,10 +12,10 @@ impl fmt::Display for Response {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
             Response::Cmd(cmd) => {
-                write!(f, "{:?}", cmd)
+                write!(f, "{cmd:?}")
             }
             Response::Rpl(rpl) => {
-                write!(f, "{:?}", rpl)
+                write!(f, "{rpl:?}")
             }
         }
     }

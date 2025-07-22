@@ -1,5 +1,7 @@
 use clown_core::command::Command;
 use tokio::task::JoinHandle;
+
+use crate::config::Config;
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub enum View {
     #[default]
@@ -16,8 +18,7 @@ pub enum RunningState {
 pub struct Model {
     pub running_state: RunningState,
     pub current_view: View,
-    pub connection_config: Option<clown_core::conn::ConnectionConfig>,
-    pub irc_config: Option<clown_core::client::IRCConfig>,
+    pub config: Config,
 
     pub message_reciever: Option<clown_core::message::MessageReceiver>,
     pub command_sender: Option<clown_core::outgoing::CommandSender>,
@@ -26,15 +27,11 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn new(
-        connection_config: Option<clown_core::conn::ConnectionConfig>,
-        irc_config: Option<clown_core::client::IRCConfig>,
-    ) -> Self {
+    pub fn new() -> Self {
         Self {
             running_state: RunningState::Running,
             current_view: View::MainView,
-            connection_config,
-            irc_config,
+            config: Config::new(),
             message_reciever: None,
             command_sender: None,
             task: None,

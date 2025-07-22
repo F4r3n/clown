@@ -108,9 +108,9 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new(config: ConnectionConfig) -> Self {
+    pub fn new(config: &ConnectionConfig) -> Self {
         Self {
-            connection_config: config,
+            connection_config: config.clone(),
         }
     }
 

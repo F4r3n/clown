@@ -1,5 +1,4 @@
 use crate::event_handler::Event;
-use clown_core::client::IRCConfig;
 use ratatui::Frame;
 use std::collections::HashMap;
 mod component;
@@ -14,6 +13,7 @@ use message_event::MessageEvent;
 
 use crate::event_handler::EventHandler;
 mod command;
+mod config;
 mod event_handler;
 mod logger;
 mod model;
@@ -26,19 +26,7 @@ async fn main() -> color_eyre::Result<()> {
     EventHandler::enable_mouse_event()?;
     let mut terminal = tui::init()?;
 
-    let mut model = model::Model::new(
-        Some(clown_core::conn::ConnectionConfig {
-            address: "localhost".into(),
-            port: 6667,
-        }),
-        Some(IRCConfig {
-            nickname: "farine".into(),
-            password: None,
-            real_name: "farine".into(),
-            username: "farine".into(),
-            channel: "#rust-spam".into(),
-        }),
-    );
+    let mut model = model::Model::new();
     let mut views: ViewMap = HashMap::new();
     views.insert(
         View::MainView,

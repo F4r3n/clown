@@ -5,11 +5,9 @@ use chrono::{DateTime, Local, Timelike};
 use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style, Styled},
-    widgets::{
-        Block, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table,
-    },
+    widgets::{Block, Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
 
 #[derive(PartialEq, Debug, Clone)]
@@ -72,10 +70,8 @@ impl Draw for TextWidget {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Length(20), // Meta (time + source)
-                Constraint::Length(1),  // Separator "┃"
-                Constraint::Min(10),    // Message
-                Constraint::Length(1),  // Scrollbar
+                Constraint::Min(30),   // Meta (time + source)
+                Constraint::Length(1), // Scrollbar
             ])
             .split(area);
 
@@ -90,6 +86,7 @@ impl Draw for TextWidget {
                 Row::new(vec![
                     Cell::from(format!("{time_str:<8}")),
                     Cell::from(format!("{source_str:<10}")).style(nickname_color(&source_str)),
+                    Cell::from("┃").style(Color::DarkGray),
                     Cell::from(line.content.clone()),
                 ])
             })
@@ -100,6 +97,7 @@ impl Draw for TextWidget {
             [
                 Constraint::Length(9),  // time
                 Constraint::Length(11), // nickname
+                Constraint::Length(1),  // nickname
                 Constraint::Min(10),    // Content
             ],
         )
@@ -110,32 +108,15 @@ impl Draw for TextWidget {
                 .block(Block::bordered().title("Messages"))
                 .set_style(border_style);
         }
-
-        let height = layout[1].height as usize;
-        let binding = "┃\n".repeat(height);
-        let vertical_line = binding.trim_end(); // trim to avoid extra line
-        let line_paragraph = Paragraph::new(vertical_line)
-            .alignment(Alignment::Center) // optional
-            .style(Style::default().fg(Color::DarkGray));
-
         self.vertical_scroll_state = ScrollbarState::new(self.content.len())
             .position(self.scroll_offset + self.max_visible_height);
 
-        frame.render_widget(
-            table,
-            Rect {
-                x: layout[0].x,
-                y: layout[0].y,
-                width: layout[0].width + layout[2].width, // table covers meta + content
-                height: layout[0].height,
-            },
-        );
-        frame.render_widget(line_paragraph, layout[1]);
+        frame.render_widget(table, layout[0]);
         frame.render_stateful_widget(
             Scrollbar::default()
                 .orientation(ScrollbarOrientation::VerticalRight)
                 .thumb_style(Style::default().bg(Color::Cyan)),
-            layout[3],
+            layout[1],
             &mut self.vertical_scroll_state,
         );
     }

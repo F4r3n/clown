@@ -1,6 +1,5 @@
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::io::{BufReader, BufWriter};
-use tokio::task::JoinHandle;
 
 use crate::conn::{self, Connection};
 use crate::error::ClownError;
@@ -10,7 +9,7 @@ use crate::outgoing::Outgoing;
 use std::fs::File;
 
 #[derive(Debug, Clone)]
-pub struct IRCConfig {
+pub struct ClownConfig {
     pub nickname: String,
     pub real_name: String,
     pub username: String,
@@ -21,19 +20,19 @@ pub struct IRCConfig {
 pub struct Client {
     sender: CommandSender,
 
-    irc_config: IRCConfig,
+    irc_config: ClownConfig,
     outgoing: Outgoing,
     message_receiver: Option<MessageReceiver>,
     log: Option<std::io::BufWriter<File>>,
 }
 
 impl Client {
-    pub fn new(irc_config: IRCConfig, in_file: Option<std::fs::File>) -> Self {
+    pub fn new(irc_config: &ClownConfig, in_file: Option<std::fs::File>) -> Self {
         let mut outgoing = Outgoing::default();
         let (sender, message_receiver) = outgoing.create_outgoing();
         Self {
             sender,
-            irc_config,
+            irc_config: irc_config.clone(),
             outgoing,
             message_receiver: Some(message_receiver),
             log: in_file.map(std::io::BufWriter::new),
@@ -72,17 +71,10 @@ impl Client {
             .map_err(ClownError::IRCIOError)
     }
 
-    pub fn spawn(
+    pub async fn launch(
         self,
-        connection_config: conn::ConnectionConfig,
-    ) -> JoinHandle<Result<(), ClownError>> {
-        tokio::spawn(async move {
-            let conn = Connection::new(connection_config).connect().await?;
-            self.start(conn).await
-        })
-    }
-
-    pub async fn launch(self, connection_config: conn::ConnectionConfig) -> Result<(), ClownError> {
+        connection_config: &conn::ConnectionConfig,
+    ) -> Result<(), ClownError> {
         let conn = Connection::new(connection_config).connect().await?;
         self.start(conn).await
     }

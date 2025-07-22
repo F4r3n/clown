@@ -100,20 +100,17 @@ impl<'a> MainView<'a> {
                 command::ClientCommand::Join => Some(MessageEvent::Join),
                 command::ClientCommand::Quit => Some(MessageEvent::Quit),
             }
-        } else if let Some(irc_config) = &model.irc_config {
-            let nickname = irc_config.nickname.clone();
+        } else {
+            let nickname = model.config.clown_config.nickname.clone();
             model.send_command(clown_core::command::Command::PrivMsg(
-                irc_config.channel.to_string(),
+                model.config.clown_config.channel.to_string(),
                 content.clone(),
             ));
-            return self
-                .messages_display
+            self.messages_display
                 .handle_actions(&MessageEvent::AddMessageView(MessageContent::new(
                     Some(nickname),
                     content,
-                )));
-        } else {
-            None
+                )))
         }
     }
 
@@ -142,11 +139,10 @@ impl<'a> MainView<'a> {
                 },
                 Response::Rpl(reply) => match reply {
                     ResponseNumber::Welcome(content) => {
-                        if let Some(irc_config) = &model.irc_config {
-                            model.send_command(clown_core::command::Command::Join(
-                                irc_config.channel.to_string(),
-                            ));
-                        }
+                        model.send_command(clown_core::command::Command::Join(
+                            model.config.clown_config.channel.to_string(),
+                        ));
+
                         Some(MessageEvent::AddMessageView(MessageContent::new(
                             source, content,
                         )))
@@ -168,20 +164,19 @@ impl<'a> MainView<'a> {
 }
 
 fn connect_irc(model: &mut Model) {
-    if let Some(connection_config) = model.connection_config.clone() {
-        if let Some(irc_config) = model.irc_config.clone() {
-            let mut client = Client::new(irc_config, File::create("log.txt").ok());
-            let reciever = client.message_receiver();
-            let command_sender = client.command_sender();
+    let connection_config = model.config.connection_config.clone();
+    let clown_config = &model.config.clown_config;
 
-            model.command_sender = Some(command_sender);
-            model.message_reciever = reciever;
+    let mut client = Client::new(clown_config, File::create("log.txt").ok());
+    let reciever = client.message_receiver();
+    let command_sender = client.command_sender();
 
-            model.task = Some(tokio::spawn(async move {
-                client.launch(connection_config).await.map_err(Into::into)
-            }));
-        }
-    }
+    model.command_sender = Some(command_sender);
+    model.message_reciever = reciever;
+
+    model.task = Some(tokio::spawn(async move {
+        client.launch(&connection_config).await.map_err(Into::into)
+    }));
 }
 
 use crate::command;
