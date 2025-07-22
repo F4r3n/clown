@@ -11,6 +11,7 @@ pub enum View {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum RunningState {
     #[default]
+    Start,
     Running,
     Done,
 }
@@ -29,7 +30,7 @@ pub struct Model {
 impl Model {
     pub fn new() -> Self {
         Self {
-            running_state: RunningState::Running,
+            running_state: RunningState::Start,
             current_view: View::MainView,
             config: Config::new(),
             message_reciever: None,

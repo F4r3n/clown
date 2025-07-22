@@ -5,10 +5,23 @@ use hashlink::LinkedHashMap;
 use std::path::PathBuf;
 use yaml_rust2::Yaml;
 
+#[derive(Debug, Clone)]
+pub struct ClientConfig {
+    pub auto_join: bool,
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        ClientConfig { auto_join: true }
+    }
+}
+
 pub struct Config {
     pub connection_config: ConnectionConfig,
     pub clown_config: ClownConfig,
+    pub client_config: ClientConfig,
 }
+
 #[macro_export]
 macro_rules! yaml_path {
     ($d:expr, $( $x:expr ),* ) => {
@@ -39,6 +52,7 @@ impl Config {
                     address: "localhost".into(),
                     port: 6667,
                 },
+                client_config: ClientConfig::default(),
             }
         }
     }
@@ -47,6 +61,16 @@ impl Config {
         let mut map = LinkedHashMap::new();
         map.insert(Yaml::from_str("address"), Yaml::from_str(&conn.address));
         map.insert(Yaml::from_str("port"), Yaml::Integer(conn.port as i64));
+        Yaml::Hash(map)
+    }
+
+    // Convert ConnectionConfig to Yaml::Hash
+    fn to_yaml_option(option: &ClientConfig) -> Yaml {
+        let mut map = LinkedHashMap::new();
+        map.insert(
+            Yaml::from_str("auto_join"),
+            Yaml::from_str(option.auto_join.to_string().as_str()),
+        );
         Yaml::Hash(map)
     }
 
@@ -76,6 +100,10 @@ impl Config {
         map.insert(
             Yaml::from_str("clown"),
             Self::to_yaml_clown(&self.clown_config),
+        );
+        map.insert(
+            Yaml::from_str("option"),
+            Self::to_yaml_option(&self.client_config),
         );
         Yaml::Hash(map)
     }
@@ -111,6 +139,7 @@ impl Config {
                 Ok(Self {
                     clown_config,
                     connection_config,
+                    client_config: Self::read_client_config(doc).unwrap_or_default(),
                 })
             } else {
                 Err(color_eyre::eyre::eyre!("Invalid config"))
@@ -131,6 +160,12 @@ impl Config {
         } else {
             None
         }
+    }
+
+    fn read_client_config(doc: &Yaml) -> Option<ClientConfig> {
+        yaml_path!(doc, "option", "auto_join")
+            .as_bool()
+            .map(|auto_join| ClientConfig { auto_join })
     }
 
     fn read_clown_config(doc: &Yaml) -> Option<ClownConfig> {

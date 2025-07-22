@@ -12,6 +12,7 @@ use crate::irc_view::text_widget::MessageContent;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
 use crate::model::Model;
+use crate::model::RunningState;
 use crate::widget_view;
 use clown_core::client::Client;
 use clown_core::command::Command;
@@ -209,7 +210,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
 
     fn handle_event(
         &mut self,
-        _model: &mut Model,
+        model: &mut Model,
         event: &Event,
     ) -> color_eyre::Result<Option<MessageEvent>> {
         // Handle focus switching first
@@ -248,7 +249,17 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 None
             }
 
-            Event::Tick => Some(MessageEvent::PullIRC),
+            Event::Tick => {
+                if model.running_state == RunningState::Start {
+                    if model.config.client_config.auto_join {
+                        connect_irc(model);
+                    }
+                    model.running_state = RunningState::Running;
+                    None
+                } else {
+                    Some(MessageEvent::PullIRC)
+                }
+            }
             _ => None,
         };
 
