@@ -50,11 +50,7 @@ impl<'a, T> Component<'a, T> {
     where
         T: EventHandler,
     {
-        if self.inner.has_focus() {
-            self.inner.handle_events(event)
-        } else {
-            None
-        }
+        self.inner.handle_events(event)
     }
 
     pub fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent>

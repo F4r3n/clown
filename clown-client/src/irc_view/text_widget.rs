@@ -1,5 +1,6 @@
 use crate::component::Draw;
 use crate::irc_view::color_user::nickname_color;
+use crate::logger::log_info_sync;
 use crate::{MessageEvent, component::EventHandler};
 use chrono::{DateTime, Local, Timelike};
 use crossterm::event::KeyCode;

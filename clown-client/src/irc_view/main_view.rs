@@ -12,6 +12,7 @@ use crate::irc_view::text_widget;
 use crate::irc_view::text_widget::MessageContent;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
+use crate::logger::log_info_sync;
 use crate::model::Model;
 use crate::model::RunningState;
 use crate::widget_view;
@@ -256,20 +257,31 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 }
             }
             Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => {
-                let mut id = None;
-                if crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-                    == mouse_event.kind
-                {
-                    id = self.get_id_event(mouse_event.column, mouse_event.row);
-                    id.map(|id| self.focus_manager.set_focus(&id));
-                    self.update_widget_focus();
-                }
-
-                for child in self.children().iter_mut() {
-                    if child.has_focus() {
-                        child.handle_events(event);
+                if let Some(id) = self.get_id_event(mouse_event.column, mouse_event.row) {
+                    if crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                        == mouse_event.kind
+                    {
+                        self.focus_manager.set_focus(&id);
+                        self.update_widget_focus();
+                    } else if crossterm::event::MouseEventKind::ScrollDown == mouse_event.kind
+                        || crossterm::event::MouseEventKind::ScrollUp == mouse_event.kind
+                    {
+                        for child in self.children().iter_mut() {
+                            if child.get_id().eq(&id) {
+                                child.handle_events(event);
+                                break;
+                            }
+                        }
+                    } else {
+                        for child in self.children().iter_mut() {
+                            if child.has_focus() {
+                                child.handle_events(event);
+                                break;
+                            }
+                        }
                     }
                 }
+
                 None
             }
 
