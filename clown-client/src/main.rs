@@ -1,6 +1,7 @@
 use crate::event_handler::Event;
 use ratatui::Frame;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 mod component;
 mod focus_manager;
 mod irc_view;
@@ -40,11 +41,13 @@ async fn main() -> color_eyre::Result<()> {
         terminal.draw(|f| view(&mut model, &mut views, f))?;
 
         // Handle events and map to a Message
-        let mut current_msg = handle_event(&mut model, &mut views, event)?;
-
+        let mut list_messages = VecDeque::new();
+        if let Some(message) = handle_event(&mut model, &mut views, event)? {
+            list_messages.push_back(message);
+        }
         // Process updates as long as they return a non-None message
-        while current_msg.is_some() {
-            current_msg = update(&mut model, &mut views, current_msg.unwrap()).await;
+        while let Some(current_msg) = list_messages.pop_front() {
+            update(&mut model, &mut views, current_msg, &mut list_messages).await;
         }
     }
 
@@ -70,18 +73,20 @@ fn handle_event(
     Ok(None)
 }
 
-async fn update(model: &mut Model, views: &mut ViewMap, msg: MessageEvent) -> Option<MessageEvent> {
+async fn update(
+    model: &mut Model,
+    views: &mut ViewMap,
+    msg: MessageEvent,
+    out_messages: &mut VecDeque<MessageEvent>,
+) {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         match msg {
             MessageEvent::Quit => {
                 // You can handle cleanup and exit here
                 model.running_state = RunningState::Done;
-                None
             }
-            _ => current_view.update(model, msg),
+            _ => current_view.update(model, msg, out_messages),
         }
-    } else {
-        None
     }
 }
 

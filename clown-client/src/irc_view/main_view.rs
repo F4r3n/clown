@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fs::File;
 
 use crate::MessageEvent;
@@ -115,7 +116,7 @@ impl<'a> MainView<'a> {
         }
     }
 
-    fn update_pull_irc(&mut self, model: &mut Model) -> Option<MessageEvent> {
+    fn update_pull_irc(&mut self, model: &mut Model, messages: &mut VecDeque<MessageEvent>) {
         if let Some(reciever) = model.message_reciever.as_mut()
             && let Ok(recieved) = reciever.inner.try_recv()
             && let Some(reply) = recieved.get_reply()
@@ -123,20 +124,37 @@ impl<'a> MainView<'a> {
             let source = recieved.get_source().map(|v| v.to_string());
 
             crate::logger::log_info_sync(format!("Response {:?} {:?}\n", &source, &reply).as_str());
-            let result = match reply {
+            match reply {
                 Response::Cmd(command) => match command {
-                    Command::PrivMsg(_target, content) => Some(MessageEvent::AddMessageView(
-                        MessageContent::new(source, content),
-                    )),
-                    Command::Nick(new_user) => Some(MessageEvent::ReplaceUser(
+                    Command::PrivMsg(_target, content) => messages.push_back(
+                        MessageEvent::AddMessageView(MessageContent::new(source, content)),
+                    ),
+                    Command::Nick(new_user) => messages.push_back(MessageEvent::ReplaceUser(
                         source.unwrap_or_default(),
                         new_user,
                     )),
-                    Command::Topic(_, topic) => Some(MessageEvent::SetTopic(topic)),
-                    Command::Quit(_) => Some(MessageEvent::RemoveUser(source.unwrap_or_default())),
-                    Command::Join(_) => Some(MessageEvent::JoinUser(source.unwrap_or_default())),
-                    Command::Error(_err) => Some(MessageEvent::DisConnect),
-                    _ => None,
+                    Command::Topic(_, topic) => messages.push_back(MessageEvent::SetTopic(topic)),
+                    Command::Quit(_) => {
+                        let source = source.unwrap_or_default();
+                        messages.push_back(MessageEvent::RemoveUser(source.clone()));
+                        messages.push_back(MessageEvent::AddMessageView(MessageContent::new(
+                            None,
+                            format!("{} has quit", source.clone()),
+                        )));
+                    }
+                    Command::Join(_) => {
+                        let source = source.unwrap_or_default();
+
+                        messages.push_back(MessageEvent::JoinUser(source.clone()));
+                        if !source.eq(&model.config.login_config.nickname) {
+                            messages.push_back(MessageEvent::AddMessageView(MessageContent::new(
+                                None,
+                                format!("{} has joined", source.clone()),
+                            )));
+                        }
+                    }
+                    Command::Error(_err) => messages.push_back(MessageEvent::DisConnect),
+                    _ => {}
                 },
                 Response::Rpl(reply) => match reply {
                     ResponseNumber::Welcome(content) => {
@@ -144,22 +162,19 @@ impl<'a> MainView<'a> {
                             model.config.login_config.channel.to_string(),
                         ));
 
-                        Some(MessageEvent::AddMessageView(MessageContent::new(
+                        messages.push_back(MessageEvent::AddMessageView(MessageContent::new(
                             source, content,
-                        )))
+                        )));
                     }
                     ResponseNumber::NameReply(list_users) => {
-                        Some(MessageEvent::UpdateUsers(list_users))
+                        messages.push_back(MessageEvent::UpdateUsers(list_users));
                     }
-                    ResponseNumber::Topic(topic) => Some(MessageEvent::SetTopic(topic)),
-                    _ => None,
+                    ResponseNumber::Topic(topic) => {
+                        messages.push_back(MessageEvent::SetTopic(topic))
+                    }
+                    _ => {}
                 },
             };
-            crate::logger::log_info_sync(format!("Message {:?}\n", &result).as_str());
-
-            result
-        } else {
-            None
         }
     }
 }
@@ -266,36 +281,40 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
         Ok(message)
     }
 
-    fn update(&mut self, model: &mut Model, msg: MessageEvent) -> Option<MessageEvent> {
+    fn update(
+        &mut self,
+        model: &mut Model,
+        msg: MessageEvent,
+        messages: &mut VecDeque<MessageEvent>,
+    ) {
         match msg {
-            MessageEvent::MessageInput(content) => self.update_input(model, content),
+            MessageEvent::MessageInput(content) => {
+                if let Some(v) = self.update_input(model, content) {
+                    messages.push_back(v)
+                }
+            }
             MessageEvent::Quit => {
                 model.send_command(clown_core::command::Command::Quit(None));
-                None
             }
             MessageEvent::Connect => {
                 connect_irc(model);
-                None
             }
             MessageEvent::DisConnect => {
                 if !model.is_irc_finished() {
                     model.send_command(clown_core::command::Command::Quit(None));
-                    None
                 } else {
-                    Some(MessageEvent::AddMessageView(MessageContent::new(
+                    messages.push_back(MessageEvent::AddMessageView(MessageContent::new(
                         None,
                         "Disconnected".into(),
-                    )))
+                    )));
                 }
             }
-            MessageEvent::PullIRC => self.update_pull_irc(model),
+            MessageEvent::PullIRC => self.update_pull_irc(model, messages),
             _ => {
                 for mut child in self.children() {
                     child.handle_actions(&msg);
                 }
-                None
-                //TODO: Manage returns of handle actions;
             }
-        }
+        };
     }
 }

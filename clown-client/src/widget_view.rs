@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::MessageEvent;
 use crate::event_handler::Event;
 use crate::model::Model;
@@ -10,5 +12,10 @@ pub trait WidgetView {
         event: &Event,
     ) -> color_eyre::Result<Option<MessageEvent>>;
 
-    fn update(&mut self, model: &mut Model, msg: MessageEvent) -> Option<MessageEvent>;
+    fn update(
+        &mut self,
+        model: &mut Model,
+        msg: MessageEvent,
+        messages: &mut VecDeque<MessageEvent>,
+    );
 }
