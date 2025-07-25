@@ -232,7 +232,10 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
 
         let message = match event {
             Event::Crossterm(crossterm::event::Event::Key(key_event)) => {
-                if key_event.kind == KeyEventKind::Press && key_event.code == KeyCode::Tab {
+                if key_event.kind == KeyEventKind::Press
+                    && key_event.modifiers.contains(KeyModifiers::CONTROL)
+                    && key_event.code == KeyCode::Char('p')
+                {
                     if key_event.modifiers.contains(KeyModifiers::SHIFT) {
                         self.focus_manager.focus_previous();
                     } else {
@@ -258,9 +261,15 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                     == mouse_event.kind
                 {
                     id = self.get_id_event(mouse_event.column, mouse_event.row);
+                    id.map(|id| self.focus_manager.set_focus(&id));
+                    self.update_widget_focus();
                 }
-                id.map(|id| self.focus_manager.set_focus(&id));
-                self.update_widget_focus();
+
+                for child in self.children().iter_mut() {
+                    if child.has_focus() {
+                        child.handle_events(event);
+                    }
+                }
                 None
             }
 

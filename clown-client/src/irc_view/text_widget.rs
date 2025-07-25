@@ -177,6 +177,18 @@ impl crate::component::EventHandler for TextWidget {
                 }
                 _ => None,
             }
+        } else if let Some(mouse_event) = event.get_mouse() {
+            match mouse_event.kind {
+                crossterm::event::MouseEventKind::ScrollDown => {
+                    self.scroll_down();
+                    None
+                }
+                crossterm::event::MouseEventKind::ScrollUp => {
+                    self.scroll_up();
+                    None
+                }
+                _ => None,
+            }
         } else {
             None
         }
