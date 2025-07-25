@@ -3,7 +3,7 @@ resolver = "2"
 
 members = [
     "clown-client",
-    "clown-core", "clown-parser",
+    "clown-core", "clown-parser", "clown-yaml", "clown-yaml-derive",
 ]
 
 [workspace.lints.rust]

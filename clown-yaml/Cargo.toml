@@ -1,0 +1,12 @@
+[package]
+name = "clown-yaml"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hashlink = "0.10.0"
+yaml-rust2 = "0.10.3"
+clown-yaml-derive = { version = "0.1.0", path = "../clown-yaml-derive" }
+
+[lints]
+workspace = true
