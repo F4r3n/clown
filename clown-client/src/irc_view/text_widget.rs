@@ -4,12 +4,14 @@ use crate::logger::log_info_sync;
 use crate::{MessageEvent, component::EventHandler};
 use chrono::{DateTime, Local, Timelike};
 use crossterm::event::KeyCode;
+use ratatui::widgets::ListState;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style, Styled},
     widgets::{Block, Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
+use textwrap::wrap;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct MessageContent {
@@ -75,23 +77,38 @@ impl Draw for TextWidget {
                 Constraint::Length(1), // Scrollbar
             ])
             .split(area);
-
-        let visible_rows: Vec<Row> = self
+        let content_width = layout[0].width;
+        let mut visible_rows = vec![];
+        for line in self
             .content
             .iter()
             .skip(scroll)
             .take(self.max_visible_height)
-            .map(|line| {
-                let time_str = format!("{:>8}", line.time_format());
-                let source_str = line.source.clone().unwrap_or_default();
-                Row::new(vec![
-                    Cell::from(format!("{time_str:<8}")),
-                    Cell::from(format!("{source_str:<10}")).style(nickname_color(&source_str)),
-                    Cell::from("┃").style(Color::DarkGray),
-                    Cell::from(line.content.clone()),
-                ])
-            })
-            .collect();
+        {
+            let content = line.content.clone();
+            let time_str = format!("{:>8}", line.time_format());
+            let source_str = line.source.clone().unwrap_or_default();
+            let wrapped = wrap(&content, content_width as usize);
+            let first_part = wrapped
+                .first()
+                .and_then(|v| Some(v.to_string()))
+                .unwrap_or_default();
+
+            visible_rows.push(Row::new(vec![
+                Cell::from(format!("{time_str:<8}")),
+                Cell::from(format!("{source_str:<10}")).style(nickname_color(&source_str)),
+                Cell::from("┃ ").style(Color::DarkGray),
+                Cell::from(first_part),
+            ]));
+            for w in wrapped.iter().skip(1) {
+                visible_rows.push(Row::new(vec![
+                    Cell::from(format!("{:<8}", " ")),
+                    Cell::from(format!("{:<10}", " ")).style(nickname_color(&source_str)),
+                    Cell::from("┃ ").style(Color::DarkGray),
+                    Cell::from(w.to_string()),
+                ]));
+            }
+        }
 
         let mut table = Table::new(
             visible_rows,
