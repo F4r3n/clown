@@ -4,11 +4,12 @@ use crate::{component::Draw, irc_view::color_user::nickname_color};
 use ratatui::{
     layout::Rect,
     style::{Color, Style, Styled},
-    text::{Line, Span, Text},
-    widgets::{Block, Paragraph},
+    text::{Line, Span},
+    widgets::{Block, List, ListItem, ListState},
 };
 pub struct UsersWidget {
     list_users: HashSet<String>,
+    list_state: ListState,
     focus: bool,
     area: Rect,
 }
@@ -19,6 +20,7 @@ impl UsersWidget {
             list_users: HashSet::new(),
             focus: false,
             area: Rect::default(),
+            list_state: ListState::default(),
         }
     }
     fn has_focus(&self) -> bool {
@@ -50,27 +52,24 @@ impl Draw for UsersWidget {
         } else {
             Style::default()
         };
-        let lines = self
+        let items = self
             .list_users
             .iter()
             .map(|content| {
-                Line::from(vec![Span::styled(
+                ListItem::from(Line::from(vec![Span::styled(
                     " ".to_string() + content,
                     nickname_color(&content.replace("@", "").to_string()),
-                )])
+                )]))
             })
-            .collect::<Vec<Line>>();
+            .collect::<Vec<ListItem>>();
 
-        let text = Text::from(lines);
+        let mut list = List::new(items);
 
-        let mut paragraph = Paragraph::new(text);
         if self.has_focus() {
-            paragraph = paragraph
-                .block(Block::bordered().title("Users"))
-                .set_style(border_style);
+            list = list.set_style(border_style);
         }
 
-        frame.render_widget(paragraph, area);
+        frame.render_stateful_widget(list, area, &mut self.list_state);
     }
 }
 use crate::message_event::MessageEvent;

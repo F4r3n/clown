@@ -32,7 +32,7 @@ async fn main() -> color_eyre::Result<()> {
     let mut views: ViewMap = HashMap::new();
     views.insert(
         View::MainView,
-        Box::new(irc_view::main_view::MainView::new()),
+        Box::new(irc_view::main_view::MainView::new(&model.current_channel)),
     );
 
     while model.running_state != RunningState::Done {

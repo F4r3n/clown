@@ -25,17 +25,22 @@ pub struct Model {
     pub command_sender: Option<clown_core::outgoing::CommandSender>,
 
     pub task: Option<JoinHandle<Result<(), color_eyre::Report>>>,
+
+    pub current_channel: String,
 }
 
 impl Model {
     pub fn new() -> Self {
+        let config = Config::new();
+        let channel = config.login_config.channel.to_string();
         Self {
             running_state: RunningState::Start,
             current_view: View::MainView,
-            config: Config::new(),
+            config,
             message_reciever: None,
             command_sender: None,
             task: None,
+            current_channel: channel,
         }
     }
 

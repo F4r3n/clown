@@ -38,7 +38,7 @@ pub struct MainView<'a> {
     focus_manager: FocusManager<'a>,
 }
 impl<'a> MainView<'a> {
-    pub fn new() -> Self {
+    pub fn new(current_channel: &str) -> Self {
         let mut focus_manager = FocusManager::new();
         let mut input = Component::new("input", input_widget::CInput::new());
         let list_users_view: Component<'_, users_widget::UsersWidget> =
@@ -46,7 +46,8 @@ impl<'a> MainView<'a> {
         let topic_view: Component<'_, topic_widget::TopicWidget> =
             Component::new("topic_view", topic_widget::TopicWidget::new());
         //list_components.push()
-        let messages_display = Component::new("messages", text_widget::TextWidget::new(vec![]));
+        let messages_display =
+            Component::new("messages", text_widget::TextWidget::new(current_channel));
 
         // Register widgets with focus manager
         focus_manager.register_widget(input.get_id());
@@ -110,10 +111,10 @@ impl<'a> MainView<'a> {
                 content.clone(),
             ));
             self.messages_display
-                .handle_actions(&MessageEvent::AddMessageView(MessageContent::new(
-                    Some(nickname),
-                    content,
-                )))
+                .handle_actions(&MessageEvent::AddMessageView(
+                    model.current_channel.to_string(),
+                    MessageContent::new(Some(nickname), content),
+                ))
         }
     }
 
@@ -127,9 +128,13 @@ impl<'a> MainView<'a> {
             crate::logger::log_info_sync(format!("Response {:?} {:?}\n", &source, &reply).as_str());
             match reply {
                 Response::Cmd(command) => match command {
-                    Command::PrivMsg(_target, content) => messages.push_back(
-                        MessageEvent::AddMessageView(MessageContent::new(source, content)),
-                    ),
+                    Command::PrivMsg(target, content) => {
+                        log_info_sync(&target);
+                        messages.push_back(MessageEvent::AddMessageView(
+                            target,
+                            MessageContent::new(source, content),
+                        ))
+                    }
                     Command::Nick(new_user) => messages.push_back(MessageEvent::ReplaceUser(
                         source.unwrap_or_default(),
                         new_user,
@@ -138,20 +143,20 @@ impl<'a> MainView<'a> {
                     Command::Quit(_) => {
                         let source = source.unwrap_or_default();
                         messages.push_back(MessageEvent::RemoveUser(source.clone()));
-                        messages.push_back(MessageEvent::AddMessageView(MessageContent::new(
-                            None,
-                            format!("{} has quit", source.clone()),
-                        )));
+                        messages.push_back(MessageEvent::AddMessageView(
+                            model.current_channel.to_string(),
+                            MessageContent::new(None, format!("{} has quit", source.clone())),
+                        ));
                     }
                     Command::Join(_) => {
                         let source = source.unwrap_or_default();
 
                         messages.push_back(MessageEvent::JoinUser(source.clone()));
                         if !source.eq(&model.config.login_config.nickname) {
-                            messages.push_back(MessageEvent::AddMessageView(MessageContent::new(
-                                None,
-                                format!("{} has joined", source.clone()),
-                            )));
+                            messages.push_back(MessageEvent::AddMessageView(
+                                model.current_channel.to_string(),
+                                MessageContent::new(None, format!("{} has joined", source.clone())),
+                            ));
                         }
                     }
                     Command::Error(_err) => messages.push_back(MessageEvent::DisConnect),
@@ -163,9 +168,10 @@ impl<'a> MainView<'a> {
                             model.config.login_config.channel.to_string(),
                         ));
 
-                        messages.push_back(MessageEvent::AddMessageView(MessageContent::new(
-                            source, content,
-                        )));
+                        messages.push_back(MessageEvent::AddMessageView(
+                            model.current_channel.to_string(),
+                            MessageContent::new(source, content),
+                        ));
                     }
                     ResponseNumber::NameReply(list_users) => {
                         messages.push_back(MessageEvent::UpdateUsers(list_users));
@@ -203,9 +209,9 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1), // Messages area
-                Constraint::Min(10),   // Messages area
-                Constraint::Length(4), // Input area
+                Constraint::Length(1),       // Topic area
+                Constraint::Percentage(100), // Messages area
+                Constraint::Length(4),       // Input area
             ])
             .split(frame.area());
 
@@ -324,10 +330,10 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 if !model.is_irc_finished() {
                     model.send_command(clown_core::command::Command::Quit(None));
                 } else {
-                    messages.push_back(MessageEvent::AddMessageView(MessageContent::new(
-                        None,
-                        "Disconnected".into(),
-                    )));
+                    messages.push_back(MessageEvent::AddMessageView(
+                        model.current_channel.to_string(),
+                        MessageContent::new(None, "Disconnected".into()),
+                    ));
                 }
             }
             MessageEvent::PullIRC => self.update_pull_irc(model, messages),

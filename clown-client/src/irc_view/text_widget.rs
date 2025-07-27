@@ -1,10 +1,11 @@
+use std::collections::HashMap;
+
 use crate::component::Draw;
 use crate::irc_view::color_user::nickname_color;
 use crate::logger::log_info_sync;
 use crate::{MessageEvent, component::EventHandler};
 use chrono::{DateTime, Local, Timelike};
 use crossterm::event::KeyCode;
-use ratatui::widgets::ListState;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -43,21 +44,49 @@ impl MessageContent {
     }
 }
 
+pub struct ChannelMessages {
+    messages: HashMap<String, Vec<MessageContent>>,
+}
+
+impl ChannelMessages {
+    pub fn new() -> Self {
+        Self {
+            messages: HashMap::new(),
+        }
+    }
+
+    pub fn add_message(&mut self, channel: &str, in_message: &MessageContent) {
+        self.messages
+            .entry(channel.to_string())
+            .or_insert_with(Vec::new)
+            .push(in_message.clone());
+    }
+
+    pub fn get_number_messages(&self, channel: &str) -> Option<usize> {
+        self.messages.get(channel).map(|v| v.len())
+    }
+
+    pub fn get_messages(&self, channel: &str) -> Option<&Vec<MessageContent>> {
+        self.messages.get(channel)
+    }
+}
+
 pub struct TextWidget {
     vertical_scroll_state: ScrollbarState,
-    content: Vec<MessageContent>,
     scroll_offset: usize,
     max_visible_height: usize,
     follow_last: bool,
     focus: bool,
     area: Rect,
+    messages: ChannelMessages,
+    current_channel: String,
 }
 
 impl Draw for TextWidget {
     fn render(&mut self, frame: &mut Frame, area: Rect) {
         self.area = area;
         let focused = self.focus;
-        let border_style = if focused {
+        let focus_style = if focused {
             Style::default().fg(Color::Cyan)
         } else {
             Style::default()
@@ -66,8 +95,10 @@ impl Draw for TextWidget {
         let text_style = Style::default().fg(Color::White);
 
         // Set how many lines can be shown
-        self.max_visible_height = area.height.saturating_sub(2) as usize;
-        let max_scroll = self.content.len().saturating_sub(self.max_visible_height);
+        self.max_visible_height = area.height as usize;
+        let max_scroll = self
+            .get_number_messages()
+            .saturating_sub(self.max_visible_height);
         let scroll = self.scroll_offset.min(max_scroll);
 
         let layout = Layout::default()
@@ -79,38 +110,35 @@ impl Draw for TextWidget {
             .split(area);
         let content_width = layout[0].width;
         let mut visible_rows = vec![];
-        for line in self
-            .content
-            .iter()
-            .skip(scroll)
-            .take(self.max_visible_height)
-        {
-            let content = line.content.clone();
-            let time_str = format!("{:>8}", line.time_format());
-            let source_str = line.source.clone().unwrap_or_default();
-            let wrapped = wrap(&content, content_width as usize);
-            let first_part = wrapped
-                .first()
-                .and_then(|v| Some(v.to_string()))
-                .unwrap_or_default();
+        if let Some(messages) = self.messages.get_messages(&self.current_channel) {
+            for line in messages.iter().skip(scroll).take(self.max_visible_height) {
+                let content = line.content.clone();
+                let time_str = format!("{:>8}", line.time_format());
+                let source_str = line.source.clone().unwrap_or_default();
+                let wrapped = wrap(&content, content_width as usize);
+                let first_part = wrapped
+                    .first()
+                    .and_then(|v| Some(v.to_string()))
+                    .unwrap_or_default();
 
-            visible_rows.push(Row::new(vec![
-                Cell::from(format!("{time_str:<8}")),
-                Cell::from(format!("{source_str:<10}")).style(nickname_color(&source_str)),
-                Cell::from("┃ ").style(Color::DarkGray),
-                Cell::from(first_part),
-            ]));
-            for w in wrapped.iter().skip(1) {
                 visible_rows.push(Row::new(vec![
-                    Cell::from(format!("{:<8}", " ")),
-                    Cell::from(format!("{:<10}", " ")).style(nickname_color(&source_str)),
-                    Cell::from("┃ ").style(Color::DarkGray),
-                    Cell::from(w.to_string()),
+                    Cell::from(format!("{time_str:<8}")),
+                    Cell::from(format!("{source_str:<10}")).style(nickname_color(&source_str)),
+                    Cell::from("┃ ").style(focus_style),
+                    Cell::from(first_part),
                 ]));
+                for w in wrapped.iter().skip(1) {
+                    visible_rows.push(Row::new(vec![
+                        Cell::from(format!("{:<8}", " ")),
+                        Cell::from(format!("{:<10}", " ")).style(nickname_color(&source_str)),
+                        Cell::from("┃ ").style(focus_style),
+                        Cell::from(w.to_string()),
+                    ]));
+                }
             }
         }
 
-        let mut table = Table::new(
+        let table = Table::new(
             visible_rows,
             [
                 Constraint::Length(9),  // time
@@ -121,22 +149,20 @@ impl Draw for TextWidget {
         )
         .column_spacing(1)
         .style(text_style);
-        if self.has_focus() {
-            table = table
-                .block(Block::bordered().title("Messages"))
-                .set_style(border_style);
-        }
-        self.vertical_scroll_state = ScrollbarState::new(self.content.len())
+
+        self.vertical_scroll_state = ScrollbarState::new(self.get_number_messages())
             .position(self.scroll_offset + self.max_visible_height);
 
         frame.render_widget(table, layout[0]);
-        frame.render_stateful_widget(
-            Scrollbar::default()
-                .orientation(ScrollbarOrientation::VerticalRight)
-                .thumb_style(Style::default().bg(Color::Cyan)),
-            layout[1],
-            &mut self.vertical_scroll_state,
-        );
+        if layout[1].width > 0 {
+            frame.render_stateful_widget(
+                Scrollbar::default()
+                    .orientation(ScrollbarOrientation::VerticalRight)
+                    .thumb_style(Style::default().bg(Color::Cyan)),
+                layout[1],
+                &mut self.vertical_scroll_state,
+            );
+        }
     }
 }
 
@@ -151,8 +177,8 @@ impl crate::component::EventHandler for TextWidget {
 
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         match event {
-            MessageEvent::AddMessageView(content) => {
-                self.add_line(content.clone());
+            MessageEvent::AddMessageView(channel, in_message) => {
+                self.add_line(channel, in_message);
                 None
             }
             _ => None,
@@ -190,7 +216,7 @@ impl crate::component::EventHandler for TextWidget {
                     None
                 }
                 KeyCode::End => {
-                    self.scroll_offset = self.content.len();
+                    self.scroll_offset = self.get_number_messages();
                     None
                 }
                 _ => None,
@@ -214,9 +240,10 @@ impl crate::component::EventHandler for TextWidget {
 }
 
 impl TextWidget {
-    pub fn new(content: Vec<MessageContent>) -> Self {
+    pub fn new(current_channel: &str) -> Self {
         Self {
-            content,
+            current_channel: current_channel.to_string(),
+            messages: ChannelMessages::new(),
             focus: false,
             scroll_offset: 0,
             max_visible_height: 10,
@@ -226,11 +253,19 @@ impl TextWidget {
         }
     }
 
-    pub fn add_line(&mut self, line: MessageContent) {
-        self.content.push(line);
-        if self.follow_last {
+    fn get_number_messages(&self) -> usize {
+        self.messages
+            .get_number_messages(&self.current_channel)
+            .unwrap_or_default()
+    }
+
+    pub fn add_line(&mut self, channel: &str, in_message: &MessageContent) {
+        self.messages.add_message(channel, in_message);
+        if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view
-            self.scroll_offset = self.content.len().saturating_sub(self.max_visible_height);
+            self.scroll_offset = self
+                .get_number_messages()
+                .saturating_sub(self.max_visible_height);
         }
     }
 
@@ -240,7 +275,11 @@ impl TextWidget {
     }
 
     fn scroll_down(&mut self) {
-        let max_scroll = self.content.len().saturating_sub(self.max_visible_height);
+        let max_scroll = self
+            .messages
+            .get_number_messages(&self.current_channel)
+            .unwrap_or_default()
+            .saturating_sub(self.max_visible_height);
         self.scroll_offset = self.scroll_offset.saturating_add(1).min(max_scroll);
         self.follow_last = max_scroll.eq(&self.scroll_offset);
     }
