@@ -8,7 +8,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Paragraph},
+    widgets::Paragraph,
 };
 use tui_input::{Input, backend::crossterm::EventHandler};
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -31,11 +31,7 @@ impl Draw for CInput {
         // keep 2 for borders and 1 for cursor
         let width = area.width.max(3) - 3;
         let scroll = self.input.visual_scroll(width as usize);
-        let focus_style = if focus {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default()
-        };
+
         let style = match (self.input_mode, focus) {
             (InputMode::Normal, true) => Style::default().fg(Color::Cyan),
             (InputMode::Normal, false) => Style::default().fg(Color::DarkGray),
@@ -44,7 +40,7 @@ impl Draw for CInput {
         };
 
         let input = Paragraph::new(Line::from(vec![
-            Span::from(">").style(focus_style),
+            Span::from(">").style(style),
             Span::from(self.input.value()),
         ]))
         .scroll((0, scroll as u16));
@@ -52,7 +48,6 @@ impl Draw for CInput {
 
         if self.input_mode == InputMode::Editing && focus {
             // Ratatui hides the cursor unless it's explicitly set. Position the  cursor past the
-            // end of the input text and one line down from the border to the input line
             let x = self.input.visual_cursor().max(scroll) - scroll + 1;
             frame.set_cursor_position((area.x + x as u16, area.y))
         }

@@ -2,15 +2,14 @@ use std::collections::HashMap;
 
 use crate::component::Draw;
 use crate::irc_view::color_user::nickname_color;
-use crate::logger::log_info_sync;
-use crate::{MessageEvent, component::EventHandler};
+use crate::{MessageEvent, logger::log_info_sync};
 use chrono::{DateTime, Local, Timelike};
 use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style, Styled},
-    widgets::{Block, Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
+    style::{Color, Style},
+    widgets::{Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
 use textwrap::wrap;
 
@@ -44,6 +43,7 @@ impl MessageContent {
     }
 }
 
+#[derive(Debug)]
 pub struct ChannelMessages {
     messages: HashMap<String, Vec<MessageContent>>,
 }
@@ -60,6 +60,13 @@ impl ChannelMessages {
             .entry(channel.to_string())
             .or_insert_with(Vec::new)
             .push(in_message.clone());
+        crate::logger::log_info_sync(
+            format!(
+                "add_message: New Received message user {channel} {:?}\n",
+                self.messages,
+            )
+            .as_str(),
+        );
     }
 
     pub fn get_number_messages(&self, channel: &str) -> Option<usize> {
@@ -181,6 +188,10 @@ impl crate::component::EventHandler for TextWidget {
                 self.add_line(channel, in_message);
                 None
             }
+            MessageEvent::SelectChannel(channel) => {
+                self.set_current_channel(channel);
+                None
+            }
             _ => None,
         }
     }
@@ -253,6 +264,21 @@ impl TextWidget {
         }
     }
 
+    pub fn set_current_channel(&mut self, channel: &str) {
+        self.current_channel = channel.to_string();
+        let max_scroll = self.get_max_scroll();
+        self.scroll_offset = max_scroll;
+        self.follow_last = true;
+        log_info_sync(
+            format!(
+                "Change channel {} {}\n",
+                self.current_channel,
+                self.get_number_messages()
+            )
+            .as_str(),
+        );
+    }
+
     fn get_number_messages(&self) -> usize {
         self.messages
             .get_number_messages(&self.current_channel)
@@ -261,6 +287,14 @@ impl TextWidget {
 
     pub fn add_line(&mut self, channel: &str, in_message: &MessageContent) {
         self.messages.add_message(channel, in_message);
+        crate::logger::log_info_sync(
+            format!(
+                "New message user {:?} {} {in_message:?}\n",
+                channel,
+                self.get_number_messages()
+            )
+            .as_str(),
+        );
         if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view
             self.scroll_offset = self
@@ -274,12 +308,15 @@ impl TextWidget {
         self.follow_last = false;
     }
 
-    fn scroll_down(&mut self) {
-        let max_scroll = self
-            .messages
+    fn get_max_scroll(&self) -> usize {
+        self.messages
             .get_number_messages(&self.current_channel)
             .unwrap_or_default()
-            .saturating_sub(self.max_visible_height);
+            .saturating_sub(self.max_visible_height)
+    }
+
+    fn scroll_down(&mut self) {
+        let max_scroll = self.get_max_scroll();
         self.scroll_offset = self.scroll_offset.saturating_add(1).min(max_scroll);
         self.follow_last = max_scroll.eq(&self.scroll_offset);
     }

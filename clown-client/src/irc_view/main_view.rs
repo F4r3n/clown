@@ -12,7 +12,6 @@ use crate::irc_view::text_widget;
 use crate::irc_view::text_widget::MessageContent;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
-use crate::logger::log_info_sync;
 use crate::model::Model;
 use crate::model::RunningState;
 use crate::widget_view;
@@ -41,8 +40,10 @@ impl<'a> MainView<'a> {
     pub fn new(current_channel: &str) -> Self {
         let mut focus_manager = FocusManager::new();
         let mut input = Component::new("input", input_widget::CInput::new());
-        let list_users_view: Component<'_, users_widget::UsersWidget> =
-            Component::new("users_view", users_widget::UsersWidget::new());
+        let list_users_view: Component<'_, users_widget::UsersWidget> = Component::new(
+            "users_view",
+            users_widget::UsersWidget::new(current_channel),
+        );
         let topic_view: Component<'_, topic_widget::TopicWidget> =
             Component::new("topic_view", topic_widget::TopicWidget::new());
         //list_components.push()
@@ -107,7 +108,7 @@ impl<'a> MainView<'a> {
         } else {
             let nickname = model.config.login_config.nickname.clone();
             model.send_command(clown_core::command::Command::PrivMsg(
-                model.config.login_config.channel.to_string(),
+                model.current_channel.to_string(),
                 content.clone(),
             ));
             self.messages_display
@@ -129,9 +130,9 @@ impl<'a> MainView<'a> {
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {
-                        log_info_sync(&target);
+                        let from = source.clone().unwrap_or(model.current_channel.clone());
                         messages.push_back(MessageEvent::AddMessageView(
-                            target,
+                            from,
                             MessageContent::new(source, content),
                         ))
                     }
@@ -325,6 +326,10 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
             }
             MessageEvent::Connect => {
                 connect_irc(model);
+            }
+            MessageEvent::SelectChannel(ref channel) => {
+                model.current_channel = channel.to_string();
+                self.messages_display.handle_actions(&msg);
             }
             MessageEvent::DisConnect => {
                 if !model.is_irc_finished() {
