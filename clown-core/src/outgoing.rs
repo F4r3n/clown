@@ -4,8 +4,7 @@ use crate::error::IRCIOError;
 use crate::message::{MessageReceiver, MessageSender, ServerMessage};
 use crate::response::Response;
 use clown_parser::message::create_message;
-use std::fs::File;
-use std::io::Write;
+
 use tokio::io::BufReader;
 use tokio::io::{AsyncBufReadExt, AsyncRead};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
@@ -55,7 +54,6 @@ impl Outgoing {
 
     pub async fn process<R, W>(
         &mut self,
-        mut log_writer: Option<std::io::BufWriter<File>>,
         mut reader: BufReader<R>,
         mut writer: BufWriter<W>,
     ) -> Result<(), IRCIOError>
@@ -73,10 +71,7 @@ impl Outgoing {
                             let line = buffer.trim_end().to_string();
                             buffer.clear();
 
-                            if let Some(log) = log_writer.as_mut() {
-                                writeln!(log, "{}", line.clone())?;
-                                log.flush()?;
-                            }
+
                             if let Ok(message) = create_message(line.as_bytes())
                             {
                                 let server_message = ServerMessage::new(message);
@@ -92,13 +87,6 @@ impl Outgoing {
                 }
                 command = self.receiver.as_mut().unwrap().inner.recv() => {
                     if let Some(cmd) = command {
-                        if let Some(log) = log_writer.as_mut() {
-                            if let Ok( string )= std::str::from_utf8(cmd.as_bytes().as_slice()) {
-                            write!(log, "{string}")?;
-                            log.flush()?;
-
-                            }
-                        }
                         writer.write_all(cmd.as_bytes().as_slice()).await?;
                         writer.flush().await?;
                     } else {

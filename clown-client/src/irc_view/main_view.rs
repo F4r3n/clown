@@ -191,7 +191,7 @@ fn connect_irc(model: &mut Model) {
     let connection_config = model.config.connection_config.clone();
     let login_config = &model.config.login_config;
 
-    let mut client = Client::new(login_config, File::create("log.txt").ok());
+    let mut client = Client::new(login_config);
     let reciever = client.message_receiver();
     let command_sender = client.command_sender();
 

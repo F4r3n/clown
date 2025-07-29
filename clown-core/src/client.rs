@@ -6,7 +6,6 @@ use crate::error::ClownError;
 use crate::message::MessageReceiver;
 use crate::outgoing::CommandSender;
 use crate::outgoing::Outgoing;
-use std::fs::File;
 
 #[derive(Debug, Clone)]
 pub struct LoginConfig {
@@ -23,11 +22,10 @@ pub struct Client {
     login_config: LoginConfig,
     outgoing: Outgoing,
     message_receiver: Option<MessageReceiver>,
-    log: Option<std::io::BufWriter<File>>,
 }
 
 impl Client {
-    pub fn new(login_config: &LoginConfig, in_file: Option<std::fs::File>) -> Self {
+    pub fn new(login_config: &LoginConfig) -> Self {
         let mut outgoing = Outgoing::default();
         let (sender, message_receiver) = outgoing.create_outgoing();
         Self {
@@ -35,7 +33,6 @@ impl Client {
             login_config: login_config.clone(),
             outgoing,
             message_receiver: Some(message_receiver),
-            log: in_file.map(std::io::BufWriter::new),
         }
     }
 
@@ -66,7 +63,7 @@ impl Client {
         let writer = BufWriter::new(writer);
         self.try_connect()?;
         self.outgoing
-            .process(self.log, reader, writer)
+            .process(reader, writer)
             .await
             .map_err(ClownError::IRCIOError)
     }
