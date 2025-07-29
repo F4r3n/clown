@@ -4,6 +4,7 @@ use crate::irc_view::text_widget::MessageContent;
 pub enum MessageEvent {
     MessageInput(String),
     AddMessageView(String, MessageContent),
+    HighlightUser(String),
     SelectChannel(String),
     UpdateUsers(Vec<String>),
     ReplaceUser(String /*old */, String /*new */),

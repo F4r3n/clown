@@ -1,4 +1,5 @@
 use crate::{component::Draw, irc_view::color_user::nickname_color};
+use color_eyre::owo_colors::OwoColorize;
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -10,6 +11,7 @@ use ratatui::{
 struct User {
     pub admin: bool,
     pub name: String,
+    pub need_hightlight: bool,
 }
 
 impl User {
@@ -18,6 +20,7 @@ impl User {
         Self {
             admin: is_admin,
             name: name.replace("@", ""),
+            need_hightlight: false,
         }
     }
 }
@@ -28,6 +31,7 @@ impl From<String> for User {
         Self {
             admin: is_admin,
             name: name.replace("@", ""),
+            need_hightlight: false,
         }
     }
 }
@@ -38,6 +42,7 @@ impl From<&str> for User {
         Self {
             admin: is_admin,
             name: name.replace("@", ""),
+            need_hightlight: false,
         }
     }
 }
@@ -85,6 +90,12 @@ impl UsersWidget {
         }
     }
 
+    pub fn hightlight_user(&mut self, user: &str) {
+        if let Some(user) = self.list_users.iter_mut().find(|v| v.name.eq(user)) {
+            user.need_hightlight = true;
+        }
+    }
+
     pub fn add_user(&mut self, user: &str) {
         if self
             .list_users
@@ -105,6 +116,7 @@ impl Draw for UsersWidget {
         } else {
             Style::default()
         };
+
         let selected = self.list_state.selected().unwrap_or_default();
         let mut items = Vec::with_capacity(self.list_users.len());
         for (id, content) in self.list_users.iter().enumerate() {
@@ -112,9 +124,16 @@ impl Draw for UsersWidget {
             if id == selected {
                 spans.push(Span::styled(">", focus_style));
             }
+            let background_color = if content.need_hightlight {
+                Color::LightBlue
+            } else {
+                Color::default()
+            };
             spans.push(Span::styled(
                 " ".to_string() + content.name.as_str(),
-                nickname_color(&content.name),
+                Style::default()
+                    .fg(nickname_color(&content.name))
+                    .bg(background_color),
             ));
             let item = ListItem::from(Line::from(spans));
             items.push(item);
@@ -144,6 +163,12 @@ impl crate::component::EventHandler for UsersWidget {
                 self.remove_user(user);
                 None
             }
+            MessageEvent::HighlightUser(user) => {
+                if !self.main_channel.eq(user) {
+                    self.hightlight_user(user);
+                }
+                None
+            }
             MessageEvent::JoinUser(user) => {
                 self.add_user(user);
                 None
@@ -167,11 +192,9 @@ impl crate::component::EventHandler for UsersWidget {
                     }
                     crossterm::event::KeyCode::Enter => {
                         if let Some(current_id) = self.list_state.selected()
-                            && let Some(user) = self.list_users.get(current_id)
+                            && let Some(user) = self.list_users.get_mut(current_id)
                         {
-                            crate::logger::log_info_sync(
-                                format!("Selected user {:?}\n", user.name).as_str(),
-                            );
+                            user.need_hightlight = false;
                             return Some(MessageEvent::SelectChannel(user.name.to_string()));
                         }
                     }

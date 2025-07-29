@@ -130,10 +130,13 @@ impl<'a> MainView<'a> {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(_target, content) => {
                         let from = source.clone().unwrap_or(model.current_channel.clone());
+                        if !from.eq(&model.current_channel) {
+                            messages.push_back(MessageEvent::HighlightUser(from.clone()));
+                        }
                         messages.push_back(MessageEvent::AddMessageView(
                             from,
                             MessageContent::new(source, content),
-                        ))
+                        ));
                     }
                     Command::Nick(new_user) => messages.push_back(MessageEvent::ReplaceUser(
                         source.unwrap_or_default(),
