@@ -125,7 +125,6 @@ impl<'a> MainView<'a> {
         {
             let source = recieved.get_source().map(|v| v.to_string());
 
-            crate::logger::log_info_sync(format!("Response {:?} {:?}\n", &source, &reply).as_str());
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(_target, content) => {

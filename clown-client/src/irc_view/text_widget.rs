@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
+use crate::MessageEvent;
 use crate::component::Draw;
 use crate::irc_view::color_user::nickname_color;
-use crate::{MessageEvent, logger::log_info_sync};
 use chrono::{DateTime, Local, Timelike};
 use crossterm::event::KeyCode;
 use ratatui::{
@@ -60,13 +60,6 @@ impl ChannelMessages {
             .entry(channel.to_string())
             .or_insert_with(Vec::new)
             .push(in_message.clone());
-        crate::logger::log_info_sync(
-            format!(
-                "add_message: New Received message user {channel} {:?}\n",
-                self.messages,
-            )
-            .as_str(),
-        );
     }
 
     pub fn get_number_messages(&self, channel: &str) -> Option<usize> {
@@ -289,14 +282,6 @@ impl TextWidget {
         let max_scroll = self.get_max_scroll();
         self.scroll_offset = max_scroll;
         self.follow_last = true;
-        log_info_sync(
-            format!(
-                "Change channel {} {}\n",
-                self.current_channel,
-                self.get_number_messages()
-            )
-            .as_str(),
-        );
     }
 
     fn get_number_messages(&self) -> usize {
@@ -307,14 +292,7 @@ impl TextWidget {
 
     pub fn add_line(&mut self, channel: &str, in_message: &MessageContent) {
         self.messages.add_message(channel, in_message);
-        crate::logger::log_info_sync(
-            format!(
-                "New message user {:?} {} {in_message:?}\n",
-                channel,
-                self.get_number_messages()
-            )
-            .as_str(),
-        );
+
         if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view
             self.scroll_offset = self
