@@ -1,5 +1,4 @@
 use std::collections::VecDeque;
-use std::fs::File;
 
 use crate::MessageEvent;
 use crate::component::Child;

@@ -96,6 +96,7 @@ impl AsyncWrite for IRCStream {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct ConnectionConfig {
     pub address: String,
