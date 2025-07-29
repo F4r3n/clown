@@ -1,8 +1,7 @@
 use crate::{component::Draw, irc_view::color_user::nickname_color};
-use color_eyre::owo_colors::OwoColorize;
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{List, ListItem, ListState},
 };
@@ -112,7 +111,9 @@ impl Draw for UsersWidget {
     fn render(&mut self, frame: &mut ratatui::Frame, area: ratatui::prelude::Rect) {
         self.area = area;
         let focus_style = if self.has_focus() {
-            Style::default().fg(Color::Cyan)
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::UNDERLINED)
         } else {
             Style::default()
         };
@@ -121,20 +122,18 @@ impl Draw for UsersWidget {
         let mut items = Vec::with_capacity(self.list_users.len());
         for (id, content) in self.list_users.iter().enumerate() {
             let mut spans = Vec::new();
+            let mut style = Style::default().fg(nickname_color(&content.name));
+
             if id == selected {
                 spans.push(Span::styled(">", focus_style));
+                style = style.add_modifier(Modifier::BOLD)
             }
-            let background_color = if content.need_hightlight {
-                Color::LightBlue
-            } else {
-                Color::default()
-            };
-            spans.push(Span::styled(
-                " ".to_string() + content.name.as_str(),
-                Style::default()
-                    .fg(nickname_color(&content.name))
-                    .bg(background_color),
-            ));
+
+            if content.need_hightlight {
+                style = style.bg(Color::LightBlue);
+            }
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(content.name.as_str(), style));
             let item = ListItem::from(Line::from(spans));
             items.push(item);
         }
@@ -190,7 +189,7 @@ impl crate::component::EventHandler for UsersWidget {
                     crossterm::event::KeyCode::Down => {
                         self.list_state.select_next();
                     }
-                    crossterm::event::KeyCode::Enter => {
+                    crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Char(' ') => {
                         if let Some(current_id) = self.list_state.selected()
                             && let Some(user) = self.list_users.get_mut(current_id)
                         {

@@ -35,7 +35,7 @@ impl Draw for CInput {
         let style = match (self.input_mode, focus) {
             (InputMode::Normal, true) => Style::default().fg(Color::Cyan),
             (InputMode::Normal, false) => Style::default().fg(Color::DarkGray),
-            (InputMode::Editing, true) => Color::Yellow.into(),
+            (InputMode::Editing, true) => Color::Cyan.into(),
             (InputMode::Editing, false) => Style::default().fg(Color::DarkGray),
         };
 
