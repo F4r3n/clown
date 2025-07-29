@@ -89,6 +89,10 @@ pub struct TextWidget {
     current_channel: String,
 }
 
+const TIME_LENGTH: usize = 8;
+const NICKNAME_LENGTH: usize = 10;
+const SEPARATOR_LENGTH: usize = 2;
+
 impl Draw for TextWidget {
     fn render(&mut self, frame: &mut Frame, area: Rect) {
         self.area = area;
@@ -115,13 +119,28 @@ impl Draw for TextWidget {
                 Constraint::Length(1), // Scrollbar
             ])
             .split(area);
-        let content_width = layout[0].width;
         let mut visible_rows = vec![];
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             for line in messages.iter().skip(scroll).take(self.max_visible_height) {
                 let content = line.content.clone();
-                let time_str = format!("{:>8}", line.time_format());
-                let source_str = line.source.clone().unwrap_or_default();
+                let content_width = layout[0]
+                    .width
+                    .saturating_sub(TIME_LENGTH as u16)
+                    .saturating_sub(NICKNAME_LENGTH as u16)
+                    .saturating_sub(SEPARATOR_LENGTH as u16)
+                    .saturating_sub(4 /*Length separator between content */ as u16);
+
+                let time_str = format!("{:>width$}", line.time_format(), width = TIME_LENGTH);
+                let nickname_style = if let Some(source) = &line.source {
+                    nickname_color(&source)
+                } else {
+                    Color::default()
+                };
+                let source_str = format!(
+                    "{:<width$}",
+                    line.source.as_ref().unwrap_or(&"".to_string()),
+                    width = NICKNAME_LENGTH
+                );
                 let wrapped = wrap(&content, content_width as usize);
                 let first_part = wrapped
                     .first()
@@ -129,15 +148,16 @@ impl Draw for TextWidget {
                     .unwrap_or_default();
 
                 visible_rows.push(Row::new(vec![
-                    Cell::from(format!("{time_str:<8}")),
-                    Cell::from(format!("{source_str:<10}")).style(nickname_color(&source_str)),
+                    Cell::from(time_str),
+                    Cell::from(source_str).style(nickname_style),
                     Cell::from("┃ ").style(focus_style),
                     Cell::from(first_part),
                 ]));
                 for w in wrapped.iter().skip(1) {
                     visible_rows.push(Row::new(vec![
-                        Cell::from(format!("{:<8}", " ")),
-                        Cell::from(format!("{:<10}", " ")).style(nickname_color(&source_str)),
+                        Cell::from(format!("{:<width$}", " ", width = TIME_LENGTH)),
+                        Cell::from(format!("{:<width$}", " ", width = NICKNAME_LENGTH))
+                            .style(nickname_style),
                         Cell::from("┃ ").style(focus_style),
                         Cell::from(w.to_string()),
                     ]));
@@ -148,10 +168,10 @@ impl Draw for TextWidget {
         let table = Table::new(
             visible_rows,
             [
-                Constraint::Length(9),  // time
-                Constraint::Length(11), // nickname
-                Constraint::Length(1),  // nickname
-                Constraint::Min(10),    // Content
+                Constraint::Length(TIME_LENGTH.saturating_add(1) as u16), // time
+                Constraint::Length(NICKNAME_LENGTH.saturating_add(1) as u16), // nickname
+                Constraint::Length(1),                                    // separator
+                Constraint::Min(10),                                      // Content
             ],
         )
         .column_spacing(1)

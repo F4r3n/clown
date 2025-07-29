@@ -129,7 +129,7 @@ impl<'a> MainView<'a> {
             crate::logger::log_info_sync(format!("Response {:?} {:?}\n", &source, &reply).as_str());
             match reply {
                 Response::Cmd(command) => match command {
-                    Command::PrivMsg(target, content) => {
+                    Command::PrivMsg(_target, content) => {
                         let from = source.clone().unwrap_or(model.current_channel.clone());
                         messages.push_back(MessageEvent::AddMessageView(
                             from,

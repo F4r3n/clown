@@ -64,6 +64,7 @@ impl UsersWidget {
         self.focus
     }
     pub fn set_users(&mut self, list_users: Vec<String>) {
+        self.list_state.select(Some(0));
         self.list_users.clear();
         self.list_users
             .push(User::new(self.main_channel.clone().as_str()));
