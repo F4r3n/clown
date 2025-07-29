@@ -1,10 +1,9 @@
 [workspace]
 resolver = "2"
+package.repository = "https://github.com/F4r3n/clown"
+package.authors = ["Guillaume Kotulski"]
 
-members = [
-    "clown-client",
-    "clown-core", "clown-parser",
-]
+members = ["clown-client", "clown-core", "clown-parser"]
 
 [workspace.lints.rust]
 trivial_numeric_casts = "warn"
@@ -30,3 +29,8 @@ cast_lossless = "warn"
 trailing_empty_array = "warn"
 as_ptr_cast_mut = "warn"
 lint_groups_priority = "allow"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

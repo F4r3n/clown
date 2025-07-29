@@ -2,6 +2,14 @@
 name = "clown-client"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/F4r3n/clown"
+authors = ["Guillaume Kotulski"]
+
+[package.metadata.wix]
+upgrade-guid = "CF50FA6D-6613-4928-941C-F3ACD6A009C5"
+path-guid = "190F04D6-FD7C-4E51-A70C-F7C36CE4AF46"
+license = false
+eula = false
 
 [dependencies]
 clown-core = { version = "0.1.0", path = "../clown-core", features = ["serde"] }
