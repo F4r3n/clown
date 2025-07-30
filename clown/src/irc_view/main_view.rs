@@ -11,6 +11,7 @@ use crate::irc_view::text_widget;
 use crate::irc_view::text_widget::MessageContent;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
+use crate::logger::log_info_sync;
 use crate::model::Model;
 use crate::model::RunningState;
 use crate::widget_view;
@@ -127,8 +128,14 @@ impl<'a> MainView<'a> {
 
             match reply {
                 Response::Cmd(command) => match command {
-                    Command::PrivMsg(_target, content) => {
-                        let from = source.clone().unwrap_or(model.current_channel.clone());
+                    Command::PrivMsg(target, content) => {
+                        //log_info_sync(format!("{:?} {:?}\n", source, target).as_str());
+
+                        let from = if target.eq(&model.config.login_config.nickname) {
+                            source.clone().unwrap_or_default()
+                        } else {
+                            target
+                        };
                         if !from.eq(&model.current_channel) {
                             messages.push_back(MessageEvent::HighlightUser(from.clone()));
                         }
