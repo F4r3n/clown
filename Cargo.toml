@@ -3,7 +3,7 @@ resolver = "2"
 package.repository = "https://github.com/F4r3n/clown"
 package.authors = ["Guillaume Kotulski"]
 
-members = ["clown-client", "clown-core", "clown-parser"]
+members = ["clown", "clown-core", "clown-parser"]
 
 [workspace.lints.rust]
 trivial_numeric_casts = "warn"

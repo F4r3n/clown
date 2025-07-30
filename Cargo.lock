@@ -132,7 +132,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "clown-client"
+name = "clown"
 version = "0.1.0"
 dependencies = [
  "chrono",

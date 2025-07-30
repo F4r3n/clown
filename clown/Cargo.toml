@@ -1,5 +1,5 @@
 [package]
-name = "clown-client"
+name = "clown"
 version = "0.1.0"
 edition = "2024"
 repository = "https://github.com/F4r3n/clown"

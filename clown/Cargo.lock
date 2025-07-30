@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "clown-client"
+name = "clown"
 version = "0.1.0"
