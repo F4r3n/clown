@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 use crate::MessageEvent;
 use crate::component::Draw;
@@ -8,7 +8,7 @@ use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
@@ -109,23 +109,31 @@ fn irc_to_color(code: &str) -> Color {
     }
 }
 
+fn toggle_modifier(mut style: Style, current: &mut Modifier, toggled: Modifier) -> Style {
+    *current = *current ^ toggled;
+
+    if *current & Modifier::BOLD == Modifier::default() {
+        style = style.remove_modifier(toggled);
+    } else {
+        style = style.add_modifier(toggled);
+    }
+    style
+}
+
 fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> {
     let mut spans = Vec::new();
     let mut buffer = String::new();
     let mut setting_style = false;
     let mut style_buffer = String::new();
-    let mut colors = vec![
-        start_style.unwrap_or_default().fg.unwrap_or_default(),
-        start_style.unwrap_or_default().bg.unwrap_or_default(),
-    ];
+    let mut style = start_style.unwrap_or_default();
+    let mut modifier = style.add_modifier & style.sub_modifier;
+    let mut colors = vec![style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
     let mut index_color = 0;
 
     for c in content.chars() {
         if c == '\x03' {
             if !buffer.is_empty() {
-                spans.push(
-                    Span::from(buffer.clone()).style(Style::default().fg(colors[0]).bg(colors[1])),
-                );
+                spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
                 buffer.clear();
             }
             setting_style = true;
@@ -137,6 +145,22 @@ fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> {
             colors[index_color] = irc_to_color(&style_buffer);
             index_color += 1;
             style_buffer.clear();
+        } else if c == '\x02' {
+            spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
+            buffer.clear();
+            style = toggle_modifier(style, &mut modifier, Modifier::BOLD);
+        } else if c == '\x1D' {
+            spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
+            buffer.clear();
+            style = toggle_modifier(style, &mut modifier, Modifier::ITALIC);
+        } else if c == '\x1F' {
+            spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
+            buffer.clear();
+            style = toggle_modifier(style, &mut modifier, Modifier::UNDERLINED);
+        } else if c == '\x1E' {
+            spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
+            buffer.clear();
+            style = toggle_modifier(style, &mut modifier, Modifier::CROSSED_OUT);
         } else {
             if setting_style {
                 setting_style = false;
@@ -146,7 +170,7 @@ fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> {
         }
     }
     if !buffer.is_empty() {
-        spans.push(Span::from(buffer.clone()).style(Style::default().fg(colors[0]).bg(colors[1])));
+        spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
     }
     spans
 }
@@ -462,6 +486,17 @@ mod tests {
         assert_eq!(fg_red, Color::Red);
         assert_eq!(normal, "Normal");
         assert_eq!(fg_normal, Color::default());
+    }
+
+    #[test]
+    fn test_italic() {
+        let input = "\x034Hello";
+        let spans = to_spans(input, None);
+        assert_eq!(spans.len(), 1);
+        let (text, fg, bg) = span_data(&spans[0]);
+        assert_eq!(text, "Hello");
+        assert_eq!(fg, Color::Red);
+        assert_eq!(bg, Color::default());
     }
 
     // Add more tests as needed for edge cases, like incomplete codes, empty input, etc.
