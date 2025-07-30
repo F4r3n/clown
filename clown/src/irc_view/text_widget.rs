@@ -8,7 +8,7 @@ use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Cell, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
