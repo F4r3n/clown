@@ -225,7 +225,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
             .direction(Direction::Horizontal)
             .constraints([
                 Constraint::Percentage(100), // Messages
-                Constraint::Min(30),         // List Users
+                Constraint::Min(15),         // List Users
             ])
             .split(main_layout[1]);
 

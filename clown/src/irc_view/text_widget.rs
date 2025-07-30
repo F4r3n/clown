@@ -201,17 +201,15 @@ impl Draw for TextWidget {
                 Constraint::Length(1), // Scrollbar
             ])
             .split(area);
+        let content_width = layout[0]
+            .width
+            .saturating_sub(TIME_LENGTH as u16)
+            .saturating_sub(NICKNAME_LENGTH as u16)
+            .saturating_sub(SEPARATOR_LENGTH as u16)
+            .saturating_sub(4 /*Length separator between content */ as u16);
         let mut visible_rows = vec![];
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             for line in messages.iter().skip(scroll).take(self.max_visible_height) {
-                let content = line.content.clone();
-                let content_width = layout[0]
-                    .width
-                    .saturating_sub(TIME_LENGTH as u16)
-                    .saturating_sub(NICKNAME_LENGTH as u16)
-                    .saturating_sub(SEPARATOR_LENGTH as u16)
-                    .saturating_sub(4 /*Length separator between content */ as u16);
-
                 let time_str = format!("{:>width$}", line.time_format(), width = TIME_LENGTH);
                 let nickname_style = if let Some(source) = &line.source {
                     nickname_color(&source)
@@ -223,7 +221,7 @@ impl Draw for TextWidget {
                     line.source.as_ref().unwrap_or(&"".to_string()),
                     width = NICKNAME_LENGTH
                 );
-                let wrapped = wrap(&content, content_width as usize);
+                let wrapped = wrap(&line.content, content_width as usize);
                 let first_part = wrapped
                     .first()
                     .map(|v| to_spans(v, None))
