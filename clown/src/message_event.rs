@@ -3,7 +3,7 @@ use crate::irc_view::text_widget::MessageContent;
 #[derive(PartialEq, Debug)]
 pub enum MessageEvent {
     MessageInput(String),
-    AddMessageView(String, MessageContent),
+    AddMessageView(String, Box<MessageContent>),
     HighlightUser(String),
     SelectChannel(String),
     UpdateUsers(Vec<String>),
@@ -14,6 +14,5 @@ pub enum MessageEvent {
     PullIRC,
     Connect,
     DisConnect,
-    Join,
     Quit,
 }

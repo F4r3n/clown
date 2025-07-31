@@ -181,7 +181,7 @@ impl crate::component::EventHandler for UsersWidget {
         event: &crate::event_handler::Event,
     ) -> Option<crate::message_event::MessageEvent> {
         if let Some(key) = event.get_key() {
-            if key.is_release() {
+            if key.is_press() && !key.is_repeat() {
                 match key.code {
                     crossterm::event::KeyCode::Up => {
                         self.list_state.select_previous();
