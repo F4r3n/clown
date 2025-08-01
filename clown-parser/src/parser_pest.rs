@@ -1,8 +1,6 @@
 use pest::Parser;
 use pest_derive::Parser;
 
-use crate::source::{Source, SourceKind};
-
 /// Note: Server sources (used for server-to-server communications) are not handled.
 #[derive(Debug, PartialEq, Eq)]
 pub struct IRCMessage<'s> {
@@ -12,15 +10,28 @@ pub struct IRCMessage<'s> {
     trailing: Option<&'s str>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum SourceKind<'a> {
+    Nick(&'a str),
+    Server(&'a str),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Source<'s> {
+    source: Option<SourceKind<'s>>,
+    user: Option<&'s str>,
+    host: Option<&'s str>,
+}
+
 #[derive(Parser)]
 #[grammar = "irc.pest"] // relative path to the grammar file
 struct IRCParser;
 
-fn parse_irc_message(input: &str) -> Result<IRCMessage, pest::error::Error<Rule>> {
+fn parse_pest_message(input: &str) -> Result<IRCMessage, pest::error::Error<Rule>> {
     let mut parsed = IRCParser::parse(Rule::irc_message, input)?;
     let message_pair = parsed.next().unwrap();
 
-    let mut source: Option<Source> = None;
+    let mut source = None;
     let mut command = None;
     let mut parameters = Vec::new();
     let mut trailing = None;
@@ -36,14 +47,14 @@ fn parse_irc_message(input: &str) -> Result<IRCMessage, pest::error::Error<Rule>
                     let mut host = None;
 
                     match source_pair.as_rule() {
-                        Rule::servername => {
-                            source_kind = Some(SourceKind::Server(inner.as_str()));
-                        }
                         Rule::source => {
                             for part in source_pair.into_inner() {
                                 match part.as_rule() {
                                     Rule::nickname => {
                                         source_kind = Some(SourceKind::Nick(part.as_str()))
+                                    }
+                                    Rule::servername => {
+                                        source_kind = Some(SourceKind::Server(part.as_str()));
                                     }
                                     Rule::user => {
                                         // user_name is inner of user
@@ -59,7 +70,11 @@ fn parse_irc_message(input: &str) -> Result<IRCMessage, pest::error::Error<Rule>
                         }
                         _ => {}
                     }
-                    source = Some(Source::new(source_kind, user, host));
+                    source = Some(Source {
+                        host,
+                        user,
+                        source: source_kind,
+                    });
                 }
             }
             Rule::command => {
@@ -85,4 +100,27 @@ fn parse_irc_message(input: &str) -> Result<IRCMessage, pest::error::Error<Rule>
         parameters,
         trailing,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_message_full() -> anyhow::Result<()> {
+        let input = ":nick!user@host PRIVMSG #chan :hello world\r\n";
+        let msg = parse_pest_message(input)?;
+        assert_eq!(
+            msg.source,
+            Some(Source {
+                source: Some(SourceKind::Nick(&"nick")),
+                host: Some(&"host"),
+                user: Some(&"user")
+            })
+        );
+        assert_eq!(msg.command, Some(&"PRIVMSG"[..]));
+        assert_eq!(msg.parameters, vec![&"#chan"[..]]);
+        assert_eq!(msg.trailing, Some(&"hello world"[..]));
+        Ok(())
+    }
 }

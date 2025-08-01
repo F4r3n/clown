@@ -9,22 +9,23 @@ use nom::{
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SourceKind<'a> {
-    Nick(&'a str),
-    Server(&'a str),
+    Nick(&'a [u8]),
+    Server(&'a [u8]),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Source<'s> {
     source: Option<SourceKind<'s>>,
-    user: Option<&'s str>,
-    host: Option<&'s str>,
+    user: Option<&'s [u8]>,
+    host: Option<&'s [u8]>,
 }
 
+#[cfg(test)]
 impl<'a> Source<'a> {
     pub fn new(
         in_source_type: Option<SourceKind<'a>>,
-        user: Option<&'a str>,
-        host: Option<&'a str>,
+        user: Option<&'a [u8]>,
+        host: Option<&'a [u8]>,
     ) -> Self {
         Self {
             source: in_source_type,
@@ -38,8 +39,8 @@ impl Source<'_> {
     pub fn get_source_kind(&self) -> Option<&str> {
         if let Some(source_type) = &self.source {
             match source_type {
-                SourceKind::Nick(name) => Some(name),
-                SourceKind::Server(name) => Some(name),
+                SourceKind::Nick(name) => std::str::from_utf8(name).ok(),
+                SourceKind::Server(name) => std::str::from_utf8(name).ok(),
             }
         } else {
             None

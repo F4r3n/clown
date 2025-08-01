@@ -10,6 +10,15 @@ pub enum ParsingError {
     Parse,
 }
 
+/// Note: Server sources (used for server-to-server communications) are not handled.
+#[derive(Debug, PartialEq, Eq)]
+pub struct IRCMessage<'s> {
+    source: Option<Source<'s>>,
+    command: Option<&'s [u8]>,
+    parameters: Vec<&'s [u8]>,
+    trailing: Option<&'s [u8]>,
+}
+
 #[self_referencing]
 #[derive(Debug, PartialEq, Eq)]
 pub struct Message {
@@ -48,7 +57,7 @@ impl Message {
     }
 }
 
-fn parse_message(buf: &[u8]) -> Result<IRCMessage<'_>, ParsingError> {
+pub(crate) fn parse_message(buf: &[u8]) -> Result<IRCMessage<'_>, ParsingError> {
     let (buf, source) = parse_source(buf);
 
     let (buf, command) = match parse_command(buf) {
