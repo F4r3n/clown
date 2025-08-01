@@ -10,15 +10,6 @@ pub enum ParsingError {
     Parse,
 }
 
-/// Note: Server sources (used for server-to-server communications) are not handled.
-#[derive(Debug, PartialEq, Eq)]
-pub struct IRCMessage<'s> {
-    source: Option<Source<'s>>,
-    command: Option<&'s [u8]>,
-    parameters: Vec<&'s [u8]>,
-    trailing: Option<&'s [u8]>,
-}
-
 #[self_referencing]
 #[derive(Debug, PartialEq, Eq)]
 pub struct Message {

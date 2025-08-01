@@ -1,0 +1,37 @@
+WHITESPACE = _{ " " }
+
+irc_message = { prefix? ~ command ~ parameters* ~ trailing? ~ line_end? }
+
+// Prefix with source:
+prefix = { ":" ~ source ~ WHITESPACE+ }
+
+// Source is either servername or nick + optional user + optional host
+source = { servername | (nickname ~ user? ~ host?) }
+
+// Nickname: no NUL, CR, LF, SPACE, chantype characters (# & + !)
+nickname = @{ (!invalid_nick_char ~ ANY)+ }
+invalid_nick_char = _{ "\0" | "\r" | "\n" | " " | "#" | "&" | "+" | "!" }
+
+// User: any chars except NUL, CR, LF, SPACE
+user = { "!" ~ user_name }
+user_name = @{ (!invalid_user_char ~ ANY)+ }
+invalid_user_char = _{ "\0" | "\r" | "\n" | " " }
+
+// Host: optional
+host = { "@" ~ host_name }
+host_name = @{ (!(" " | "\r" | "\n") ~ ANY)+ }
+
+// Servername: typical hostname chars, e.g. ASCII letters/digits/dots/hyphens etc.
+// We simplify here to exclude space, CR, LF, NUL
+servername = @{ (!invalid_server_char ~ ANY)+ }
+invalid_server_char = _{ "\0" | "\r" | "\n" | " " }
+
+command   = @{ (ASCII_ALPHA+ | ASCII_DIGIT{3}) }
+
+parameters = { WHITESPACE+ ~ param }
+param      = @{ (!(" " | "\r" | "\n") ~ ANY)+ }  // non-trailing parameter
+
+trailing  = _{ WHITESPACE+ ~ ":" ~ trailing_data }
+trailing_data = @{ (!("\r" | "\n") ~ ANY)* }
+
+line_end  = { "\r\n" | "\n" }
