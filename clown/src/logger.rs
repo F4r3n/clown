@@ -22,6 +22,7 @@ impl Logger {
     }
 }
 
+#[allow(dead_code)]
 pub fn log_info_sync(msg: &str) {
     let logger_mutex = LOGGER.get_or_init(|| {
         Mutex::new(Logger::try_new("test_log.txt").expect("Failed to open log file"))
