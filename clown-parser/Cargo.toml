@@ -13,4 +13,9 @@ workspace = true
 
 [dev-dependencies]
 anyhow = "1.0.98"
+criterion = { version = "0.7" }
 
+
+[[bench]]
+name = "parse_messages"
+harness = false
