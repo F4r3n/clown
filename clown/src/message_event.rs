@@ -3,7 +3,7 @@ use crate::irc_view::message_content::MessageContent;
 #[derive(PartialEq, Debug)]
 pub enum MessageEvent {
     MessageInput(String),
-    AddMessageView(String, Box<MessageContent>),
+    AddMessageView(String, MessageContent),
     HighlightUser(String),
     SelectChannel(String),
     UpdateUsers(Vec<String>),

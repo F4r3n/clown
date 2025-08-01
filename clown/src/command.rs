@@ -39,7 +39,7 @@ pub fn help(channel: &str) -> MessageEvent {
     }
     MessageEvent::AddMessageView(
         channel.to_string(),
-        Box::new(MessageContent::new_info(output.as_str())),
+        MessageContent::new_info(output.as_str()),
     )
 }
 
@@ -48,7 +48,7 @@ pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
         if !task.is_finished() {
             return Some(MessageEvent::AddMessageView(
                 model.current_channel.clone(),
-                Box::new(MessageContent::new_error("Already connected".to_string())),
+                MessageContent::new_error("Already connected".to_string()),
             ));
         }
     }

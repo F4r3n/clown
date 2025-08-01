@@ -119,7 +119,7 @@ impl<'a> MainView<'a> {
             self.messages_display
                 .handle_actions(&MessageEvent::AddMessageView(
                     model.current_channel.to_string(),
-                    Box::new(MessageContent::new(Some(nickname), content.as_str())),
+                    MessageContent::new(Some(nickname), content.as_str()),
                 ))
         }
     }
@@ -144,11 +144,11 @@ impl<'a> MainView<'a> {
                         }
                         messages.push_back(MessageEvent::AddMessageView(
                             from,
-                            Box::new(MessageContent::new_message(
+                            MessageContent::new_message(
                                 source,
                                 content.as_str(),
                                 &model.config.login_config.nickname,
-                            )),
+                            ),
                         ));
                     }
                     Command::Nick(new_user) => messages.push_back(MessageEvent::ReplaceUser(
@@ -161,9 +161,9 @@ impl<'a> MainView<'a> {
                         messages.push_back(MessageEvent::RemoveUser(source.clone()));
                         messages.push_back(MessageEvent::AddMessageView(
                             model.current_channel.to_string(),
-                            Box::new(MessageContent::new_info(
+                            MessageContent::new_info(
                                 format!("{} has quit", source.clone()).as_str(),
-                            )),
+                            ),
                         ));
                     }
                     Command::Join(_) => {
@@ -173,9 +173,9 @@ impl<'a> MainView<'a> {
                         if !source.eq(&model.config.login_config.nickname) {
                             messages.push_back(MessageEvent::AddMessageView(
                                 model.current_channel.to_string(),
-                                Box::new(MessageContent::new_info(
+                                MessageContent::new_info(
                                     format!("{} has joined", source.clone()).as_str(),
-                                )),
+                                ),
                             ));
                         }
                     }
@@ -190,7 +190,7 @@ impl<'a> MainView<'a> {
 
                         messages.push_back(MessageEvent::AddMessageView(
                             model.current_channel.to_string(),
-                            Box::new(MessageContent::new(source, content.as_str())),
+                            MessageContent::new(source, content.as_str()),
                         ));
                     }
                     ResponseNumber::NameReply(list_users) => {
@@ -202,7 +202,7 @@ impl<'a> MainView<'a> {
                     ResponseNumber::Err(_, content) => {
                         messages.push_back(MessageEvent::AddMessageView(
                             model.current_channel.to_string(),
-                            Box::new(MessageContent::new_error(content)),
+                            MessageContent::new_error(content),
                         ));
                     }
                     _ => {}
@@ -350,7 +350,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 } else {
                     messages.push_back(MessageEvent::AddMessageView(
                         model.current_channel.to_string(),
-                        Box::new(MessageContent::new(None, "Disconnected".into())),
+                        MessageContent::new(None, "Disconnected".into()),
                     ));
                 }
             }
