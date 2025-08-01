@@ -1,4 +1,4 @@
-use crate::irc_view::text_widget::MessageContent;
+use crate::irc_view::message_content::MessageContent;
 
 #[derive(PartialEq, Debug)]
 pub enum MessageEvent {

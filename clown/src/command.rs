@@ -1,6 +1,6 @@
 use clown_core::client::Client;
 
-use crate::{irc_view::text_widget::MessageContent, message_event::MessageEvent, model::Model};
+use crate::{irc_view::message_content::MessageContent, message_event::MessageEvent, model::Model};
 
 use strum::{EnumIter, IntoEnumIterator, IntoStaticStr};
 
