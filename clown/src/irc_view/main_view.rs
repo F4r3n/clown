@@ -137,7 +137,7 @@ impl<'a> MainView<'a> {
         {
             let reply = recieved.get_reply();
             let source = recieved.get_source().map(|v| v.to_string());
-            log_info_sync(format!("{reply:?}\n").as_str());
+            //log_info_sync(format!("{reply:?}\n").as_str());
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {

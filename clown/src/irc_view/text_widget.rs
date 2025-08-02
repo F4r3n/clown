@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::SubAssign;
 
 use crate::component::Draw;
 use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
@@ -85,10 +86,23 @@ impl Draw for TextWidget {
             .saturating_sub(SEPARATOR_LENGTH as u16)
             .saturating_sub(4_u16);
 
+        let mut counter: i64 = self.max_visible_height as i64;
         let mut visible_rows = vec![];
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             for line in messages.iter().skip(scroll).take(self.max_visible_height) {
-                visible_rows.append(&mut line.create_rows(content_width, &focus_style));
+                let mut new_rows = line.create_rows(content_width, &focus_style);
+                counter -= new_rows.len() as i64;
+                if counter < 0 {
+                    for i in 0..counter.abs() {
+                        visible_rows.push(new_rows[i as usize].clone());
+                    }
+                    break;
+                } else {
+                    visible_rows.append(&mut new_rows);
+                }
+                if counter == 0 {
+                    break;
+                }
             }
         }
 

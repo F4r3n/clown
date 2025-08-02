@@ -283,11 +283,7 @@ impl ResponseBuilder {
         trailing: Option<&str>,
     ) -> ResponseNumber {
         use ResponseNumber::*;
-        let string_to_send = if trailing.is_some() {
-            trailing.unwrap_or_default().to_string()
-        } else {
-            parameters.join(" ")
-        };
+        let string_to_send = trailing.map_or_else(|| parameters.join(" "), |t| t.to_string());
         match reply_number {
             1 => Welcome(string_to_send),
             2 => YourHost(string_to_send),
