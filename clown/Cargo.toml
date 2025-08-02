@@ -1,6 +1,6 @@
 [package]
 name = "clown"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 repository = "https://github.com/F4r3n/clown"
 authors = ["Guillaume Kotulski"]
