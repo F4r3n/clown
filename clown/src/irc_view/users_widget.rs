@@ -96,12 +96,7 @@ impl UsersWidget {
     }
 
     pub fn add_user(&mut self, user: &str) {
-        if self
-            .list_users
-            .iter()
-            .position(|v| v.name.eq(user))
-            .is_none()
-        {
+        if !self.list_users.iter().any(|v| v.name.eq(user)) {
             self.list_users.push(user.into());
         }
     }

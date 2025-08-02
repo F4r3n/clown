@@ -55,11 +55,7 @@ impl Default for Config {
 
 impl Config {
     pub fn new() -> Self {
-        if let Ok(value) = Self::read() {
-            value
-        } else {
-            Self::default()
-        }
+        Self::read().unwrap_or_default()
     }
 
     pub fn save(&self) -> color_eyre::Result<()> {

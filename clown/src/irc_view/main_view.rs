@@ -350,7 +350,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                 } else {
                     messages.push_back(MessageEvent::AddMessageView(
                         model.current_channel.to_string(),
-                        MessageContent::new(None, "Disconnected".into()),
+                        MessageContent::new(None, "Disconnected"),
                     ));
                 }
             }

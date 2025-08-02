@@ -47,7 +47,7 @@ impl MessageContent {
             time: std::time::SystemTime::now(),
             source,
             content: content.to_string(),
-            kind: kind,
+            kind,
         }
     }
 
@@ -86,7 +86,7 @@ impl MessageContent {
         let mut visible_rows = Vec::new();
         let time_str = format!("{:>width$}", self.time_format(), width = TIME_LENGTH);
         let mut nickname_style = if let Some(source) = &self.source {
-            Style::default().fg(nickname_color(&source))
+            Style::default().fg(nickname_color(source))
         } else {
             Style::default()
         };

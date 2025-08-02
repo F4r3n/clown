@@ -26,7 +26,7 @@ impl ChannelMessages {
     pub fn add_message(&mut self, channel: &str, in_message: &MessageContent) {
         self.messages
             .entry(channel.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(in_message.clone());
     }
 
@@ -81,7 +81,7 @@ impl Draw for TextWidget {
             .saturating_sub(TIME_LENGTH as u16)
             .saturating_sub(NICKNAME_LENGTH as u16)
             .saturating_sub(SEPARATOR_LENGTH as u16)
-            .saturating_sub(4 /*Length separator between content */ as u16);
+            .saturating_sub(4_u16);
 
         let mut visible_rows = vec![];
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {

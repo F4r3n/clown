@@ -30,7 +30,7 @@ fn irc_to_color(code: &str) -> Color {
 }
 
 fn toggle_modifier(mut style: Style, current: &mut Modifier, toggled: Modifier) -> Style {
-    *current = *current ^ toggled;
+    *current ^= toggled;
 
     if *current & Modifier::BOLD == Modifier::default() {
         style = style.remove_modifier(toggled);
@@ -47,7 +47,7 @@ pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> 
     let mut style_buffer = String::new();
     let mut style = start_style.unwrap_or_default();
     let mut modifier = style.add_modifier & style.sub_modifier;
-    let mut colors = vec![style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
+    let mut colors = [style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
     let mut index_color = 0;
 
     for c in content.chars() {
@@ -59,7 +59,7 @@ pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> 
             setting_style = true;
             style_buffer.clear();
             index_color = 0;
-        } else if setting_style && style_buffer.len() < 2 && c >= '0' && c <= '9' {
+        } else if setting_style && style_buffer.len() < 2 && c.is_ascii_digit() {
             style_buffer.push(c);
         } else if setting_style && c == ',' && index_color == 0 {
             colors[index_color] = irc_to_color(&style_buffer);
