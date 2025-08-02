@@ -102,7 +102,13 @@ impl<'a> MainView<'a> {
         if let Some(parsed_message) = command::parse_command(&content) {
             match parsed_message {
                 command::ClientCommand::Connect => Some(MessageEvent::Connect),
-                command::ClientCommand::Quit => Some(MessageEvent::Quit),
+                command::ClientCommand::Quit(message) => {
+                    Some(MessageEvent::Quit(if message.is_empty() {
+                        None
+                    } else {
+                        Some(message)
+                    }))
+                }
                 command::ClientCommand::Help => Some(help(&model.current_channel)),
                 command::ClientCommand::Nick(new_nick) => {
                     model.config.login_config.nickname = new_nick;
@@ -197,7 +203,7 @@ impl<'a> MainView<'a> {
                         messages.push_back(MessageEvent::UpdateUsers(list_users));
                     }
                     ResponseNumber::Topic(topic) => {
-                        messages.push_back(MessageEvent::SetTopic(topic))
+                        messages.push_back(MessageEvent::SetTopic(topic));
                     }
                     ResponseNumber::Err(_, content) => {
                         messages.push_back(MessageEvent::AddMessageView(
@@ -221,7 +227,7 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
             .constraints([
                 Constraint::Length(1),       // Topic area
                 Constraint::Percentage(100), // Messages area
-                Constraint::Length(4),       // Input area
+                Constraint::Length(2),       // Input area
             ])
             .split(frame.area());
 
@@ -332,8 +338,8 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
                     messages.push_back(v)
                 }
             }
-            MessageEvent::Quit => {
-                model.send_command(clown_core::command::Command::Quit(None));
+            MessageEvent::Quit(message) => {
+                model.send_command(clown_core::command::Command::Quit(message));
             }
             MessageEvent::Connect => {
                 if let Some(v) = connect_irc(model) {

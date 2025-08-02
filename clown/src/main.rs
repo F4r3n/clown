@@ -81,7 +81,7 @@ async fn update(
 ) {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         match msg {
-            MessageEvent::Quit => {
+            MessageEvent::Quit(_) => {
                 // You can handle cleanup and exit here
                 model.running_state = RunningState::Done;
             }

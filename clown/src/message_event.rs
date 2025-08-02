@@ -14,5 +14,5 @@ pub enum MessageEvent {
     PullIRC,
     Connect,
     DisConnect,
-    Quit,
+    Quit(Option<String>),
 }

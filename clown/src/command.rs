@@ -7,7 +7,7 @@ use strum::{EnumIter, IntoEnumIterator, IntoStaticStr};
 #[derive(IntoStaticStr, Debug, EnumIter)]
 pub enum ClientCommand {
     Connect,
-    Quit,
+    Quit(String),
     Nick(String),
     Help,
 }
@@ -18,7 +18,7 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
         if let Some(command) = splits.next() {
             match command {
                 "connect" => Some(ClientCommand::Connect),
-                "quit" => Some(ClientCommand::Quit),
+                "quit" => Some(ClientCommand::Quit(splits.collect())),
                 "nick" => Some(ClientCommand::Nick(splits.collect())),
                 "help" => Some(ClientCommand::Help),
                 _ => None,

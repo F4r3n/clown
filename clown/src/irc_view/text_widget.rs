@@ -64,6 +64,7 @@ impl Draw for TextWidget {
 
         // Set how many lines can be shown
         self.max_visible_height = area.height as usize;
+
         let max_scroll = self
             .get_number_messages()
             .saturating_sub(self.max_visible_height);
@@ -76,6 +77,7 @@ impl Draw for TextWidget {
                 Constraint::Length(1), // Scrollbar
             ])
             .split(area);
+
         let content_width = layout[0]
             .width
             .saturating_sub(TIME_LENGTH as u16)
