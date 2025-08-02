@@ -25,22 +25,20 @@ impl Outgoing {
     where
         W: AsyncWrite + Unpin,
     {
-        if let Some(reply) = server_message.get_reply() {
-            match reply {
-                Response::Cmd(Command::Ping(token)) => {
-                    writer
-                        .write_all(Command::Pong(token).as_bytes().as_slice())
-                        .await?;
-                    writer.flush().await?;
-                }
-                Response::Cmd(Command::Cap(_)) => {
-                    writer
-                        .write_all(Command::Cap("END".into()).as_bytes().as_slice())
-                        .await?;
-                    writer.flush().await?;
-                }
-                _ => {}
+        match server_message.get_reply() {
+            Response::Cmd(Command::Ping(token)) => {
+                writer
+                    .write_all(Command::Pong(token).as_bytes().as_slice())
+                    .await?;
+                writer.flush().await?;
             }
+            Response::Cmd(Command::Cap(_)) => {
+                writer
+                    .write_all(Command::Cap("END".into()).as_bytes().as_slice())
+                    .await?;
+                writer.flush().await?;
+            }
+            _ => {}
         }
 
         if let Some(sender) = &self.message_sender {

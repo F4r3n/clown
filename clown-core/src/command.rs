@@ -251,7 +251,7 @@ impl CommandBuilder {
 
     // TOPIC <channel> :<topic>
     fn topic(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
-        if parameters.len() >= 2 {
+        if !parameters.is_empty() {
             Some(Command::Topic(
                 parameters[0].to_string(),
                 trailing.unwrap_or_default().to_string(),

@@ -13,6 +13,7 @@ use crate::irc_view::message_content::MessageContent;
 use crate::irc_view::text_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
+use crate::logger::log_info_sync;
 use crate::model::Model;
 use crate::model::RunningState;
 use crate::widget_view;
@@ -133,10 +134,10 @@ impl<'a> MainView<'a> {
     fn update_pull_irc(&mut self, model: &mut Model, messages: &mut VecDeque<MessageEvent>) {
         if let Some(reciever) = model.message_reciever.as_mut()
             && let Ok(recieved) = reciever.inner.try_recv()
-            && let Some(reply) = recieved.get_reply()
         {
+            let reply = recieved.get_reply();
             let source = recieved.get_source().map(|v| v.to_string());
-
+            log_info_sync(format!("{reply:?}\n").as_str());
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {
@@ -213,6 +214,7 @@ impl<'a> MainView<'a> {
                     }
                     _ => {}
                 },
+                Response::Unknown(_) => {}
             };
         }
     }

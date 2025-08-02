@@ -2,7 +2,7 @@ use clown_parser::message::Message;
 use tokio::sync::mpsc;
 
 use crate::{
-    command::CommandBuilder,
+    command::{Command, CommandBuilder},
     response::{Response, ResponseBuilder},
 };
 pub struct MessageSender {
@@ -27,11 +27,10 @@ impl ServerMessage {
         self.message.get_source()
     }
 
-    pub fn get_reply(&self) -> Option<Response> {
+    pub fn get_reply(&self) -> Response {
         if let Some(command) = self.message.get_command_name() {
             if let Ok(command_number) = command.parse() {
-                ResponseBuilder::get_reply(command_number, self.message.get_trailing())
-                    .map(Response::Rpl)
+                Response::Rpl(ResponseBuilder::get_reply(command_number,self.message.get_parameters(),  self.message.get_trailing()))
             } else {
                 CommandBuilder::get_command(
                     command,
@@ -39,9 +38,13 @@ impl ServerMessage {
                     self.message.get_trailing(),
                 )
                 .map(Response::Cmd)
+                .unwrap_or(Response::Cmd(Command::Unknown(format!(
+                    "{:?}",
+                    self.message
+                ))))
             }
         } else {
-            None
+            Response::Cmd(Command::Unknown(format!("{:?}", self.message)))
         }
     }
 }
@@ -63,8 +66,7 @@ mod tests {
         )?;
         let server_message = ServerMessage::new(message);
         let command = server_message.get_reply();
-        assert!(command.is_some());
-        if let Some(Response::Cmd(crate::command::Command::PrivMsg(target, message))) = command {
+        if let Response::Cmd(crate::command::Command::PrivMsg(target, message)) = command {
             assert_eq!(target, "Wiz", "PRIVMSG target mismatch");
             assert_eq!(
                 message, "Hello are you receiving this message ?",
@@ -82,8 +84,7 @@ mod tests {
         let message = create_message(":Alice QUIT :Quit: Leaving\r\n".as_bytes())?;
         let server_message = ServerMessage::new(message);
         let command = server_message.get_reply();
-        assert!(command.is_some());
-        if let Some(Response::Cmd(crate::command::Command::Quit(reason))) = command {
+        if let Response::Cmd(crate::command::Command::Quit(reason)) = command {
             assert_eq!(
                 reason,
                 Some("Quit: Leaving".to_string()),
@@ -100,8 +101,7 @@ mod tests {
         let message = create_message(":Alice QUIT\r\n".as_bytes())?;
         let server_message = ServerMessage::new(message);
         let command = server_message.get_reply();
-        assert!(command.is_some());
-        if let Some(Response::Cmd(crate::command::Command::Quit(reason))) = command {
+        if let Response::Cmd(crate::command::Command::Quit(reason)) = command {
             assert_eq!(reason, None, "QUIT reason mismatch");
         } else {
             panic!("Expected QUIT command, got {command:?}");
@@ -114,8 +114,7 @@ mod tests {
         let message = create_message(":token PING :token\r\n".as_bytes())?;
         let server_message = ServerMessage::new(message);
         let command = server_message.get_reply();
-        assert!(command.is_some());
-        if let Some(Response::Cmd(crate::command::Command::Ping(token))) = command {
+        if let Response::Cmd(crate::command::Command::Ping(token)) = command {
             assert_eq!(token, "token", "PING token mismatch");
         } else {
             panic!("Expected PING command, got {command:?}");
@@ -128,8 +127,7 @@ mod tests {
         let message = create_message("PONG serverName 123456789\r\n".as_bytes())?;
         let server_message = ServerMessage::new(message);
         let command = server_message.get_reply();
-        assert!(command.is_some());
-        if let Some(Response::Cmd(Command::Pong(token))) = command {
+        if let Response::Cmd(Command::Pong(token)) = command {
             assert_eq!(token, "123456789", "PONG token mismatch");
         } else {
             panic!("Expected PONG command, got {command:?}");
@@ -148,9 +146,8 @@ mod tests {
             server_message.get_source()
         );
         let command = server_message.get_reply();
-        assert!(command.is_some(), "{server_message:?}");
 
-        if let Some(Response::Cmd(Command::Nick(new_name))) = command {
+        if let Response::Cmd(Command::Nick(new_name)) = command {
             assert_eq!(new_name, "jo", "NICK token mismatch");
         } else {
             panic!("Expected NICK command, got {command:?}");
@@ -169,9 +166,8 @@ mod tests {
             server_message.get_source()
         );
         let command = server_message.get_reply();
-        assert!(command.is_some(), "{server_message:?}");
 
-        if let Some(Response::Cmd(Command::Nick(new_name))) = command {
+        if let Response::Cmd(Command::Nick(new_name)) = command {
             assert_eq!(new_name, "jo", "NICK token mismatch");
         } else {
             panic!("Expected NICK command, got {command:?}");
@@ -185,7 +181,7 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::Unknown(999, msg))) if msg == "Unknown numeric reply")
+            matches!(reply, Response::Rpl(ResponseNumber::Unknown(999, msg)) if msg == "Unknown numeric reply")
         );
         Ok(())
     }
@@ -197,7 +193,7 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Cmd(Command::Notice(target, msg))) if target == "*" && msg == "*** Looking up your hostname...")
+            matches!(reply, Response::Cmd(Command::Notice(target, msg)) if target == "*" && msg == "*** Looking up your hostname...")
         );
         Ok(())
     }
@@ -208,7 +204,7 @@ mod tests {
             create_message(b":irc.example.net NOTICE farine :*** Found your hostname (inspircd)")?;
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
-        if let Some(Response::Cmd(Command::Notice(target, msg))) = reply {
+        if let Response::Cmd(Command::Notice(target, msg)) = reply {
             assert_eq!(target, "farine");
             assert_eq!(msg, "*** Found your hostname (inspircd)");
         } else {
@@ -225,7 +221,7 @@ mod tests {
         let reply = server_message.get_reply();
 
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::Welcome(msg))) if msg == "Welcome to the ExampleNet IRC Network farine!farine@inspircd")
+            matches!(reply, Response::Rpl(ResponseNumber::Welcome(ref msg)) if msg == "Welcome to the ExampleNet IRC Network farine!farine@inspircd")
         );
         Ok(())
     }
@@ -236,7 +232,7 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::YourHost(msg))) if msg == "Your host is irc.example.net, running version InspIRCd-4")
+            matches!(reply, Response::Rpl(ResponseNumber::YourHost(ref msg)) if msg == "Your host is irc.example.net, running version InspIRCd-4")
         );
         Ok(())
     }
@@ -248,9 +244,8 @@ mod tests {
         )?;
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
-        assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::Created(msg))) if msg == "This server was created on 12 Jul 2025 at 06:41:59 UTC")
-        );
+        assert!(matches!(reply, Response::Rpl(ResponseNumber::Created(msg))
+             if msg == "This server was created on 12 Jul 2025 at 06:41:59 UTC"));
         Ok(())
     }
 
@@ -261,9 +256,7 @@ mod tests {
         )?;
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
-        assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::MyInfo(msg))) if msg == "bklov")
-        );
+        assert!(matches!(reply, Response::Rpl(ResponseNumber::MyInfo(msg)) if msg == "bklov"));
         Ok(())
     }
 
@@ -271,7 +264,7 @@ mod tests {
     fn test_numeric_reply_005_1() -> anyhow::Result<()> {
         let message = create_message(b":irc.example.net 005 farine AWAYLEN=200 CASEMAPPING=ascii CHANLIMIT=#:20 CHANMODES=b,k,l,imnpst CHANNELLEN=60 CHANTYPES=# ELIST=CMNTU EXTBAN=, HOSTLEN=64 KEYLEN=32 KICKLEN=300 LINELEN=512 :are supported by this server")?;
         let server_message = ServerMessage::new(message);
-        if let Some(Response::Rpl(ResponseNumber::Bounce(msg))) = server_message.get_reply() {
+        if let Response::Rpl(ResponseNumber::Bounce(msg)) = server_message.get_reply() {
             assert_eq!(msg, "are supported by this server");
         } else {
             panic!("Wrong reply")
@@ -286,8 +279,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::Bounce(msg))) if msg == "are supported by this server")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::Bounce(msg)) 
+            if msg == "are supported by this server"));
         Ok(())
     }
 
@@ -299,8 +292,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::Bounce(msg))) if msg == "are supported by this server")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::Bounce(msg)) 
+            if msg == "are supported by this server"));
         Ok(())
     }
 
@@ -312,8 +305,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::LUserClient(msg))) if msg == "There are 0 users and 0 invisible on 1 servers")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::LUserClient(msg)) 
+            if msg == "There are 0 users and 0 invisible on 1 servers"));
         Ok(())
     }
 
@@ -323,8 +316,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::LUserUnknown(msg))) if msg == "unknown connections")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::LUserUnknown(msg)) 
+            if msg == "unknown connections"));
         Ok(())
     }
 
@@ -334,8 +327,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::LUserChannels(msg))) if msg == "channels formed")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::LUserChannels(msg)) 
+            if msg == "channels formed"));
         Ok(())
     }
 
@@ -346,8 +339,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::LUserMe(msg))) if msg == "I have 0 clients and 0 servers")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::LUserMe(msg)) 
+            if msg == "I have 0 clients and 0 servers"));
         Ok(())
     }
 
@@ -358,8 +351,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::LocalUsers(msg))) if msg == "Current local users: 0  Max: 0")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::LocalUsers(msg)) 
+            if msg == "Current local users: 0  Max: 0"));
         Ok(())
     }
 
@@ -370,8 +363,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::GlobalUsers(msg))) if msg == "Current global users: 0  Max: 0")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::GlobalUsers(msg))
+             if msg == "Current global users: 0  Max: 0"));
         Ok(())
     }
 
@@ -381,8 +374,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::HighestConnCount(msg))) if msg == "Highest connection count: 0 (0 clients) (1 connections received)")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::HighestConnCount(msg)) 
+            if msg == "Highest connection count: 0 (0 clients) (1 connections received)"));
         Ok(())
     }
 
@@ -393,8 +386,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
         assert!(
-            matches!(reply, Some(Response::Rpl(ResponseNumber::Err(422, msg))) if msg == "There is no message of the day.")
-        );
+            matches!(reply, Response::Rpl(ResponseNumber::Err(422, msg)) 
+            if msg == "There is no message of the day."));
         Ok(())
     }
 
@@ -403,7 +396,28 @@ mod tests {
         let message = create_message(b":irc.example.com")?;
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
-        assert!(reply.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_topic_333_command() -> anyhow::Result<()> {
+        let message = create_message(b":IRC-server 333 farine_test #rust-spam farineA 1754165495")?;
+        let server_message = ServerMessage::new(message);
+        let reply = server_message.get_reply();
+                assert!(
+            matches!(reply, Response::Rpl(ResponseNumber::TopicWhoTime(msg)) 
+            if msg == "farine_test #rust-spam farineA 1754165495"));
+        Ok(())
+    }
+
+    #[test]
+        fn test_topic_command() -> anyhow::Result<()> {
+        let message = create_message(b":farineA!farine4@hidden TOPIC #rust-spam :yo")?;
+        let server_message = ServerMessage::new(message);
+        let reply = server_message.get_reply();
+                assert!(
+            matches!(reply, Response::Cmd(Command::Topic(channel, msg)) 
+            if msg == "yo" && channel == "#rust-spam"));
         Ok(())
     }
 }
