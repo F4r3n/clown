@@ -13,7 +13,6 @@ use crate::irc_view::message_content::MessageContent;
 use crate::irc_view::text_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
-use crate::logger::log_info_sync;
 use crate::model::Model;
 use crate::model::RunningState;
 use crate::widget_view;
@@ -37,7 +36,7 @@ pub struct MainView<'a> {
 
     focus_manager: FocusManager<'a>,
 }
-impl<'a> MainView<'a> {
+impl MainView<'_> {
     pub fn new(current_channel: &str) -> Self {
         let mut focus_manager = FocusManager::new();
         let mut input = Component::new("input", input_widget::CInput::new());
@@ -81,8 +80,8 @@ impl<'a> MainView<'a> {
         id
     }
 
-    fn children(&mut self) -> Vec<Component<Child<'_>>> {
-        vec![
+    fn children(&mut self) -> [Component<'_, Child<'_>>; 4] {
+        [
             self.input.to_child_mut(),
             self.messages_display.to_child_mut(),
             self.list_users_view.to_child_mut(),
@@ -221,8 +220,8 @@ impl<'a> MainView<'a> {
 }
 
 use crate::command;
-impl<'a> widget_view::WidgetView for MainView<'a> {
-    fn view(&mut self, _model: &mut Model, frame: &mut Frame) {
+impl widget_view::WidgetView for MainView<'_> {
+    fn view(&mut self, _model: &mut Model, frame: &mut Frame<'_>) {
         // Create layout
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
@@ -233,19 +232,32 @@ impl<'a> widget_view::WidgetView for MainView<'a> {
             ])
             .split(frame.area());
 
-        let top_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(100), // Messages
-                Constraint::Min(15),         // List Users
-            ])
-            .split(main_layout[1]);
+        if let Some(message_area_layout) = main_layout.get(1) {
+            let top_layout = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([
+                    Constraint::Percentage(100), // Messages
+                    Constraint::Min(15),         // List Users
+                ])
+                .split(*message_area_layout);
+
+            if let Some(message_area) = top_layout.first() {
+                self.messages_display.render(frame, *message_area);
+            }
+
+            if let Some(list_users) = top_layout.get(1) {
+                self.list_users_view.render(frame, *list_users);
+            }
+        }
 
         // Render widgets
-        self.messages_display.render(frame, top_layout[0]);
-        self.list_users_view.render(frame, top_layout[1]);
-        self.input.render(frame, main_layout[2]);
-        self.topic_view.render(frame, main_layout[0]);
+        if let Some(input_area) = main_layout.get(2) {
+            self.input.render(frame, *input_area);
+        }
+
+        if let Some(topic_area) = main_layout.first() {
+            self.topic_view.render(frame, *topic_area);
+        }
     }
 
     fn handle_event(

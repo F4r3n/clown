@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::ops::SubAssign;
 
 use crate::component::Draw;
 use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
@@ -52,7 +51,7 @@ pub struct TextWidget {
 }
 
 impl Draw for TextWidget {
-    fn render(&mut self, frame: &mut Frame, area: Rect) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
         let focused = self.focus;
         let focus_style = if focused {
@@ -79,12 +78,16 @@ impl Draw for TextWidget {
             ])
             .split(area);
 
-        let content_width = layout[0]
-            .width
-            .saturating_sub(TIME_LENGTH as u16)
-            .saturating_sub(NICKNAME_LENGTH as u16)
-            .saturating_sub(SEPARATOR_LENGTH as u16)
-            .saturating_sub(4_u16);
+        let content_width = layout
+            .first()
+            .map(|rect| {
+                rect.width
+                    .saturating_sub(TIME_LENGTH as u16)
+                    .saturating_sub(NICKNAME_LENGTH as u16)
+                    .saturating_sub(SEPARATOR_LENGTH as u16)
+                    .saturating_sub(4_u16)
+            })
+            .unwrap_or(0);
 
         let mut counter: i64 = self.max_visible_height as i64;
         let mut visible_rows = vec![];
@@ -94,7 +97,9 @@ impl Draw for TextWidget {
                 counter -= new_rows.len() as i64;
                 if counter < 0 {
                     for i in 0..counter.abs() {
-                        visible_rows.push(new_rows[i as usize].clone());
+                        if let Some(row) = new_rows.get(i as usize) {
+                            visible_rows.push(row.clone());
+                        }
                     }
                     break;
                 } else {
@@ -121,13 +126,17 @@ impl Draw for TextWidget {
         self.vertical_scroll_state = ScrollbarState::new(self.get_number_messages())
             .position(self.scroll_offset + self.max_visible_height);
 
-        frame.render_widget(table, layout[0]);
-        if layout[1].width > 0 {
+        if let Some(layout) = layout.first() {
+            frame.render_widget(table, *layout)
+        }
+        if let Some(layout_1) = layout.get(1)
+            && layout_1.width > 0
+        {
             frame.render_stateful_widget(
                 Scrollbar::default()
                     .orientation(ScrollbarOrientation::VerticalRight)
                     .thumb_style(Style::default().bg(Color::Cyan)),
-                layout[1],
+                *layout_1,
                 &mut self.vertical_scroll_state,
             );
         }

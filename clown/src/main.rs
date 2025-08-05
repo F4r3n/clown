@@ -55,7 +55,7 @@ async fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-fn view(model: &mut Model, views: &mut ViewMap, frame: &mut Frame) {
+fn view(model: &mut Model, views: &mut ViewMap, frame: &mut Frame<'_>) {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         current_view.view(model, frame);
     }

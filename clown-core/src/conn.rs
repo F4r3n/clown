@@ -202,9 +202,15 @@ pub mod test {
         ) -> std::task::Poll<std::io::Result<()>> {
             loop {
                 if let Some(current) = self.current.take() {
-                    let remaining = &current[self.pos..];
-                    let to_read = std::cmp::min(remaining.len(), buf.remaining());
-                    buf.put_slice(&remaining[..to_read]);
+                    let remaining = current.get(self.pos..);
+                    let to_read =
+                        std::cmp::min(remaining.map(|v| v.len()).unwrap_or(0), buf.remaining());
+                    if let Some(v) = remaining
+                        && let Some(slice) = v.get(..to_read)
+                    {
+                        buf.put_slice(slice);
+                    }
+                    //buf.put_slice(&remaining[..to_read]);
                     self.pos += to_read;
                     if self.pos < current.len() {
                         self.current = Some(current);

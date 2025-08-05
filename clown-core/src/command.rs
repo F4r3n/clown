@@ -239,35 +239,24 @@ impl CommandBuilder {
 
     // NOTICE <target> :<message>
     fn notice(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
-        if !parameters.is_empty() {
-            Some(Command::Notice(
-                parameters[0].to_string(),
-                trailing.unwrap_or_default().to_string(),
-            ))
-        } else {
-            None
-        }
+        parameters.first().map(|first| {
+            Command::Notice(first.to_string(), trailing.unwrap_or_default().to_string())
+        })
     }
 
     // TOPIC <channel> :<topic>
     fn topic(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
-        if !parameters.is_empty() {
-            Some(Command::Topic(
-                parameters[0].to_string(),
-                trailing.unwrap_or_default().to_string(),
-            ))
-        } else {
-            None
-        }
+        parameters.first().map(|first| {
+            Command::Topic(first.to_string(), trailing.unwrap_or_default().to_string())
+        })
     }
 
     // MODE <target> <mode>
     fn mode(parameters: Vec<&str>) -> Option<Command> {
-        if parameters.len() >= 2 {
-            Some(Command::Mode(
-                parameters[0].to_string(),
-                parameters[1..].join(" "),
-            ))
+        if let Some(first) = parameters.first()
+            && let Some(others) = parameters.get(1..)
+        {
+            Some(Command::Mode(first.to_string(), others.join(" ")))
         } else {
             None
         }
@@ -291,11 +280,10 @@ impl CommandBuilder {
 
     // INVITE <nick> <channel>
     fn invite(parameters: Vec<&str>) -> Option<Command> {
-        if parameters.len() >= 2 {
-            Some(Command::Invite(
-                parameters[0].to_string(),
-                parameters[1].to_string(),
-            ))
+        if let Some(first) = parameters.first()
+            && let Some(others) = parameters.get(1)
+        {
+            Some(Command::Invite(first.to_string(), others.to_string()))
         } else {
             None
         }
@@ -303,12 +291,12 @@ impl CommandBuilder {
 
     // KICK <channel> <nick> [:reason]
     fn kick(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
-        if parameters.len() >= 2 {
-            let channel = parameters[0].to_string();
-            let nick = parameters[1].to_string();
+        if let Some(channel) = parameters.first()
+            && let Some(nick) = parameters.get(1)
+        {
             Some(Command::Kick(
-                channel,
-                nick,
+                channel.to_string(),
+                nick.to_string(),
                 trailing.map(|v| v.to_string()),
             ))
         } else {

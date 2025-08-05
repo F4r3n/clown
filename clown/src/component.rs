@@ -3,7 +3,7 @@ use ratatui::{Frame, layout::Rect};
 use std::ops::{Deref, DerefMut};
 
 pub trait Draw {
-    fn render(&mut self, frame: &mut Frame, area: Rect);
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect);
 }
 
 pub trait EventHandler {
@@ -60,7 +60,7 @@ impl<'a, T> Component<'a, T> {
         self.inner.handle_actions(event)
     }
 
-    pub fn render(&mut self, frame: &mut Frame, area: Rect)
+    pub fn render(&mut self, frame: &mut Frame<'_>, area: Rect)
     where
         T: Draw,
     {
@@ -103,7 +103,7 @@ impl<'a> Deref for Child<'a> {
     }
 }
 
-impl<'a> DerefMut for Child<'a> {
+impl DerefMut for Child<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0
     }

@@ -25,7 +25,7 @@ pub struct CInput {
 }
 
 impl Draw for CInput {
-    fn render(&mut self, frame: &mut Frame, area: Rect) {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
         let focus = self.has_focus();
         // keep 2 for borders and 1 for cursor

@@ -62,7 +62,9 @@ pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> 
         } else if setting_style && style_buffer.len() < 2 && c.is_ascii_digit() {
             style_buffer.push(c);
         } else if setting_style && c == ',' && index_color == 0 {
-            colors[index_color] = irc_to_color(&style_buffer);
+            if let Some(color) = colors.get_mut(index_color) {
+                *color = irc_to_color(&style_buffer);
+            }
             index_color += 1;
             style_buffer.clear();
         } else if c == '\x02' {
@@ -84,7 +86,9 @@ pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> 
         } else {
             if setting_style {
                 setting_style = false;
-                colors[index_color] = irc_to_color(&style_buffer);
+                if let Some(color) = colors.get_mut(index_color) {
+                    *color = irc_to_color(&style_buffer);
+                }
             }
             buffer.push(c);
         }
@@ -100,7 +104,7 @@ mod tests {
     use super::*;
 
     // Helper to extract text and colors from spans for assertion
-    fn span_data<'a>(span: &'a Span) -> (&'a str, Color, Color) {
+    fn span_data<'a>(span: &'a Span<'_>) -> (&'a str, Color, Color) {
         // Assuming you have methods or public fields to get these:
         (
             &span.content,

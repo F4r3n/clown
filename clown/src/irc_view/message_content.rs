@@ -82,7 +82,7 @@ impl MessageContent {
         formatted_time
     }
 
-    pub fn create_rows(&self, content_width: u16, focus_style: &Style) -> Vec<Row> {
+    pub fn create_rows(&self, content_width: u16, focus_style: &Style) -> Vec<Row<'_>> {
         let mut visible_rows = Vec::new();
         let time_str = format!("{:>width$}", self.time_format(), width = TIME_LENGTH);
         let mut nickname_style = if let Some(source) = &self.source {

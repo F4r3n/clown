@@ -103,7 +103,7 @@ impl UsersWidget {
 }
 
 impl Draw for UsersWidget {
-    fn render(&mut self, frame: &mut ratatui::Frame, area: ratatui::prelude::Rect) {
+    fn render(&mut self, frame: &mut ratatui::Frame<'_>, area: ratatui::prelude::Rect) {
         self.area = area;
         let focus_style = if self.has_focus() {
             Style::default()

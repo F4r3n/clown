@@ -9,7 +9,7 @@ pub struct TopicWidget {
 }
 
 impl Draw for TopicWidget {
-    fn render(&mut self, frame: &mut ratatui::Frame, area: ratatui::prelude::Rect) {
+    fn render(&mut self, frame: &mut ratatui::Frame<'_>, area: ratatui::prelude::Rect) {
         let text = Text::from(self.topic.clone());
         let paragrapth = Paragraph::new(text);
         frame.render_widget(paragrapth, area);

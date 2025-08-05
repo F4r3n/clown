@@ -160,7 +160,7 @@ impl<'a> FocusManager<'a> {
     }
 }
 
-impl<'a> Default for FocusManager<'a> {
+impl Default for FocusManager<'_> {
     fn default() -> Self {
         Self::new()
     }
