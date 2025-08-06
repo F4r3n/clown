@@ -2,14 +2,14 @@ use clown_parser::message::Message;
 use tokio::sync::mpsc;
 
 use crate::{
-    command::{Command, CommandBuilder},
+    command::{CommandBuilder},
     response::{Response, ResponseBuilder},
 };
 pub struct MessageSender {
     pub inner: mpsc::UnboundedSender<ServerMessage>,
 }
 
-pub struct MessageReceiver {
+pub struct MessageReceiver { 
     pub inner: mpsc::UnboundedReceiver<ServerMessage>,
 }
 
@@ -38,13 +38,13 @@ impl ServerMessage {
                     self.message.get_trailing(),
                 )
                 .map(Response::Cmd)
-                .unwrap_or(Response::Cmd(Command::Unknown(format!(
+                .unwrap_or(Response::Unknown(format!(
                     "{:?}",
                     self.message
-                ))))
+                )))
             }
         } else {
-            Response::Cmd(Command::Unknown(format!("{:?}", self.message)))
+            Response::Unknown(format!("{:?}", self.message))
         }
     }
 }
@@ -396,6 +396,10 @@ mod tests {
         let message = create_message(b":irc.example.com")?;
         let server_message = ServerMessage::new(message);
         let reply = server_message.get_reply();
+
+        assert!(
+            matches!(reply, Response::Unknown{..}) 
+        );
         Ok(())
     }
 

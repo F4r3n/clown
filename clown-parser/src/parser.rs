@@ -90,9 +90,9 @@ mod tests {
     #[test]
     fn test_parse_parameters_trailing_no_parameters() {
         let input = b"PRIVMSG :hello world\r\n";
-        let (rest, command) = parse_command(input).unwrap();
-        let (rest, params) = parse_parameters(rest).unwrap();
-        let (rest, trailing) = parse_trailing(rest).unwrap();
+        let (rest, _command) = parse_command(input).unwrap();
+        let (rest, _params) = parse_parameters(rest).unwrap();
+        let (_rest, trailing) = parse_trailing(rest).unwrap();
 
         assert_eq!(trailing, Some(&b"hello world"[..]));
     }
