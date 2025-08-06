@@ -23,12 +23,11 @@ type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    let mut events = EventHandler::new(); // new
+    let mut events = EventHandler::new();
     EventHandler::enable_mouse_event()?;
     let mut terminal = tui::init()?;
 
     let mut model = model::Model::new();
-    model.save()?;
     let mut views: ViewMap = HashMap::new();
     views.insert(
         View::MainView,
@@ -36,20 +35,20 @@ async fn main() -> color_eyre::Result<()> {
     );
 
     while model.running_state != RunningState::Done {
-        let event = events.next().await?; // new
-        // Render the current view
+        let event = events.next().await?;
+
         terminal.draw(|f| view(&mut model, &mut views, f))?;
 
-        // Handle events and map to a Message
         let mut list_messages = VecDeque::new();
         if let Some(message) = handle_event(&mut model, &mut views, event)? {
             list_messages.push_back(message);
         }
-        // Process updates as long as they return a non-None message
+
         while let Some(current_msg) = list_messages.pop_front() {
             update(&mut model, &mut views, current_msg, &mut list_messages).await;
         }
     }
+    model.save()?;
 
     tui::restore()?;
     Ok(())
@@ -82,7 +81,6 @@ async fn update(
     if let Some(current_view) = views.get_mut(&model.current_view) {
         match msg {
             MessageEvent::Quit(_) => {
-                // You can handle cleanup and exit here
                 model.running_state = RunningState::Done;
             }
             _ => current_view.update(model, msg, out_messages),

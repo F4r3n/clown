@@ -10,7 +10,7 @@ pub struct FocusManager<'a> {
     /// Map of widget ID to whether it's currently visible/enabled
     widget_states: HashMap<WidgetId<'a>, bool>,
 }
-//ctrl+n ctrl+p
+
 impl<'a> FocusManager<'a> {
     pub fn new() -> Self {
         Self {
