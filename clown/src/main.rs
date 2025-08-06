@@ -1,4 +1,5 @@
 use crate::event_handler::Event;
+use crate::irc_view::message_content::MessageContent;
 use ratatui::Frame;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -33,13 +34,17 @@ async fn main() -> color_eyre::Result<()> {
         View::MainView,
         Box::new(irc_view::main_view::MainView::new(&model.current_channel)),
     );
+    let mut list_messages = VecDeque::new();
+    list_messages.push_back(MessageEvent::AddMessageView(
+        model.current_channel.clone(),
+        MessageContent::new_info("Use the command /help"),
+    ));
 
     while model.running_state != RunningState::Done {
         let event = events.next().await?;
 
         terminal.draw(|f| view(&mut model, &mut views, f))?;
 
-        let mut list_messages = VecDeque::new();
         if let Some(message) = handle_event(&mut model, &mut views, event)? {
             list_messages.push_back(message);
         }

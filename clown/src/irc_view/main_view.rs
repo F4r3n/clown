@@ -326,7 +326,16 @@ impl widget_view::WidgetView for MainView<'_> {
                     model.running_state = RunningState::Running;
 
                     if model.config.client_config.auto_join {
-                        connect_irc(model)
+                        Some(MessageEvent::Connect)
+                    } else {
+                        None
+                    }
+                } else if let Some(receiver) = &mut model.error_receiver {
+                    if let Ok(msg) = receiver.try_recv() {
+                        Some(MessageEvent::AddMessageView(
+                            model.current_channel.clone(),
+                            MessageContent::new_error(msg),
+                        ))
                     } else {
                         None
                     }
@@ -356,6 +365,16 @@ impl widget_view::WidgetView for MainView<'_> {
                 model.send_command(clown_core::command::Command::Quit(message));
             }
             MessageEvent::Connect => {
+                messages.push_back(MessageEvent::AddMessageView(
+                    model.current_channel.to_string(),
+                    MessageContent::new_info(
+                        format!(
+                            "Try to connect to {}...",
+                            model.config.connection_config.address
+                        )
+                        .as_str(),
+                    ),
+                ));
                 if let Some(v) = connect_irc(model) {
                     messages.push_back(v)
                 }

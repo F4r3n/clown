@@ -1,14 +1,22 @@
 use clown_core::client::Client;
+use tokio::sync::mpsc;
 
 use crate::{irc_view::message_content::MessageContent, message_event::MessageEvent, model::Model};
 
-use strum::{EnumIter, IntoEnumIterator, IntoStaticStr};
+use strum::{EnumIter, EnumMessage, IntoEnumIterator, IntoStaticStr};
 
-#[derive(IntoStaticStr, Debug, EnumIter)]
+#[derive(IntoStaticStr, Debug, EnumIter, EnumMessage)]
 pub enum ClientCommand {
+    #[strum(
+        message = "Connect",
+        detailed_message = "To connect to the server, if already connected does nothing"
+    )]
     Connect,
+    #[strum(message = "Quit", detailed_message = "To quit the server and the app")]
     Quit(String),
+    #[strum(message = "Nick", detailed_message = "To change your nickname")]
     Nick(String),
+    #[strum(message = "Help", detailed_message = "To display the list of commands")]
     Help,
 }
 
@@ -34,8 +42,14 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
 pub fn help(channel: &str) -> MessageEvent {
     let mut output: String = "List of commands, type /command:\n".into();
     for e in ClientCommand::iter() {
-        output += e.into();
-        output += "\n";
+        output.push_str(
+            format!(
+                "Command {}: {}\n",
+                e.get_message().unwrap_or_default(),
+                e.get_detailed_message().unwrap_or_default()
+            )
+            .as_str(),
+        );
     }
     MessageEvent::AddMessageView(
         channel.to_string(),
@@ -59,11 +73,17 @@ pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
     let reciever = client.message_receiver();
     let command_sender = client.command_sender();
 
+    let (error_sender, error_receiver) = mpsc::unbounded_channel();
+    model.error_receiver = Some(error_receiver);
+    model.error_sender = Some(error_sender.clone());
+
     model.command_sender = Some(command_sender);
     model.message_reciever = reciever;
 
     model.task = Some(tokio::spawn(async move {
-        client.launch(&connection_config).await.map_err(Into::into)
+        if let Err(err) = client.launch(&connection_config).await {
+            let _ = error_sender.send(format!("Connection error: {err}"));
+        }
     }));
     None
 }

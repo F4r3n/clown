@@ -1,5 +1,5 @@
 use clown_core::command::Command;
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc, task::JoinHandle};
 
 use crate::config::Config;
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
@@ -24,9 +24,13 @@ pub struct Model {
     pub message_reciever: Option<clown_core::message::MessageReceiver>,
     pub command_sender: Option<clown_core::outgoing::CommandSender>,
 
-    pub task: Option<JoinHandle<Result<(), color_eyre::Report>>>,
+    pub task: Option<JoinHandle<()>>,
 
     pub current_channel: String,
+
+    //How to manage errors?
+    pub error_receiver: Option<mpsc::UnboundedReceiver<String>>,
+    pub error_sender: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl Model {
@@ -41,6 +45,8 @@ impl Model {
             command_sender: None,
             task: None,
             current_channel: channel,
+            error_receiver: None,
+            error_sender: None,
         }
     }
 
