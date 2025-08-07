@@ -78,12 +78,14 @@ impl Outgoing {
 
                         }
                         Err(e) => {
-                            eprintln!("Read error: {e}");
-                            break;
+                            return Err(IRCIOError::IO(e));
                         }
                     }
                 }
-                command = self.receiver.as_mut().unwrap().inner.recv() => {
+                command = match self.receiver.as_mut() {
+                    Some(receiver) => receiver.inner.recv(),
+                    None => break, // Receiver not set, break the loop
+                } => {
                     if let Some(cmd) = command {
                         writer.write_all(cmd.as_bytes().as_slice()).await?;
                         writer.flush().await?;
