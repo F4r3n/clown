@@ -337,7 +337,7 @@ impl widget_view::WidgetView for MainView<'_> {
                             MessageContent::new_error(msg),
                         ))
                     } else {
-                        None
+                        Some(MessageEvent::PullIRC)
                     }
                 } else {
                     Some(MessageEvent::PullIRC)
