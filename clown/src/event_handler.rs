@@ -91,10 +91,10 @@ impl EventHandler {
     }
 
     pub async fn _join(&mut self) -> color_eyre::Result<()> {
-        if let Some(task) = self._task.take() {
-            if let Err(_e) = join!(task).0 {
-                return Err(color_eyre::eyre::Error::msg("Failed to stop"));
-            }
+        if let Some(task) = self._task.take()
+            && let Err(_e) = join!(task).0
+        {
+            return Err(color_eyre::eyre::Error::msg("Failed to stop"));
         }
         Ok(())
     }

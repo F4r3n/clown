@@ -6,7 +6,6 @@ use crate::command::help;
 use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
-use crate::focus_manager::FocusManager;
 use crate::irc_view::input_widget;
 use crate::irc_view::input_widget::CInput;
 use crate::irc_view::message_content::MessageContent;
@@ -19,9 +18,6 @@ use crate::widget_view;
 use clown_core::command::Command;
 use clown_core::response::Response;
 use clown_core::response::ResponseNumber;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ratatui::layout::Position;
 use ratatui::{
     Frame,
@@ -33,13 +29,10 @@ pub struct MainView<'a> {
     messages_display: Component<'a, text_widget::TextWidget>,
     list_users_view: Component<'a, users_widget::UsersWidget>,
     topic_view: Component<'a, topic_widget::TopicWidget>,
-
-    focus_manager: FocusManager<'a>,
 }
 impl MainView<'_> {
     pub fn new(current_channel: &str) -> Self {
-        let mut focus_manager = FocusManager::new();
-        let mut input = Component::new("input", input_widget::CInput::new());
+        let input = Component::new("input", input_widget::CInput::new());
         let list_users_view: Component<'_, users_widget::UsersWidget> = Component::new(
             "users_view",
             users_widget::UsersWidget::new(current_channel),
@@ -50,25 +43,15 @@ impl MainView<'_> {
         let messages_display =
             Component::new("messages", text_widget::TextWidget::new(current_channel));
 
-        // Register widgets with focus manager
-        focus_manager.register_widget(input.get_id());
-        focus_manager.register_widget(messages_display.get_id());
-        focus_manager.register_widget(list_users_view.get_id());
-        //No topic focus
-
-        // Set initial focus to input
-        input.set_focus(true);
-
         Self {
             list_users_view,
             topic_view,
             input,
             messages_display,
-            focus_manager,
         }
     }
 
-    fn get_id_event(&mut self, column: u16, row: u16) -> Option<String> {
+    fn get_id_from_row_col(&mut self, column: u16, row: u16) -> Option<String> {
         let mut id: Option<String> = None;
 
         for child in self.children().iter() {
@@ -87,15 +70,6 @@ impl MainView<'_> {
             self.list_users_view.to_child_mut(),
             self.topic_view.to_child_mut(),
         ]
-    }
-
-    fn update_widget_focus(&mut self) {
-        let focused_widget = self.focus_manager.get_focused_widget().cloned();
-        if let Some(focused_widget) = focused_widget {
-            for child in self.children().iter_mut() {
-                child.set_focus(*child.get_id() == focused_widget);
-            }
-        }
     }
 
     fn update_input(&mut self, model: &mut Model, content: String) -> Option<MessageEvent> {
@@ -134,8 +108,8 @@ impl MainView<'_> {
         if let Some(reciever) = model.message_reciever.as_mut()
             && let Ok(recieved) = reciever.inner.try_recv()
         {
-            let reply = recieved.get_reply();
-            let source = recieved.get_source().map(|v| v.to_string());
+            let reply = recieved.reply();
+            let source = recieved.source().map(|v| v.to_string());
             //log_info_sync(format!("{reply:?}\n").as_str());
             match reply {
                 Response::Cmd(command) => match command {
@@ -268,52 +242,20 @@ impl widget_view::WidgetView for MainView<'_> {
         // Handle focus switching first
 
         let message = match event {
-            Event::Crossterm(crossterm::event::Event::Key(key_event)) => {
-                if key_event.kind == KeyEventKind::Press
-                    && key_event.modifiers.contains(KeyModifiers::CONTROL)
-                    && key_event.code == KeyCode::Char('p')
-                {
-                    if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                        self.focus_manager.focus_previous();
-                    } else {
-                        self.focus_manager.focus_next();
-                    }
-                    self.update_widget_focus();
-                    None
-                } else {
-                    let mut new_message = None;
-                    // Pass event to focused widget
-                    for child in self.children().iter_mut() {
-                        if child.has_focus() {
-                            new_message = child.handle_events(event);
-                            break;
-                        }
-                    }
-                    new_message
+            Event::Crossterm(crossterm::event::Event::Key(_)) => {
+                let mut new_message = None;
+                // Pass event to focused widget
+                for child in self.children().iter_mut() {
+                    new_message = child.handle_events(event);
                 }
+                new_message
             }
             Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => {
-                if let Some(id) = self.get_id_event(mouse_event.column, mouse_event.row) {
-                    if crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-                        == mouse_event.kind
-                    {
-                        self.focus_manager.set_focus(&id);
-                        self.update_widget_focus();
-                    } else if crossterm::event::MouseEventKind::ScrollDown == mouse_event.kind
-                        || crossterm::event::MouseEventKind::ScrollUp == mouse_event.kind
-                    {
-                        for child in self.children().iter_mut() {
-                            if child.get_id().eq(&id) {
-                                child.handle_events(event);
-                                break;
-                            }
-                        }
-                    } else {
-                        for child in self.children().iter_mut() {
-                            if child.has_focus() {
-                                child.handle_events(event);
-                                break;
-                            }
+                if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row) {
+                    for child in self.children().iter_mut() {
+                        if child.get_id().eq(&id) {
+                            child.handle_events(event);
+                            break;
                         }
                     }
                 }

@@ -276,7 +276,7 @@ mod tests {
     use crate::conn::test::StreamMock;
     use tokio::io::AsyncBufReadExt;
     #[tokio::test]
-    async fn test_mock_simple() -> anyhow::Result<()> {
+    async fn test_mock_simple() {
         let stream_mock = StreamMock::new(vec![
             Action::Item("test\n".as_bytes().to_vec()),
             Action::Item("HELLO\n".as_bytes().to_vec()),
@@ -290,7 +290,5 @@ mod tests {
         line.clear();
         reader.read_line(&mut line).await.unwrap();
         assert_eq!(line, "HELLO\n".to_string());
-
-        Ok(())
     }
 }

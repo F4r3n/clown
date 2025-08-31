@@ -4,7 +4,6 @@ use ratatui::Frame;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 mod component;
-mod focus_manager;
 mod irc_view;
 mod tui;
 use model::Model;

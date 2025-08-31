@@ -29,20 +29,19 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn get_command_name(&self) -> Option<&str> {
+    pub fn command_name(&self) -> Option<&str> {
         let irc = self.borrow_internal();
         irc.command.and_then(|value| str::from_utf8(value).ok())
     }
 
-    pub fn get_parameters(&self) -> Vec<&str> {
+    pub fn parameters(&self) -> impl Iterator<Item = &str> {
         let irc = self.borrow_internal();
         irc.parameters
             .iter()
             .map(|value| str::from_utf8(value).unwrap_or_default())
-            .collect()
     }
 
-    pub fn get_source(&self) -> Option<&str> {
+    pub fn source(&self) -> Option<&str> {
         let irc = self.borrow_internal();
         if let Some(source_kind) = irc.source.as_ref() {
             source_kind.get_source_kind()
@@ -51,7 +50,7 @@ impl Message {
         }
     }
 
-    pub fn get_trailing(&self) -> Option<&str> {
+    pub fn trailing(&self) -> Option<&str> {
         let irc = self.borrow_internal();
         irc.trailing.and_then(|value| str::from_utf8(value).ok())
     }

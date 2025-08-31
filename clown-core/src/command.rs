@@ -167,7 +167,7 @@ pub struct CommandBuilder;
 
 impl CommandBuilder {
     //USER alice 0 * :Alice Example
-    fn user(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+    fn user(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
         parameters.first().map(|target| {
             Command::User(target.to_string(), trailing.unwrap_or_default().to_string())
         })
@@ -175,13 +175,13 @@ impl CommandBuilder {
 
     //Command: PONG
     //Parameters: [<server>] <token>
-    fn pong(parameters: Vec<&str>) -> Option<Command> {
+    fn pong(parameters: &[&str]) -> Option<Command> {
         Some(Command::Pong(
             parameters.last().map(|v| v.to_string()).unwrap_or_default(),
         ))
     }
 
-    fn nick(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+    fn nick(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
         if !parameters.is_empty() {
             Some(Command::Nick(
                 parameters.last().map(|v| v.to_string()).unwrap_or_default(),
@@ -191,7 +191,7 @@ impl CommandBuilder {
         }
     }
 
-    fn join(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+    fn join(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
         if !parameters.is_empty() {
             Some(Command::Join(
                 parameters.last().map(|v| v.to_string()).unwrap_or_default(),
@@ -205,7 +205,7 @@ impl CommandBuilder {
         Some(Command::Quit(trailing.map(|v| v.to_string())))
     }
 
-    fn make_command_1<F>(parameters: Vec<&str>, trailing: Option<&str>, ctor: F) -> Option<Command>
+    fn make_command_1<F>(parameters: &[&str], trailing: Option<&str>, ctor: F) -> Option<Command>
     where
         F: Fn(String) -> Command,
     {
@@ -218,7 +218,7 @@ impl CommandBuilder {
         }
     }
 
-    fn make_command_2<F>(parameters: Vec<&str>, trailing: Option<&str>, ctor: F) -> Option<Command>
+    fn make_command_2<F>(parameters: &[&str], trailing: Option<&str>, ctor: F) -> Option<Command>
     where
         F: Fn(String, String) -> Command,
     {
@@ -228,7 +228,7 @@ impl CommandBuilder {
     }
 
     // PART <channel> [:reason]
-    fn part(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+    fn part(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
         if let Some(channel) = parameters.first() {
             let reason = trailing.map(|v| v.to_string());
             Some(Command::Part(channel.to_string(), reason))
@@ -238,24 +238,22 @@ impl CommandBuilder {
     }
 
     // NOTICE <target> :<message>
-    fn notice(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+    fn notice(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
         parameters.first().map(|first| {
             Command::Notice(first.to_string(), trailing.unwrap_or_default().to_string())
         })
     }
 
     // TOPIC <channel> :<topic>
-    fn topic(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
+    fn topic(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
         parameters.first().map(|first| {
             Command::Topic(first.to_string(), trailing.unwrap_or_default().to_string())
         })
     }
 
     // MODE <target> <mode>
-    fn mode(parameters: Vec<&str>) -> Option<Command> {
-        if let Some(first) = parameters.first()
-            && let Some(others) = parameters.get(1..)
-        {
+    fn mode(parameters: &[&str]) -> Option<Command> {
+        if let [first, others @ ..] = parameters {
             Some(Command::Mode(first.to_string(), others.join(" ")))
         } else {
             None
@@ -263,14 +261,14 @@ impl CommandBuilder {
     }
 
     // WHO <mask>
-    fn who(parameters: Vec<&str>) -> Option<Command> {
+    fn who(parameters: &[&str]) -> Option<Command> {
         parameters
             .first()
             .map(|mask| Command::Who(mask.to_string()))
     }
 
     // LIST [<channel>]
-    fn list(parameters: Vec<&str>) -> Option<Command> {
+    fn list(parameters: &[&str]) -> Option<Command> {
         if let Some(channel) = parameters.first() {
             Some(Command::List(Some(channel.to_string())))
         } else {
@@ -279,10 +277,8 @@ impl CommandBuilder {
     }
 
     // INVITE <nick> <channel>
-    fn invite(parameters: Vec<&str>) -> Option<Command> {
-        if let Some(first) = parameters.first()
-            && let Some(others) = parameters.get(1)
-        {
+    fn invite(parameters: &[&str]) -> Option<Command> {
+        if let [first, others] = parameters {
             Some(Command::Invite(first.to_string(), others.to_string()))
         } else {
             None
@@ -290,10 +286,8 @@ impl CommandBuilder {
     }
 
     // KICK <channel> <nick> [:reason]
-    fn kick(parameters: Vec<&str>, trailing: Option<&str>) -> Option<Command> {
-        if let Some(channel) = parameters.first()
-            && let Some(nick) = parameters.get(1)
-        {
+    fn kick(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
+        if let [channel, nick] = parameters {
             Some(Command::Kick(
                 channel.to_string(),
                 nick.to_string(),
@@ -306,7 +300,7 @@ impl CommandBuilder {
 
     pub fn get_command(
         command_name: &str,
-        parameters: Vec<&str>,
+        parameters: &[&str],
         trailing: Option<&str>,
     ) -> Option<Command> {
         if let Some(command_name) = COMMAND_NAME.get(command_name) {

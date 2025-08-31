@@ -144,10 +144,6 @@ impl Draw for TextWidget {
 }
 
 impl crate::component::EventHandler for TextWidget {
-    fn has_focus(&self) -> bool {
-        self.focus
-    }
-
     fn get_area(&self) -> Rect {
         self.area
     }
@@ -166,9 +162,6 @@ impl crate::component::EventHandler for TextWidget {
         }
     }
 
-    fn set_focus(&mut self, focused: bool) {
-        self.focus = focused;
-    }
     fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
         if let Some(key) = event.get_key() {
             match key.code {

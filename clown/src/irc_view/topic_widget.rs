@@ -45,8 +45,4 @@ impl EventHandler for TopicWidget {
     fn handle_events(&mut self, _event: &crate::event_handler::Event) -> Option<MessageEvent> {
         None
     }
-    fn has_focus(&self) -> bool {
-        false
-    }
-    fn set_focus(&mut self, _focused: bool) {}
 }

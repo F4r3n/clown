@@ -25,7 +25,7 @@ impl Outgoing {
     where
         W: AsyncWrite + Unpin,
     {
-        match server_message.get_reply() {
+        match server_message.reply() {
             Response::Cmd(Command::Ping(token)) => {
                 writer
                     .write_all(Command::Pong(token).as_bytes().as_slice())

@@ -58,13 +58,13 @@ pub fn help(channel: &str) -> MessageEvent {
 }
 
 pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
-    if let Some(task) = &model.task {
-        if !task.is_finished() {
-            return Some(MessageEvent::AddMessageView(
-                model.current_channel.clone(),
-                MessageContent::new_error("Already connected".to_string()),
-            ));
-        }
+    if let Some(task) = &model.task
+        && !task.is_finished()
+    {
+        return Some(MessageEvent::AddMessageView(
+            model.current_channel.clone(),
+            MessageContent::new_error("Already connected".to_string()),
+        ));
     }
     let connection_config = model.config.connection_config.clone();
     let login_config = &model.config.login_config;

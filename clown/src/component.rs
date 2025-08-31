@@ -10,8 +10,6 @@ pub trait EventHandler {
     fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>;
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent>;
 
-    fn set_focus(&mut self, _focused: bool) {}
-    fn has_focus(&self) -> bool;
     fn get_area(&self) -> Rect;
 }
 
@@ -30,20 +28,6 @@ impl<'a, T> Component<'a, T> {
     /// Returns the unique identifier for this component
     pub fn get_id(&self) -> &WidgetId<'a> {
         &self.id
-    }
-
-    pub fn set_focus(&mut self, focused: bool)
-    where
-        T: EventHandler,
-    {
-        self.inner.set_focus(focused);
-    }
-
-    pub fn has_focus(&self) -> bool
-    where
-        T: EventHandler,
-    {
-        self.inner.has_focus()
     }
 
     pub fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>
@@ -114,16 +98,8 @@ impl EventHandler for Child<'_> {
         self.deref_mut().handle_events(event)
     }
 
-    fn has_focus(&self) -> bool {
-        self.deref().has_focus()
-    }
-
     fn get_area(&self) -> Rect {
         self.deref().get_area()
-    }
-
-    fn set_focus(&mut self, focused: bool) {
-        self.deref_mut().set_focus(focused);
     }
 
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {

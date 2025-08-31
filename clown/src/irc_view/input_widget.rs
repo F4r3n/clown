@@ -58,21 +58,11 @@ impl crate::component::EventHandler for CInput {
     fn get_area(&self) -> Rect {
         self.area
     }
-    fn set_focus(&mut self, focused: bool) {
-        if !focused {
-            self.stop_editing();
-        } else {
-            self.start_editing();
-        }
-    }
 
     fn handle_actions(&mut self, _event: &MessageEvent) -> Option<MessageEvent> {
         None
     }
 
-    fn has_focus(&self) -> bool {
-        self.input_mode == InputMode::Editing
-    }
     fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
         let mut message = None;
         if let Some(key_event) = event.get_key() {

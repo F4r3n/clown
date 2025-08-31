@@ -118,7 +118,7 @@ mod tests {
         let input = "Hello world";
         let spans = to_spans(input, None);
         assert_eq!(spans.len(), 1);
-        let (text, fg, bg) = span_data(&spans[0]);
+        let (text, fg, bg) = span_data(spans.first().unwrap());
         assert_eq!(text, "Hello world");
         assert_eq!(fg, Color::default());
         assert_eq!(bg, Color::default());
@@ -129,7 +129,7 @@ mod tests {
         let input = "\x034Hello";
         let spans = to_spans(input, None);
         assert_eq!(spans.len(), 1);
-        let (text, fg, bg) = span_data(&spans[0]);
+        let (text, fg, bg) = span_data(spans.first().unwrap());
         assert_eq!(text, "Hello");
         assert_eq!(fg, Color::Red);
         assert_eq!(bg, Color::default());
@@ -140,7 +140,7 @@ mod tests {
         let input = "\x038,4Hi!";
         let spans = to_spans(input, None);
         assert_eq!(spans.len(), 1);
-        let (text, fg, bg) = span_data(&spans[0]);
+        let (text, fg, bg) = span_data(spans.first().unwrap());
         assert_eq!(text, "Hi!");
         assert_eq!(fg, Color::Yellow);
         assert_eq!(bg, Color::Red);
@@ -151,7 +151,7 @@ mod tests {
         let input = "\x0308,04Hi!";
         let spans = to_spans(input, None);
         assert_eq!(spans.len(), 1);
-        let (text, fg, bg) = span_data(&spans[0]);
+        let (text, fg, bg) = span_data(spans.first().unwrap());
         assert_eq!(text, "Hi!");
         assert_eq!(fg, Color::Yellow);
         assert_eq!(bg, Color::Red);
@@ -163,9 +163,9 @@ mod tests {
         let spans = to_spans(input, None);
         assert_eq!(spans.len(), 3);
 
-        let (a, fg_a, _) = span_data(&spans[0]);
-        let (b, fg_b, _) = span_data(&spans[1]);
-        let (c, fg_c, _) = span_data(&spans[2]);
+        let (a, fg_a, _) = span_data(spans.first().unwrap());
+        let (b, fg_b, _) = span_data(spans.get(1).unwrap());
+        let (c, fg_c, _) = span_data(spans.get(2).unwrap());
         assert_eq!(a, "A");
         assert_eq!(fg_a, Color::default());
         assert_eq!(b, "B");
@@ -180,8 +180,8 @@ mod tests {
         let spans = to_spans(input, None);
         assert_eq!(spans.len(), 2);
 
-        let (red, fg_red, _) = span_data(&spans[0]);
-        let (normal, fg_normal, _) = span_data(&spans[1]);
+        let (red, fg_red, _) = span_data(spans.first().unwrap());
+        let (normal, fg_normal, _) = span_data(spans.get(1).unwrap());
         assert_eq!(red, "Red");
         assert_eq!(fg_red, Color::Red);
         assert_eq!(normal, "Normal");
@@ -193,7 +193,7 @@ mod tests {
         let input = "\x034Hello";
         let spans = to_spans(input, None);
         assert_eq!(spans.len(), 1);
-        let (text, fg, bg) = span_data(&spans[0]);
+        let (text, fg, bg) = span_data(spans.first().unwrap());
         assert_eq!(text, "Hello");
         assert_eq!(fg, Color::Red);
         assert_eq!(bg, Color::default());

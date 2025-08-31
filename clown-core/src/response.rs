@@ -279,7 +279,7 @@ pub struct ResponseBuilder;
 impl ResponseBuilder {
     pub fn get_reply(
         reply_number: u16,
-        parameters: Vec<&str>,
+        parameters: &[&str],
         trailing: Option<&str>,
     ) -> ResponseNumber {
         use ResponseNumber::*;

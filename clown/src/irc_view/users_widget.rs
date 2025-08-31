@@ -175,33 +175,28 @@ impl crate::component::EventHandler for UsersWidget {
         &mut self,
         event: &crate::event_handler::Event,
     ) -> Option<crate::message_event::MessageEvent> {
-        if let Some(key) = event.get_key() {
-            if key.is_press() && !key.is_repeat() {
-                match key.code {
-                    crossterm::event::KeyCode::Up => {
-                        self.list_state.select_previous();
-                    }
-                    crossterm::event::KeyCode::Down => {
-                        self.list_state.select_next();
-                    }
-                    crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Char(' ') => {
-                        if let Some(current_id) = self.list_state.selected()
-                            && let Some(user) = self.list_users.get_mut(current_id)
-                        {
-                            user.need_hightlight = false;
-                            return Some(MessageEvent::SelectChannel(user.name.to_string()));
-                        }
-                    }
-                    _ => {}
+        if let Some(key) = event.get_key()
+            && key.is_press()
+            && !key.is_repeat()
+        {
+            match key.code {
+                crossterm::event::KeyCode::Up => {
+                    self.list_state.select_previous();
                 }
+                crossterm::event::KeyCode::Down => {
+                    self.list_state.select_next();
+                }
+                crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Char(' ') => {
+                    if let Some(current_id) = self.list_state.selected()
+                        && let Some(user) = self.list_users.get_mut(current_id)
+                    {
+                        user.need_hightlight = false;
+                        return Some(MessageEvent::SelectChannel(user.name.to_string()));
+                    }
+                }
+                _ => {}
             }
         }
         None
-    }
-    fn has_focus(&self) -> bool {
-        self.has_focus()
-    }
-    fn set_focus(&mut self, focused: bool) {
-        self.focus = focused
     }
 }
