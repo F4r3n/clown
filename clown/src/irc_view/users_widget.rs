@@ -1,4 +1,5 @@
 use crate::{component::Draw, irc_view::color_user::nickname_color};
+use crossterm::event::KeyModifiers;
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -179,22 +180,23 @@ impl crate::component::EventHandler for UsersWidget {
             && key.is_press()
             && !key.is_repeat()
         {
-            match key.code {
-                crossterm::event::KeyCode::Up => {
-                    self.list_state.select_previous();
-                }
-                crossterm::event::KeyCode::Down => {
-                    self.list_state.select_next();
-                }
-                crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Char(' ') => {
-                    if let Some(current_id) = self.list_state.selected()
-                        && let Some(user) = self.list_users.get_mut(current_id)
-                    {
-                        user.need_hightlight = false;
-                        return Some(MessageEvent::SelectChannel(user.name.to_string()));
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                match key.code {
+                    crossterm::event::KeyCode::Char('p') => {
+                        self.list_state.select_previous();
                     }
+                    crossterm::event::KeyCode::Char('n') => {
+                        self.list_state.select_next();
+                    }
+                    _ => {}
                 }
-                _ => {}
+            }
+
+            if let Some(current_id) = self.list_state.selected()
+                && let Some(user) = self.list_users.get_mut(current_id)
+            {
+                user.need_hightlight = false;
+                return Some(MessageEvent::SelectChannel(user.name.to_string()));
             }
         }
         None

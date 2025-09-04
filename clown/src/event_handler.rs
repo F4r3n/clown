@@ -98,4 +98,9 @@ impl EventHandler {
         }
         Ok(())
     }
+
+    pub fn disable_mouse_event() -> color_eyre::Result<()> {
+        std::io::stdout().execute(crossterm::event::DisableMouseCapture)?;
+        Ok(())
+    }
 }

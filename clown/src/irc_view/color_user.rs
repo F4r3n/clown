@@ -16,7 +16,9 @@ pub fn nickname_color(nickname: &str) -> ratatui::style::Color {
     let mut hsl = hsl::HSL::from_rgb(&[r as u8, g as u8, b as u8]);
 
     //Lighter
-    hsl.l = (hsl.l.add(1_f64)) / 2.0;
+    if hsl.l < 0.5 {
+        hsl.l = hsl.l.add(0.2_f64).clamp(0.0, 1.0);
+    }
     let (r, g, b) = hsl.to_rgb();
     ratatui::style::Color::Rgb(r, g, b)
 }

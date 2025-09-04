@@ -51,6 +51,7 @@ async fn main() -> color_eyre::Result<()> {
         }
     }
     model.save()?;
+    EventHandler::disable_mouse_event()?;
 
     tui::restore()?;
     Ok(())
