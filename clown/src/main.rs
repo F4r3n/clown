@@ -44,9 +44,7 @@ async fn main() -> color_eyre::Result<()> {
 
         terminal.draw(|f| view(&mut model, &mut views, f))?;
 
-        if let Some(message) = handle_event(&mut model, &mut views, event)? {
-            list_messages.push_back(message);
-        }
+        handle_event(&mut model, &mut views, event, &mut list_messages)?;
 
         while let Some(current_msg) = list_messages.pop_front() {
             update(&mut model, &mut views, current_msg, &mut list_messages).await;
@@ -68,9 +66,10 @@ fn handle_event(
     model: &mut Model,
     views: &mut ViewMap,
     event: Event,
+    out_messages: &mut VecDeque<MessageEvent>,
 ) -> color_eyre::Result<Option<MessageEvent>> {
     if let Some(current_view) = views.get_mut(&model.current_view) {
-        return current_view.handle_event(model, &event);
+        current_view.handle_event(model, &event, out_messages);
     }
 
     Ok(None)

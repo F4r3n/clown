@@ -11,8 +11,8 @@ use crate::outgoing::Outgoing;
 #[derive(Debug, Clone)]
 pub struct LoginConfig {
     pub nickname: String,
-    pub real_name: String,
-    pub username: String,
+    pub real_name: Option<String>,
+    pub username: Option<String>,
     pub password: Option<String>,
     pub channel: String,
 }
@@ -48,8 +48,15 @@ impl Client {
             self.login_config.nickname.clone(),
         ))?;
         command_sender.send(crate::command::Command::User(
-            self.login_config.username.clone(),
-            self.login_config.real_name.clone(),
+            self.login_config
+                .username
+                .clone()
+                .unwrap_or(self.login_config.nickname.clone()),
+            self.login_config
+                .real_name
+                .clone()
+                .unwrap_or(self.login_config.nickname.clone())
+                .clone(),
         ))?;
 
         Ok(())

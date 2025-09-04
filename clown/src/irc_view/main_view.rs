@@ -238,17 +238,18 @@ impl widget_view::WidgetView for MainView<'_> {
         &mut self,
         model: &mut Model,
         event: &Event,
-    ) -> color_eyre::Result<Option<MessageEvent>> {
+        messages: &mut VecDeque<MessageEvent>,
+    ) {
         // Handle focus switching first
 
-        let message = match event {
+        match event {
             Event::Crossterm(crossterm::event::Event::Key(_)) => {
-                let mut new_message = None;
                 // Pass event to focused widget
                 for child in self.children().iter_mut() {
-                    new_message = child.handle_events(event);
+                    if let Some(new_message) = child.handle_events(event) {
+                        messages.push_back(new_message);
+                    }
                 }
-                new_message
             }
             Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => {
                 if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row) {
@@ -259,12 +260,9 @@ impl widget_view::WidgetView for MainView<'_> {
                         }
                     }
                 }
-
-                None
             }
-
             Event::Tick => {
-                if model.running_state == RunningState::Start {
+                let message = if model.running_state == RunningState::Start {
                     model.running_state = RunningState::Running;
 
                     if model.config.client_config.auto_join {
@@ -283,12 +281,14 @@ impl widget_view::WidgetView for MainView<'_> {
                     }
                 } else {
                     Some(MessageEvent::PullIRC)
+                };
+
+                if let Some(message) = message {
+                    messages.push_back(message);
                 }
             }
-            _ => None,
+            _ => {}
         };
-
-        Ok(message)
     }
 
     fn update(

@@ -10,7 +10,8 @@ pub trait WidgetView {
         &mut self,
         model: &mut Model,
         event: &Event,
-    ) -> color_eyre::Result<Option<MessageEvent>>;
+        messages: &mut VecDeque<MessageEvent>,
+    );
 
     fn update(
         &mut self,

@@ -40,8 +40,8 @@ impl Default for Config {
             login_config: LoginConfig {
                 nickname: "nickname".into(),
                 password: None,
-                real_name: "real".into(),
-                username: "username".into(),
+                real_name: None,
+                username: None,
                 channel: "#rust-spam".into(),
             },
             connection_config: ConnectionConfig {
