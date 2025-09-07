@@ -19,7 +19,6 @@ mod event_handler;
 mod model;
 mod widget_view;
 use tracing::info;
-use tracing_subscriber;
 
 type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]

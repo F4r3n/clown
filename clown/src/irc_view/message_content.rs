@@ -95,7 +95,7 @@ impl MessageContent {
         }
         let source_str = format!(
             "{:<width$}",
-            self.source.as_ref().unwrap_or(&"".to_string()),
+            self.source.as_deref().unwrap_or_default(),
             width = NICKNAME_LENGTH
         );
         let default_style = match &self.kind {
