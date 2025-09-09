@@ -6,51 +6,36 @@ use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::Paragraph,
 };
 use tui_input::{Input, backend::crossterm::EventHandler};
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-enum InputMode {
-    Normal,
-    #[default]
-    Editing,
-}
+#[derive(Debug, Default, Clone)]
+
 pub struct CInput {
     input: Input,
     /// Current input mode
-    input_mode: InputMode,
     area: Rect,
 }
 
 impl Draw for CInput {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
-        let focus = self.has_focus();
         // keep 2 for borders and 1 for cursor
         let width = area.width.max(3) - 3;
         let scroll = self.input.visual_scroll(width as usize);
 
-        let style = match (self.input_mode, focus) {
-            (InputMode::Normal, true) => Style::default().fg(Color::Cyan),
-            (InputMode::Normal, false) => Style::default().fg(Color::DarkGray),
-            (InputMode::Editing, true) => Color::Cyan.into(),
-            (InputMode::Editing, false) => Style::default().fg(Color::DarkGray),
-        };
-
         let input = Paragraph::new(Line::from(vec![
-            Span::from(">").style(style),
+            Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)),
             Span::from(self.input.value()),
         ]))
         .scroll((0, scroll as u16));
         frame.render_widget(input, area);
 
-        if self.input_mode == InputMode::Editing && focus {
-            // Ratatui hides the cursor unless it's explicitly set. Position the  cursor past the
-            let x = self.input.visual_cursor().max(scroll) - scroll + 1;
-            frame.set_cursor_position((area.x + x as u16, area.y))
-        }
+        // Ratatui hides the cursor unless it's explicitly set. Position the  cursor past the
+        let x = self.input.visual_cursor().max(scroll) - scroll + 1;
+        frame.set_cursor_position((area.x + x as u16, area.y))
     }
 }
 
@@ -66,35 +51,22 @@ impl crate::component::EventHandler for CInput {
     fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
         let mut message = None;
         if let Some(key_event) = event.get_key() {
-            message = match self.input_mode {
-                InputMode::Normal => match key_event.code {
-                    KeyCode::Enter => {
-                        self.start_editing();
+            message = match key_event.code {
+                KeyCode::Enter => {
+                    let m = self.get_current_input();
+                    self.reset_value();
+                    if !m.is_empty() {
+                        Some(MessageEvent::MessageInput(m))
+                    } else {
                         None
                     }
-                    _ => None,
-                },
-                InputMode::Editing => match key_event.code {
-                    KeyCode::Enter => {
-                        let m = self.get_current_input();
-                        self.reset_value();
-                        if !m.is_empty() {
-                            Some(MessageEvent::MessageInput(m))
-                        } else {
-                            None
-                        }
+                }
+                _ => {
+                    if let crate::event_handler::Event::Crossterm(cross) = &event {
+                        self.input.handle_event(cross);
                     }
-                    KeyCode::Esc => {
-                        self.stop_editing();
-                        None
-                    }
-                    _ => {
-                        if let crate::event_handler::Event::Crossterm(cross) = &event {
-                            self.input.handle_event(cross);
-                        }
-                        None
-                    }
-                },
+                    None
+                }
             };
         }
 
@@ -106,20 +78,8 @@ impl CInput {
     pub fn new() -> Self {
         Self {
             input: Input::new(String::from("")),
-            input_mode: InputMode::Editing,
             area: Rect::default(),
         }
-    }
-    fn has_focus(&self) -> bool {
-        self.input_mode == InputMode::Editing
-    }
-
-    fn start_editing(&mut self) {
-        self.input_mode = InputMode::Editing
-    }
-
-    fn stop_editing(&mut self) {
-        self.input_mode = InputMode::Normal
     }
 
     pub fn get_current_input(&self) -> String {
