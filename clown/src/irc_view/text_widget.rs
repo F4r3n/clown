@@ -10,7 +10,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-
+use tracing::info;
 #[derive(Debug)]
 pub struct ChannelMessages {
     messages: HashMap<String, Vec<MessageContent>>,
@@ -36,6 +36,13 @@ impl ChannelMessages {
 
     pub fn get_messages(&self, channel: &str) -> Option<&Vec<MessageContent>> {
         self.messages.get(channel)
+    }
+
+    pub fn get_url(&self, channel: &str, index: usize) -> Option<String> {
+        self.messages
+            .get(channel)
+            .and_then(|messages| messages.get(index))
+            .and_then(|message| /*message.get_url()*/ Some("https://www.lemonde.fr/".to_string()))
     }
 }
 
@@ -204,6 +211,35 @@ impl crate::component::EventHandler for TextWidget {
                 crossterm::event::MouseEventKind::ScrollUp => {
                     self.scroll_up();
                     None
+                }
+                crossterm::event::MouseEventKind::Moved => {
+                    let mouse_position =
+                        ratatui::prelude::Position::new(mouse_event.column, mouse_event.row);
+
+                    if self.area.contains(mouse_position) {
+                        let index = mouse_position
+                            .y
+                            .saturating_sub(self.area.y)
+                            .saturating_add(self.scroll_offset as u16)
+                            as usize;
+                        /*info!(
+                            "{:?} {:?} {:?}",
+                            mouse_position.y, index, self.scroll_offset
+                        );*/
+
+                        if let Some(url) = self.messages.get_url(&self.current_channel, index) {
+                            //info!("{}", url.clone());
+                            Some(MessageEvent::Hover(
+                                url,
+                                mouse_event.column,
+                                mouse_event.row,
+                            ))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
                 }
                 _ => None,
             }

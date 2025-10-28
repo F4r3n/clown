@@ -5,5 +5,6 @@ pub mod main_view;
 pub mod message_content;
 pub mod message_parser;
 pub mod text_widget;
+pub mod tooltip_widget;
 pub mod topic_widget;
 pub mod users_widget;

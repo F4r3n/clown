@@ -69,6 +69,21 @@ impl MessageContent {
         }
     }
 
+    pub fn get_url(&self) -> Option<String> {
+        let text = self.content.as_str();
+        if let Some(start) = text.find("https://") {
+            let mut end = text.len();
+            for (indice, c) in text[start..].char_indices() {
+                if c == ' ' {
+                    end = start + indice;
+                    break;
+                }
+            }
+            return Some(self.content[start..end].to_string());
+        }
+        None
+    }
+
     fn time_format(&self) -> String {
         let datetime: DateTime<Local> = self.time.into();
 

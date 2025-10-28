@@ -10,6 +10,7 @@ use crate::irc_view::input_widget;
 use crate::irc_view::input_widget::CInput;
 use crate::irc_view::message_content::MessageContent;
 use crate::irc_view::text_widget;
+use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
 use crate::model::Model;
@@ -23,12 +24,14 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
 };
+use tracing::info;
 
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
     messages_display: Component<'a, text_widget::TextWidget>,
     list_users_view: Component<'a, users_widget::UsersWidget>,
     topic_view: Component<'a, topic_widget::TopicWidget>,
+    tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
 }
 impl MainView<'_> {
     pub fn new(current_channel: &str) -> Self {
@@ -42,12 +45,13 @@ impl MainView<'_> {
         //list_components.push()
         let messages_display =
             Component::new("messages", text_widget::TextWidget::new(current_channel));
-
+        let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
         Self {
             list_users_view,
             topic_view,
             input,
             messages_display,
+            tooltip_widget,
         }
     }
 
@@ -63,12 +67,13 @@ impl MainView<'_> {
         id
     }
 
-    fn children(&mut self) -> [Component<'_, Child<'_>>; 4] {
+    fn children(&mut self) -> [Component<'_, Child<'_>>; 5] {
         [
             self.input.to_child_mut(),
             self.messages_display.to_child_mut(),
             self.list_users_view.to_child_mut(),
             self.topic_view.to_child_mut(),
+            self.tooltip_widget.to_child_mut(),
         ]
     }
 
@@ -217,6 +222,7 @@ impl widget_view::WidgetView for MainView<'_> {
 
             if let Some(message_area) = top_layout.first() {
                 self.messages_display.render(frame, *message_area);
+                self.tooltip_widget.render(frame, *message_area);
             }
 
             if let Some(list_users) = top_layout.get(1) {
@@ -255,8 +261,9 @@ impl widget_view::WidgetView for MainView<'_> {
                 if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row) {
                     for child in self.children().iter_mut() {
                         if child.get_id().eq(&id) {
-                            child.handle_events(event);
-                            break;
+                            if let Some(new_message) = child.handle_events(event) {
+                                messages.push_back(new_message);
+                            }
                         }
                     }
                 }
@@ -285,6 +292,7 @@ impl widget_view::WidgetView for MainView<'_> {
 
                 if let Some(message) = message {
                     messages.push_back(message);
+                    messages.push_back(MessageEvent::Tick);
                 }
             }
             _ => {}

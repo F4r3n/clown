@@ -11,8 +11,10 @@ pub enum MessageEvent {
     JoinUser(String),
     RemoveUser(String /*user */),
     SetTopic(String /*topic */),
+    Hover(String /*Message or URL */, u16, u16),
     PullIRC,
     Connect,
     DisConnect,
+    Tick,
     Quit(Option<String>),
 }
