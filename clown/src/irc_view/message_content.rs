@@ -146,4 +146,8 @@ impl MessageContent {
         }
         visible_rows
     }
+
+    pub fn get_message_length(&self) -> usize {
+        self.content.len()
+    }
 }

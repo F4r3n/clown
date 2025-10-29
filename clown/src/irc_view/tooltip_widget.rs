@@ -1,3 +1,5 @@
+use std::ops::Mul;
+
 use crate::{component::Draw, message_event::MessageEvent};
 use chrono::Local;
 use ratatui::style::Color;
@@ -153,9 +155,6 @@ pub struct ToolTipDiscussWidget {
     preview: Option<WebsitePreview>,
     start_time: Option<chrono::DateTime<Local>>,
     end_time: Option<chrono::DateTime<Local>>,
-
-    col: u16,
-    row: u16,
 }
 
 impl ToolTipDiscussWidget {
@@ -165,8 +164,6 @@ impl ToolTipDiscussWidget {
             end_time: None,
             start_time: None,
             preview: None,
-            col: 0,
-            row: 0,
         }
     }
 
@@ -188,11 +185,9 @@ impl ToolTipDiscussWidget {
             .map(|time| time + chrono::Duration::seconds(5));
     }
 
-    pub fn set_message(&mut self, message: &str, col: u16, row: u16) {
+    pub fn set_message(&mut self, message: &str) {
         //info!("New message");
         self.preview = Some(WebsitePreview::from_url(message));
-        self.col = col;
-        self.row = row;
         self.start_timer();
         if let Some(preview) = &mut self.preview {
             preview.fetch_preview();
@@ -201,7 +196,6 @@ impl ToolTipDiscussWidget {
 
     fn check_preview(&mut self) -> Option<MetaData> {
         if let Some(preview) = &mut self.preview {
-            info!("{}", preview.metadata.is_some());
             preview.get_metadata()
         } else {
             None
@@ -211,18 +205,19 @@ impl ToolTipDiscussWidget {
 
 impl Draw for ToolTipDiscussWidget {
     fn render(&mut self, frame: &mut ratatui::Frame<'_>, area: ratatui::prelude::Rect) {
-        /*if !self.is_open() {
+        return;
+        if !self.is_open() {
             return;
-        }*/
+        }
         let area_to_render = ratatui::prelude::Rect {
-            height: 5,
-            width: 10,
-            x: area.x + area.width - 10,
-            y: area.y + area.height - 5,
+            height: (area.height as f32).mul(0.2) as u16,
+            width: (area.width as f32).mul(0.2) as u16,
+            x: area.x,
+            y: area.y,
         };
 
         self.area = area_to_render;
-
+        let preview = self.check_preview();
         let overlay_style = Style::default().bg(Color::Rgb(0, 0, 0)).fg(Color::White);
 
         let tooltip = Paragraph::new("Tooltip")
@@ -243,9 +238,9 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
         event: &crate::message_event::MessageEvent,
     ) -> Option<crate::message_event::MessageEvent> {
         match event {
-            MessageEvent::Hover(content, col, row) => {
+            MessageEvent::Hover(content) => {
                 if !self.is_open() {
-                    self.set_message(content, *col, *row);
+                    self.set_message(content);
                 }
                 None
             }

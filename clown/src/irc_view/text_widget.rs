@@ -11,6 +11,7 @@ use ratatui::{
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
 use tracing::info;
+use tracing_subscriber::fmt::writer::OrElse;
 #[derive(Debug)]
 pub struct ChannelMessages {
     messages: HashMap<String, Vec<MessageContent>>,
@@ -42,7 +43,7 @@ impl ChannelMessages {
         self.messages
             .get(channel)
             .and_then(|messages| messages.get(index))
-            .and_then(|message| /*message.get_url()*/ Some("https://www.lemonde.fr/".to_string()))
+            .and_then(|message| message.get_url())
     }
 }
 
@@ -53,6 +54,7 @@ pub struct TextWidget {
     follow_last: bool,
     focus: bool,
     area: Rect,
+    content_width: usize,
     messages: ChannelMessages,
     current_channel: String,
 }
@@ -95,6 +97,7 @@ impl Draw for TextWidget {
                     .saturating_sub(4_u16)
             })
             .unwrap_or(0);
+        self.content_width = content_width as usize;
 
         let mut counter: i64 = self.max_visible_height as i64;
         let mut visible_rows = vec![];
@@ -217,26 +220,21 @@ impl crate::component::EventHandler for TextWidget {
                         ratatui::prelude::Position::new(mouse_event.column, mouse_event.row);
 
                     if self.area.contains(mouse_position) {
-                        let index = mouse_position
-                            .y
-                            .saturating_sub(self.area.y)
-                            .saturating_add(self.scroll_offset as u16)
-                            as usize;
+                        if let Some(index) = self.get_current_line_index(mouse_event.row) {
+                            if let Some(url) = self.messages.get_url(&self.current_channel, index) {
+                                //info!("{}", url.clone());
+                                Some(MessageEvent::Hover(url))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+
                         /*info!(
                             "{:?} {:?} {:?}",
                             mouse_position.y, index, self.scroll_offset
                         );*/
-
-                        if let Some(url) = self.messages.get_url(&self.current_channel, index) {
-                            //info!("{}", url.clone());
-                            Some(MessageEvent::Hover(
-                                url,
-                                mouse_event.column,
-                                mouse_event.row,
-                            ))
-                        } else {
-                            None
-                        }
                     } else {
                         None
                     }
@@ -260,6 +258,7 @@ impl TextWidget {
             follow_last: true,
             vertical_scroll_state: ScrollbarState::default(),
             area: Rect::default(),
+            content_width: 0,
         }
     }
 
@@ -268,6 +267,27 @@ impl TextWidget {
         let max_scroll = self.get_max_scroll();
         self.scroll_offset = max_scroll;
         self.follow_last = true;
+    }
+
+    pub fn get_current_line_index(&self, mouse_pos_y: u16) -> Option<usize> {
+        let index = mouse_pos_y.saturating_sub(self.area.y) as usize;
+        info!("{},{},{}", mouse_pos_y, index, self.area.y);
+
+        let mut counter = 0;
+        if let Some(messages) = self.messages.get_messages(&self.current_channel) {
+            for (i, line) in messages
+                .iter()
+                .skip(self.scroll_offset)
+                .take(self.max_visible_height)
+                .enumerate()
+            {
+                counter += line.get_message_length().div_ceil(self.content_width);
+                if index < counter {
+                    return Some(i);
+                }
+            }
+        }
+        None
     }
 
     fn get_number_messages(&self) -> usize {
