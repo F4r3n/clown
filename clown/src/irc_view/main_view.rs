@@ -24,7 +24,6 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
 };
-use tracing::info;
 
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
@@ -292,7 +291,6 @@ impl widget_view::WidgetView for MainView<'_> {
 
                 if let Some(message) = message {
                     messages.push_back(message);
-                    messages.push_back(MessageEvent::Tick);
                 }
             }
             _ => {}

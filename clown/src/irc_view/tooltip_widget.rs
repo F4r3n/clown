@@ -1,25 +1,30 @@
+use std::io::Cursor;
 use std::ops::Mul;
 
 use crate::{component::Draw, message_event::MessageEvent};
 use chrono::Local;
-use ratatui::style::Color;
-use ratatui::style::Style;
-use ratatui::text::Span;
-use ratatui::widgets::{Block, Borders, Paragraph};
+use image::DynamicImage;
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
+    widgets::{Block, Borders},
+};
+use ratatui_image::{StatefulImage, picker::Picker, protocol::StatefulProtocol};
+use scraper::Html;
+use std::sync::Arc;
 use tokio::{
     runtime::Handle,
     task::{JoinHandle, block_in_place},
 };
-use tracing::info;
 
-use scraper::Html;
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone)]
 struct MetaData {
     image_url: String,
     title: String,
     description: String,
     site: String,
-    image_only: bool,
+    image: Option<Arc<DynamicImage>>,
 }
 
 impl MetaData {
@@ -29,7 +34,7 @@ impl MetaData {
             title: String::from(""),
             description: String::from(""),
             site: String::from(""),
-            image_only: false,
+            image: None,
         };
         use scraper::Selector;
         if let Ok(selector) = Selector::parse("head meta") {
@@ -60,6 +65,20 @@ impl MetaData {
     }
 }
 
+fn parse_html(text: &str, is_meta: bool) -> MetaData {
+    if !is_meta {
+        return MetaData {
+            image_url: String::new(),
+            title: String::new(),
+            description: String::new(),
+            site: String::new(),
+            image: None,
+        };
+    }
+    let document = Html::parse_document(text);
+    MetaData::new(document)
+}
+
 async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
     let client = reqwest::Client::new();
     let resp = client
@@ -68,32 +87,51 @@ async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
         .await
         .map_err(|e| e.to_string())?;
     let headers = resp.headers();
-    let mut has_meta = false;
+    let has_meta = headers
+        .get("content-type")
+        .and_then(|ct| ct.to_str().ok())
+        .map_or(false, |ct| !ct.starts_with("image"));
 
-    if let Some(content) = headers.get("content-type") {
-        has_meta = !content
-            .to_str()
-            .map_err(|e| e.to_string())?
-            .starts_with("image");
-    }
     let text = resp.text().await.map_err(|e| e.to_string())?;
-    let document = Html::parse_document(text.as_str());
-    if has_meta {
-        Ok(MetaData::new(document))
+    let mut metadata = if has_meta {
+        parse_html(&text, has_meta)
     } else {
-        Ok(MetaData {
+        MetaData {
             image_url: String::from(endpoint),
             title: String::from(""),
             description: String::from(""),
             site: String::from(""),
-            image_only: true,
-        })
+            image: None,
+        }
+    };
+
+    if let Some(bytes) = client
+        .get(metadata.image_url.clone())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .bytes()
+        .await
+        .ok()
+        .and_then(|bytes| Some(bytes))
+    {
+        metadata.image = Some(Arc::new(
+            image::ImageReader::new(Cursor::new(bytes))
+                .with_guessed_format()
+                .map_err(|e| e.to_string())?
+                .decode()
+                .map_err(|e| e.to_string())?,
+        ));
     }
+
+    Ok(metadata)
 }
 
 pub struct WebsitePreview {
     url: String,
     handle: Option<JoinHandle<Result<MetaData, String>>>,
+    image: Option<StatefulProtocol>,
+    picker: Option<Picker>,
 
     metadata: Option<MetaData>, //handle: Option<JoinHandle<>,
 }
@@ -103,12 +141,15 @@ impl WebsitePreview {
             url: url.to_string(),
             handle: None,
             metadata: None,
+            image: None,
+            picker: Picker::from_query_stdio().ok(),
         }
     }
 
     pub fn fetch_preview(&mut self) {
         let handle = Handle::current();
         let url = self.url.clone();
+        //let url = "https://ogp.me/".to_string();
         self.handle = Some(handle.spawn(async move { get_url_preview(&url).await }));
     }
 
@@ -119,7 +160,7 @@ impl WebsitePreview {
             true
         }
     }
-    fn get_metadata(&mut self) -> Option<MetaData> {
+    fn get_metadata(&mut self, in_picker: &Picker) -> Option<MetaData> {
         if self.metadata.is_some() {
             return self.metadata.clone();
         }
@@ -143,9 +184,51 @@ impl WebsitePreview {
                 }
             });
             self.metadata = data;
+            if let Some(meta) = &mut self.metadata
+                && let Some(dyn_image) = meta.image.take()
+            {
+                self.image = Some(in_picker.new_resize_protocol((*dyn_image).clone()));
+            }
+
             self.metadata.clone()
         } else {
             None
+        }
+    }
+}
+
+impl Draw for WebsitePreview {
+    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        if let Some(picker) = self.picker.clone() {
+            if let Some(meta) = self.get_metadata(&picker) {
+                frame.render_widget(ratatui::widgets::Clear, area);
+                let block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Gray))
+                    .style(Style::default().bg(Color::Black));
+
+                let inner_area = block.inner(area);
+                frame.render_widget(block, area);
+
+                let main_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(1),       // Title
+                        Constraint::Percentage(100), // Image
+                    ])
+                    .split(inner_area);
+
+                let span = ratatui::text::Span::raw(meta.title);
+                frame.render_widget(span, main_layout[0]);
+
+                if let Some(image_protocol) = &mut self.image {
+                    frame.render_stateful_widget(
+                        StatefulImage::new(),
+                        main_layout[1],
+                        image_protocol,
+                    );
+                }
+            }
         }
     }
 }
@@ -193,19 +276,10 @@ impl ToolTipDiscussWidget {
             preview.fetch_preview();
         }
     }
-
-    fn check_preview(&mut self) -> Option<MetaData> {
-        if let Some(preview) = &mut self.preview {
-            preview.get_metadata()
-        } else {
-            None
-        }
-    }
 }
 
 impl Draw for ToolTipDiscussWidget {
     fn render(&mut self, frame: &mut ratatui::Frame<'_>, area: ratatui::prelude::Rect) {
-        return;
         if !self.is_open() {
             return;
         }
@@ -217,14 +291,9 @@ impl Draw for ToolTipDiscussWidget {
         };
 
         self.area = area_to_render;
-        let preview = self.check_preview();
-        let overlay_style = Style::default().bg(Color::Rgb(0, 0, 0)).fg(Color::White);
-
-        let tooltip = Paragraph::new("Tooltip")
-            .style(overlay_style)
-            .block(Block::default().borders(Borders::ALL));
-
-        frame.render_widget(tooltip, area_to_render);
+        if let Some(preview) = &mut self.preview {
+            preview.render(frame, area_to_render);
+        }
     }
 }
 
@@ -251,7 +320,7 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
 
     fn handle_events(
         &mut self,
-        event: &crate::event_handler::Event,
+        _event: &crate::event_handler::Event,
     ) -> Option<crate::message_event::MessageEvent> {
         None
     }

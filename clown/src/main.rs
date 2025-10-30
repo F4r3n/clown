@@ -18,7 +18,6 @@ mod config;
 mod event_handler;
 mod model;
 mod widget_view;
-use tracing::info;
 
 type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]

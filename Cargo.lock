@@ -340,6 +340,7 @@ dependencies = [
  "directories",
  "futures",
  "hsl",
+ "image",
  "once_cell",
  "ratatui",
  "ratatui-image",

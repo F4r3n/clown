@@ -10,8 +10,6 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-use tracing::info;
-use tracing_subscriber::fmt::writer::OrElse;
 #[derive(Debug)]
 pub struct ChannelMessages {
     messages: HashMap<String, Vec<MessageContent>>,
@@ -226,6 +224,7 @@ impl crate::component::EventHandler for TextWidget {
                                 Some(MessageEvent::Hover(url))
                             } else {
                                 None
+                                //Some(MessageEvent::Hover("https://ogp.me/".to_string()))
                             }
                         } else {
                             None
@@ -271,7 +270,6 @@ impl TextWidget {
 
     pub fn get_current_line_index(&self, mouse_pos_y: u16) -> Option<usize> {
         let index = mouse_pos_y.saturating_sub(self.area.y) as usize;
-        info!("{},{},{}", mouse_pos_y, index, self.area.y);
 
         let mut counter = 0;
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
