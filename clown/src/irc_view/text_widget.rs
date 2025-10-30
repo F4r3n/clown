@@ -220,20 +220,13 @@ impl crate::component::EventHandler for TextWidget {
                     if self.area.contains(mouse_position) {
                         if let Some(index) = self.get_current_line_index(mouse_event.row) {
                             if let Some(url) = self.messages.get_url(&self.current_channel, index) {
-                                //info!("{}", url.clone());
                                 Some(MessageEvent::Hover(url))
                             } else {
                                 None
-                                //Some(MessageEvent::Hover("https://ogp.me/".to_string()))
                             }
                         } else {
                             None
                         }
-
-                        /*info!(
-                            "{:?} {:?} {:?}",
-                            mouse_position.y, index, self.scroll_offset
-                        );*/
                     } else {
                         None
                     }

@@ -217,8 +217,19 @@ impl Draw for WebsitePreview {
                         Constraint::Percentage(100), // Image
                     ])
                     .split(inner_area);
+                let max_width = main_layout[0].width as usize;
+                let mut title = meta.title.clone();
 
-                let span = ratatui::text::Span::raw(meta.title);
+                if title.chars().count() > max_width {
+                    // Keep room for "..."
+                    title = title
+                        .chars()
+                        .take(max_width.saturating_sub(3))
+                        .collect::<String>()
+                        + "...";
+                }
+
+                let span = ratatui::text::Span::raw(title);
                 frame.render_widget(span, main_layout[0]);
 
                 if let Some(image_protocol) = &mut self.image {
@@ -284,8 +295,8 @@ impl Draw for ToolTipDiscussWidget {
             return;
         }
         let area_to_render = ratatui::prelude::Rect {
-            height: (area.height as f32).mul(0.2) as u16,
-            width: (area.width as f32).mul(0.2) as u16,
+            height: (area.height as f32).mul(0.3) as u16,
+            width: (area.width as f32).mul(0.3) as u16,
             x: area.x,
             y: area.y,
         };

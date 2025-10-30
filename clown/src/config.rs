@@ -21,19 +21,6 @@ pub struct Config {
     pub client_config: ClientConfig,
 }
 
-#[macro_export]
-macro_rules! yaml_path {
-    ($d:expr, $( $x:expr ),* ) => {
-        {
-            let mut temp =$d;
-            $(
-                temp = &temp[$x];
-            )*
-            temp
-        }
-    };
-}
-
 impl Default for Config {
     fn default() -> Self {
         Self {

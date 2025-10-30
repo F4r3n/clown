@@ -80,7 +80,7 @@ pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
         model.irc_connection = Some(IRCConnection {
             command_sender: command_sender,
             error_receiver: error_receiver,
-            error_sender: error_sender.clone(),
+            _error_sender: error_sender.clone(),
             message_reciever: reciever,
             task: tokio::spawn(async move {
                 if let Err(err) = client.launch(&connection_config).await {

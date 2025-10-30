@@ -20,7 +20,7 @@ pub struct IRCConnection {
     pub message_reciever: clown_core::message::MessageReceiver,
     pub command_sender: clown_core::outgoing::CommandSender,
     pub error_receiver: mpsc::UnboundedReceiver<String>,
-    pub error_sender: mpsc::UnboundedSender<String>,
+    pub _error_sender: mpsc::UnboundedSender<String>,
     pub task: JoinHandle<()>,
 }
 
