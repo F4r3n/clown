@@ -1,4 +1,4 @@
-use clown_core::command::Command;
+use clown_core::{command::Command, message::ServerMessage};
 use tokio::{sync::mpsc, task::JoinHandle};
 
 use crate::config::Config;
@@ -16,21 +16,20 @@ pub enum RunningState {
     Done,
 }
 
+pub struct IRCConnection {
+    pub message_reciever: clown_core::message::MessageReceiver,
+    pub command_sender: clown_core::outgoing::CommandSender,
+    pub error_receiver: mpsc::UnboundedReceiver<String>,
+    pub error_sender: mpsc::UnboundedSender<String>,
+    pub task: JoinHandle<()>,
+}
+
 pub struct Model {
     pub running_state: RunningState,
     pub current_view: View,
     pub config: Config,
-
-    pub message_reciever: Option<clown_core::message::MessageReceiver>,
-    pub command_sender: Option<clown_core::outgoing::CommandSender>,
-
-    pub task: Option<JoinHandle<()>>,
-
     pub current_channel: String,
-
-    //How to manage errors?
-    pub error_receiver: Option<mpsc::UnboundedReceiver<String>>,
-    pub error_sender: Option<mpsc::UnboundedSender<String>>,
+    pub irc_connection: Option<IRCConnection>,
 }
 
 impl Model {
@@ -40,13 +39,9 @@ impl Model {
         Self {
             running_state: RunningState::Start,
             current_view: View::MainView,
-            config,
-            message_reciever: None,
-            command_sender: None,
-            task: None,
             current_channel: channel,
-            error_receiver: None,
-            error_sender: None,
+            config,
+            irc_connection: None,
         }
     }
 
@@ -55,12 +50,29 @@ impl Model {
     }
 
     pub fn send_command(&mut self, in_command: Command) {
-        self.command_sender
+        self.irc_connection
             .as_mut()
-            .map(|value| value.send(in_command));
+            .map(|value| value.command_sender.send(in_command));
     }
 
     pub fn is_irc_finished(&self) -> bool {
-        self.task.as_ref().map(|v| v.is_finished()).unwrap_or(true)
+        self.irc_connection
+            .as_ref()
+            .map(|v| v.task.is_finished())
+            .unwrap_or(true)
+    }
+
+    pub fn pull_server_message(&mut self) -> Option<ServerMessage> {
+        self.irc_connection
+            .as_mut()
+            .map(|v| v.message_reciever.inner.try_recv().ok())
+            .flatten()
+    }
+
+    pub fn pull_server_error(&mut self) -> Option<String> {
+        self.irc_connection
+            .as_mut()
+            .map(|v| v.error_receiver.try_recv().ok())
+            .flatten()
     }
 }

@@ -1,7 +1,11 @@
 use clown_core::client::Client;
 use tokio::sync::mpsc;
 
-use crate::{irc_view::message_content::MessageContent, message_event::MessageEvent, model::Model};
+use crate::{
+    irc_view::message_content::MessageContent,
+    message_event::MessageEvent,
+    model::{IRCConnection, Model},
+};
 
 use strum::{EnumIter, EnumMessage, IntoEnumIterator, IntoStaticStr};
 
@@ -58,9 +62,7 @@ pub fn help(channel: &str) -> MessageEvent {
 }
 
 pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
-    if let Some(task) = &model.task
-        && !task.is_finished()
-    {
+    if !model.is_irc_finished() {
         return Some(MessageEvent::AddMessageView(
             model.current_channel.clone(),
             MessageContent::new_error("Already connected".to_string()),
@@ -70,20 +72,23 @@ pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
     let login_config = &model.config.login_config;
 
     let mut client = Client::new(login_config);
-    let reciever = client.message_receiver();
-    let command_sender = client.command_sender();
+    if let Some(reciever) = client.message_receiver() {
+        let command_sender = client.command_sender();
 
-    let (error_sender, error_receiver) = mpsc::unbounded_channel();
-    model.error_receiver = Some(error_receiver);
-    model.error_sender = Some(error_sender.clone());
+        let (error_sender, error_receiver) = mpsc::unbounded_channel();
 
-    model.command_sender = Some(command_sender);
-    model.message_reciever = reciever;
+        model.irc_connection = Some(IRCConnection {
+            command_sender: command_sender,
+            error_receiver: error_receiver,
+            error_sender: error_sender.clone(),
+            message_reciever: reciever,
+            task: tokio::spawn(async move {
+                if let Err(err) = client.launch(&connection_config).await {
+                    let _ = error_sender.send(format!("Connection error: {err}"));
+                }
+            }),
+        });
+    }
 
-    model.task = Some(tokio::spawn(async move {
-        if let Err(err) = client.launch(&connection_config).await {
-            let _ = error_sender.send(format!("Connection error: {err}"));
-        }
-    }));
     None
 }

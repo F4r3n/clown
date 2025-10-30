@@ -109,9 +109,7 @@ impl MainView<'_> {
     }
 
     fn update_pull_irc(&mut self, model: &mut Model, messages: &mut VecDeque<MessageEvent>) {
-        if let Some(reciever) = model.message_reciever.as_mut()
-            && let Ok(recieved) = reciever.inner.try_recv()
-        {
+        if let Some(recieved) = model.pull_server_message() {
             let reply = recieved.reply();
             let source = recieved.source().map(|v| v.to_string());
             //log_info_sync(format!("{reply:?}\n").as_str());
@@ -268,6 +266,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 }
             }
             Event::Tick => {
+                let mut received_error = false;
                 let message = if model.running_state == RunningState::Start {
                     model.running_state = RunningState::Running;
 
@@ -276,21 +275,27 @@ impl widget_view::WidgetView for MainView<'_> {
                     } else {
                         None
                     }
-                } else if let Some(receiver) = &mut model.error_receiver {
-                    if let Ok(msg) = receiver.try_recv() {
-                        Some(MessageEvent::AddMessageView(
-                            model.current_channel.clone(),
-                            MessageContent::new_error(msg),
-                        ))
-                    } else {
-                        Some(MessageEvent::PullIRC)
-                    }
+                } else if let Some(msg) = model.pull_server_error() {
+                    received_error = true;
+                    //Received an error
+                    Some(MessageEvent::AddMessageView(
+                        model.current_channel.clone(),
+                        MessageContent::new_error(msg),
+                    ))
                 } else {
                     Some(MessageEvent::PullIRC)
                 };
 
                 if let Some(message) = message {
                     messages.push_back(message);
+                }
+
+                if received_error {
+                    //Try to reconnect
+                    if model.is_irc_finished() {
+                        model.irc_connection = None;
+                    }
+                    messages.push_back(MessageEvent::Connect);
                 }
             }
             _ => {}
