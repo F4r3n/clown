@@ -11,6 +11,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
+use tracing::info;
 
 #[derive(Debug)]
 pub struct ChannelMessages {
@@ -270,12 +271,13 @@ impl DiscussWidget {
     ) -> Option<(usize, usize)> {
         let index_y = mouse_pos_y.saturating_sub(self.area.y) as usize;
         let mouse_pos_x = mouse_pos_x.saturating_sub(self.area.x) as usize;
-
-        if mouse_pos_x < TEXT_START {
+        let text_start = self.area.width as usize - self.content_width;
+        if mouse_pos_x < text_start {
             return None;
         }
 
-        let pos_x = mouse_pos_x - TEXT_START;
+        let pos_x = mouse_pos_x.saturating_sub(text_start);
+
         if pos_x > self.content_width {
             return None;
         }
@@ -295,9 +297,10 @@ impl DiscussWidget {
                 if index_y < wrapped_line_index + wrapped_lines {
                     let line_in_msg = index_y - wrapped_line_index;
                     let local_x = pos_x.min(self.content_width - 1);
-                    let char_index =
-                        (line_in_msg * self.content_width + local_x).min(msg_len.saturating_sub(1));
-
+                    let char_index = line_in_msg * self.content_width + local_x;
+                    if char_index >= msg_len {
+                        return None;
+                    }
                     return Some((msg_index + self.scroll_offset, char_index));
                 }
 
@@ -351,7 +354,7 @@ mod tests {
     fn test_find_index() {
         let mut discuss = DiscussWidget::new("test");
         discuss.content_width = 4;
-
+        discuss.area.width = (TEXT_START + discuss.content_width) as u16;
         discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
         discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
         discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
@@ -381,6 +384,7 @@ mod tests {
         );
 
         discuss.scroll_offset = 1;
+        discuss.area.width = (TEXT_START + discuss.content_width) as u16;
 
         assert_eq!(
             discuss.get_current_line_index_character(2, mouse_x),
