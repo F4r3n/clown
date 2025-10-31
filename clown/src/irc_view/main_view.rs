@@ -27,7 +27,7 @@ use ratatui::{
 
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
-    messages_display: Component<'a, discuss_widget::TextWidget>,
+    messages_display: Component<'a, discuss_widget::DiscussWidget>,
     list_users_view: Component<'a, users_widget::UsersWidget>,
     topic_view: Component<'a, topic_widget::TopicWidget>,
     tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
@@ -42,8 +42,10 @@ impl MainView<'_> {
         let topic_view: Component<'_, topic_widget::TopicWidget> =
             Component::new("topic_view", topic_widget::TopicWidget::new());
         //list_components.push()
-        let messages_display =
-            Component::new("messages", discuss_widget::TextWidget::new(current_channel));
+        let messages_display = Component::new(
+            "messages",
+            discuss_widget::DiscussWidget::new(current_channel),
+        );
         let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
         Self {
             list_users_view,

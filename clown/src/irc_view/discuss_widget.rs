@@ -1,5 +1,7 @@
 use crate::component::Draw;
-use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
+use crate::irc_view::dimension_discuss::{
+    NICKNAME_LENGTH, SEPARATOR_LENGTH, TEXT_START, TIME_LENGTH,
+};
 use crate::{MessageEvent, irc_view::message_content::MessageContent};
 use ahash::AHashMap;
 use crossterm::event::KeyCode;
@@ -9,6 +11,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
+
 #[derive(Debug)]
 pub struct ChannelMessages {
     messages: AHashMap<String, Vec<MessageContent>>,
@@ -36,15 +39,16 @@ impl ChannelMessages {
         self.messages.get(channel)
     }
 
-    pub fn get_url(&self, channel: &str, index: usize) -> Option<String> {
+    pub fn get_url(&self, channel: &str, index: usize, character_pos: usize) -> Option<String> {
         self.messages
             .get(channel)
             .and_then(|messages| messages.get(index))
-            .and_then(|message| message.get_url())
+            .and_then(|message| message.get_url(character_pos))
+            .map(|str| str.to_string())
     }
 }
 
-pub struct TextWidget {
+pub struct DiscussWidget {
     vertical_scroll_state: ScrollbarState,
     scroll_offset: usize,
     max_visible_height: usize,
@@ -56,7 +60,7 @@ pub struct TextWidget {
     current_channel: String,
 }
 
-impl Draw for TextWidget {
+impl Draw for DiscussWidget {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
         let focused = self.focus;
@@ -150,7 +154,7 @@ impl Draw for TextWidget {
     }
 }
 
-impl crate::component::EventHandler for TextWidget {
+impl crate::component::EventHandler for DiscussWidget {
     fn get_area(&self) -> Rect {
         self.area
     }
@@ -217,9 +221,11 @@ impl crate::component::EventHandler for TextWidget {
                         ratatui::prelude::Position::new(mouse_event.column, mouse_event.row);
 
                     if self.area.contains(mouse_position) {
-                        if let Some(index) = self.get_current_line_index(mouse_event.row) {
+                        if let Some((index, character)) = self
+                            .get_current_line_index_character(mouse_event.row, mouse_event.column)
+                        {
                             self.messages
-                                .get_url(&self.current_channel, index)
+                                .get_url(&self.current_channel, index, character)
                                 .map(MessageEvent::Hover)
                         } else {
                             None
@@ -236,7 +242,7 @@ impl crate::component::EventHandler for TextWidget {
     }
 }
 
-impl TextWidget {
+impl DiscussWidget {
     pub fn new(current_channel: &str) -> Self {
         Self {
             current_channel: current_channel.to_string(),
@@ -257,24 +263,48 @@ impl TextWidget {
         self.scroll_offset = max_scroll;
         self.follow_last = true;
     }
+    pub fn get_current_line_index_character(
+        &self,
+        mouse_pos_y: u16,
+        mouse_pos_x: u16,
+    ) -> Option<(usize, usize)> {
+        let index_y = mouse_pos_y.saturating_sub(self.area.y) as usize;
+        let mouse_pos_x = mouse_pos_x.saturating_sub(self.area.x) as usize;
 
-    pub fn get_current_line_index(&self, mouse_pos_y: u16) -> Option<usize> {
-        let index = mouse_pos_y.saturating_sub(self.area.y) as usize;
+        if mouse_pos_x < TEXT_START {
+            return None;
+        }
 
-        let mut counter = 0;
+        let pos_x = mouse_pos_x - TEXT_START;
+        if pos_x > self.content_width {
+            return None;
+        }
+
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
-            for (i, line) in messages
+            let mut wrapped_line_index = 0;
+
+            for (msg_index, line) in messages
                 .iter()
                 .skip(self.scroll_offset)
                 .take(self.max_visible_height)
                 .enumerate()
             {
-                counter += line.get_message_length().div_ceil(self.content_width);
-                if index < counter {
-                    return Some(i);
+                let msg_len = line.get_message_length();
+                let wrapped_lines = msg_len.div_ceil(self.content_width);
+
+                if index_y < wrapped_line_index + wrapped_lines {
+                    let line_in_msg = index_y - wrapped_line_index;
+                    let local_x = pos_x.min(self.content_width - 1);
+                    let char_index =
+                        (line_in_msg * self.content_width + local_x).min(msg_len.saturating_sub(1));
+
+                    return Some((msg_index + self.scroll_offset, char_index));
                 }
+
+                wrapped_line_index += wrapped_lines;
             }
         }
+
         None
     }
 
@@ -311,5 +341,67 @@ impl TextWidget {
         let max_scroll = self.get_max_scroll();
         self.scroll_offset = self.scroll_offset.saturating_add(1).min(max_scroll);
         self.follow_last = max_scroll.eq(&self.scroll_offset);
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_index() {
+        let mut discuss = DiscussWidget::new("test");
+        discuss.content_width = 4;
+
+        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
+        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
+        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
+
+        assert_eq!(discuss.scroll_offset, 0);
+        let mouse_x = TEXT_START as u16;
+        assert_eq!(
+            discuss.get_current_line_index_character(0, mouse_x),
+            Some((0, 0))
+        );
+        assert_eq!(
+            discuss.get_current_line_index_character(2, mouse_x),
+            Some((1, 0))
+        );
+        assert_eq!(
+            discuss.get_current_line_index_character(1, mouse_x),
+            Some((0, 4))
+        );
+
+        assert_eq!(
+            discuss.get_current_line_index_character(3, mouse_x),
+            Some((1, 4))
+        );
+        assert_eq!(
+            discuss.get_current_line_index_character(4, mouse_x),
+            Some((2, 0))
+        );
+
+        discuss.scroll_offset = 1;
+
+        assert_eq!(
+            discuss.get_current_line_index_character(2, mouse_x),
+            Some((2, 0))
+        );
+        assert_eq!(
+            discuss.get_current_line_index_character(1, mouse_x),
+            Some((1, 4))
+        );
+        assert_eq!(
+            discuss.get_current_line_index_character(0, mouse_x),
+            Some((1, 0))
+        );
+        assert_eq!(
+            discuss.get_current_line_index_character(3, mouse_x),
+            Some((2, 4))
+        );
+        assert_eq!(discuss.get_current_line_index_character(4, mouse_x), None);
+        assert_eq!(
+            discuss.get_current_line_index_character(0, (TEXT_START + 100) as u16),
+            None
+        );
     }
 }

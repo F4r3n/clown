@@ -99,6 +99,44 @@ pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> 
     spans
 }
 
+pub fn get_size_without_color(content: &str) -> usize {
+    let bytes = content.as_bytes();
+    let mut i = 0;
+    let mut count = 0;
+
+    while i < bytes.len() {
+        match bytes.get(i) {
+            Some(0x02) | Some(0x1D) | Some(0x1E) | Some(0x1F) | Some(0x0F) => i += 1,
+            Some(0x03) => {
+                i += 1;
+                let mut n = 0;
+                while n < 2 && i < bytes.len() && bytes.get(i).is_some_and(|b| b.is_ascii_digit()) {
+                    i += 1;
+                    n += 1;
+                }
+                if i < bytes.len() && bytes.get(i).is_some_and(|b| b == &b',') {
+                    i += 1;
+                    let mut n = 0;
+                    while n < 2
+                        && i < bytes.len()
+                        && bytes.get(i).is_some_and(|b| b.is_ascii_digit())
+                    {
+                        i += 1;
+                        n += 1;
+                    }
+                }
+            }
+
+            _ => {
+                count += 1;
+                i += 1;
+            }
+        }
+    }
+
+    count
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,5 +237,12 @@ mod tests {
         assert_eq!(bg, Color::default());
     }
 
-    // Add more tests as needed for edge cases, like incomplete codes, empty input, etc.
+    #[test]
+    fn test_size_without_color() {
+        let input = "\x034Hello";
+        assert_eq!(get_size_without_color(input), 5);
+
+        let input = "A\x034B\x037C";
+        assert_eq!(get_size_without_color(input), 3);
+    }
 }

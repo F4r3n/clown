@@ -1,6 +1,6 @@
 ## Clown
 
-An IRC client written in Rust.
+An IRC client written in Rust, with the goal to be memory and cpu light.
 
 ## Features
 
@@ -9,6 +9,7 @@ An IRC client written in Rust.
 * preview when hovering message
 * scroll with mouse/keyboard
 * auto reconnect
+* Can connect to only one channel (for now)
 
 ## Build
 

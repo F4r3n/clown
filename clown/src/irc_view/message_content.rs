@@ -69,17 +69,30 @@ impl MessageContent {
         }
     }
 
-    pub fn get_url(&self) -> Option<String> {
-        let text = self.content.as_str();
-        if let Some(start) = text.find("https://") {
-            let mut end = text.len();
-            for (indice, c) in text[start..].char_indices() {
-                if c == ' ' {
-                    end = start + indice;
-                    break;
-                }
-            }
-            return Some(self.content[start..end].to_string());
+    pub fn get_url(&self, character_pos: usize) -> Option<&str> {
+        let text = self.content.as_str(); //Lets say the URL is in a RAW message
+        let bytes = text.as_bytes();
+
+        if character_pos >= bytes.len() {
+            return None;
+        }
+
+        let mut start = character_pos;
+        let mut end = character_pos;
+        while start > 0
+            && !bytes
+                .get(start - 1)
+                .is_some_and(|c| c.is_ascii_whitespace())
+        {
+            start -= 1;
+        }
+
+        while end < bytes.len() && !bytes.get(end).is_some_and(|c| c.is_ascii_whitespace()) {
+            end += 1;
+        }
+        let word = &text[start..end];
+        if word.starts_with("https://") {
+            return Some(word);
         }
         None
     }
@@ -148,6 +161,23 @@ impl MessageContent {
     }
 
     pub fn get_message_length(&self) -> usize {
-        self.content.len()
+        crate::irc_view::message_parser::get_size_without_color(&self.content)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::irc_view::message_content::MessageContent;
+
+    #[test]
+    fn test_url_find() {
+        let message = MessageContent::new(None, "https://test.com");
+        assert_eq!(message.get_url(0), Some("https://test.com"));
+        assert_eq!(message.get_url(100), None);
+
+        let message = MessageContent::new(None, "a aa aa https://test.com");
+        assert_eq!(message.get_url(0), None);
+        assert_eq!(message.get_url(100), None);
+        assert_eq!(message.get_url(10), Some("https://test.com"));
     }
 }
