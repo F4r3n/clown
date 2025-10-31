@@ -1,7 +1,5 @@
 use crate::component::Draw;
-use crate::irc_view::dimension_discuss::{
-    NICKNAME_LENGTH, SEPARATOR_LENGTH, TEXT_START, TIME_LENGTH,
-};
+use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::{MessageEvent, irc_view::message_content::MessageContent};
 use ahash::AHashMap;
 use crossterm::event::KeyCode;
@@ -11,7 +9,6 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-use tracing::info;
 
 #[derive(Debug)]
 pub struct ChannelMessages {
@@ -352,6 +349,8 @@ mod tests {
 
     #[test]
     fn test_find_index() {
+        pub const TEXT_START: usize = TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH;
+
         let mut discuss = DiscussWidget::new("test");
         discuss.content_width = 4;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;

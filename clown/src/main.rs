@@ -51,7 +51,6 @@ async fn main() -> color_eyre::Result<()> {
             update(&mut model, &mut views, current_msg, &mut list_messages).await;
         }
     }
-    model.save()?;
     EventHandler::disable_mouse_event()?;
 
     tui::restore()?;

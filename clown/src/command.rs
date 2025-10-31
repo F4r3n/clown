@@ -68,8 +68,8 @@ pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
             MessageContent::new_error("Already connected".to_string()),
         ));
     }
-    let connection_config = model.config.connection_config.clone();
-    let login_config = &model.config.login_config;
+    let connection_config = model.get_connection_config();
+    let login_config = &model.get_login_config();
 
     let mut client = Client::new(login_config);
     if let Some(reciever) = client.message_receiver() {

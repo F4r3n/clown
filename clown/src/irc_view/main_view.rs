@@ -91,13 +91,13 @@ impl MainView<'_> {
                 }
                 command::ClientCommand::Help => Some(help(&model.current_channel)),
                 command::ClientCommand::Nick(new_nick) => {
-                    model.config.login_config.nickname = new_nick;
-                    model.send_command(Command::Nick(model.config.login_config.nickname.clone()));
+                    let _ = model.set_nickname(&new_nick);
+                    model.send_command(Command::Nick(new_nick.clone()));
                     None
                 }
             }
         } else {
-            let nickname = model.config.login_config.nickname.clone();
+            let nickname = model.get_nickname().to_string();
             model.send_command(clown_core::command::Command::PrivMsg(
                 model.current_channel.to_string(),
                 content.clone(),
@@ -118,7 +118,7 @@ impl MainView<'_> {
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {
-                        let from = if target.eq(&model.config.login_config.nickname) {
+                        let from = if target.eq(&model.get_nickname()) {
                             source.clone().unwrap_or_default()
                         } else {
                             target
@@ -131,7 +131,7 @@ impl MainView<'_> {
                             MessageContent::new_message(
                                 source,
                                 content.as_str(),
-                                &model.config.login_config.nickname,
+                                model.get_nickname(),
                             ),
                         ));
                     }
@@ -154,7 +154,7 @@ impl MainView<'_> {
                         let source = source.unwrap_or_default();
 
                         messages.push_back(MessageEvent::JoinUser(source.clone()));
-                        if !source.eq(&model.config.login_config.nickname) {
+                        if !source.eq(model.get_nickname()) {
                             messages.push_back(MessageEvent::AddMessageView(
                                 model.current_channel.to_string(),
                                 MessageContent::new_info(
@@ -169,7 +169,7 @@ impl MainView<'_> {
                 Response::Rpl(reply) => match reply {
                     ResponseNumber::Welcome(content) => {
                         model.send_command(clown_core::command::Command::Join(
-                            model.config.login_config.channel.to_string(),
+                            model.get_login_channel().to_string(),
                         ));
 
                         messages.push_back(MessageEvent::AddMessageView(
@@ -272,7 +272,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 let message = if model.running_state == RunningState::Start {
                     model.running_state = RunningState::Running;
 
-                    if model.config.client_config.auto_join {
+                    if model.is_autojoin() {
                         Some(MessageEvent::Connect)
                     } else {
                         None
@@ -323,11 +323,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 messages.push_back(MessageEvent::AddMessageView(
                     model.current_channel.to_string(),
                     MessageContent::new_info(
-                        format!(
-                            "Try to connect to {}...",
-                            model.config.connection_config.address
-                        )
-                        .as_str(),
+                        format!("Try to connect to {}...", model.get_address()).as_str(),
                     ),
                 ));
                 if let Some(v) = connect_irc(model) {

@@ -1,4 +1,6 @@
-use clown_core::{command::Command, message::ServerMessage};
+use clown_core::{
+    client::LoginConfig, command::Command, conn::ConnectionConfig, message::ServerMessage,
+};
 use tokio::{sync::mpsc, task::JoinHandle};
 
 use crate::config::Config;
@@ -27,7 +29,7 @@ pub struct IRCConnection {
 pub struct Model {
     pub running_state: RunningState,
     pub current_view: View,
-    pub config: Config,
+    config: Config,
     pub current_channel: String,
     pub irc_connection: Option<IRCConnection>,
 }
@@ -47,6 +49,36 @@ impl Model {
 
     pub fn save(&self) -> color_eyre::Result<()> {
         self.config.save()
+    }
+
+    pub fn set_nickname(&mut self, nickname: &str) -> color_eyre::Result<&str> {
+        self.config.login_config.nickname = nickname.to_string();
+        self.save()?;
+        Ok(&self.config.login_config.nickname)
+    }
+
+    pub fn get_nickname(&self) -> &str {
+        &self.config.login_config.nickname
+    }
+
+    pub fn get_login_channel(&self) -> &str {
+        &self.config.login_config.channel
+    }
+
+    pub fn get_address(&self) -> &str {
+        &self.config.connection_config.address
+    }
+
+    pub fn is_autojoin(&self) -> bool {
+        self.config.client_config.auto_join
+    }
+
+    pub fn get_connection_config(&self) -> ConnectionConfig {
+        self.config.connection_config.clone()
+    }
+
+    pub fn get_login_config(&self) -> LoginConfig {
+        self.config.login_config.clone()
     }
 
     pub fn send_command(&mut self, in_command: Command) {
