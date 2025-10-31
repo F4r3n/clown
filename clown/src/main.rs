@@ -1,7 +1,7 @@
 use crate::event_handler::Event;
 use crate::irc_view::message_content::MessageContent;
+use ahash::AHashMap;
 use ratatui::Frame;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 mod component;
 mod irc_view;
@@ -19,7 +19,7 @@ mod event_handler;
 mod model;
 mod widget_view;
 
-type ViewMap = HashMap<View, Box<dyn widget_view::WidgetView>>;
+type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     tracing_subscriber::fmt::init();
@@ -29,7 +29,7 @@ async fn main() -> color_eyre::Result<()> {
     let mut terminal = tui::init()?;
 
     let mut model = model::Model::new();
-    let mut views: ViewMap = HashMap::new();
+    let mut views: ViewMap = AHashMap::new();
     views.insert(
         View::MainView,
         Box::new(irc_view::main_view::MainView::new(&model.current_channel)),

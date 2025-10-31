@@ -78,8 +78,8 @@ pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
 
         model.irc_connection = Some(IRCConnection {
-            command_sender: command_sender,
-            error_receiver: error_receiver,
+            command_sender,
+            error_receiver,
             _error_sender: error_sender.clone(),
             message_reciever: reciever,
             task: tokio::spawn(async move {

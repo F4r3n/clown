@@ -6,10 +6,10 @@ use crate::command::help;
 use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
+use crate::irc_view::discuss_widget;
 use crate::irc_view::input_widget;
 use crate::irc_view::input_widget::CInput;
 use crate::irc_view::message_content::MessageContent;
-use crate::irc_view::text_widget;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
@@ -27,7 +27,7 @@ use ratatui::{
 
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
-    messages_display: Component<'a, text_widget::TextWidget>,
+    messages_display: Component<'a, discuss_widget::TextWidget>,
     list_users_view: Component<'a, users_widget::UsersWidget>,
     topic_view: Component<'a, topic_widget::TopicWidget>,
     tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
@@ -43,7 +43,7 @@ impl MainView<'_> {
             Component::new("topic_view", topic_widget::TopicWidget::new());
         //list_components.push()
         let messages_display =
-            Component::new("messages", text_widget::TextWidget::new(current_channel));
+            Component::new("messages", discuss_widget::TextWidget::new(current_channel));
         let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
         Self {
             list_users_view,

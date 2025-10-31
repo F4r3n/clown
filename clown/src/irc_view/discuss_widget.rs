@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::component::Draw;
 use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::{MessageEvent, irc_view::message_content::MessageContent};
+use ahash::AHashMap;
 use crossterm::event::KeyCode;
 use ratatui::{
     Frame,
@@ -12,13 +11,13 @@ use ratatui::{
 };
 #[derive(Debug)]
 pub struct ChannelMessages {
-    messages: HashMap<String, Vec<MessageContent>>,
+    messages: AHashMap<String, Vec<MessageContent>>,
 }
 
 impl ChannelMessages {
     pub fn new() -> Self {
         Self {
-            messages: HashMap::new(),
+            messages: AHashMap::new(),
         }
     }
 
@@ -219,11 +218,9 @@ impl crate::component::EventHandler for TextWidget {
 
                     if self.area.contains(mouse_position) {
                         if let Some(index) = self.get_current_line_index(mouse_event.row) {
-                            if let Some(url) = self.messages.get_url(&self.current_channel, index) {
-                                Some(MessageEvent::Hover(url))
-                            } else {
-                                None
-                            }
+                            self.messages
+                                .get_url(&self.current_channel, index)
+                                .map(MessageEvent::Hover)
                         } else {
                             None
                         }

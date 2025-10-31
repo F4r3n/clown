@@ -90,7 +90,7 @@ async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
     let has_meta = headers
         .get("content-type")
         .and_then(|ct| ct.to_str().ok())
-        .map_or(false, |ct| !ct.starts_with("image"));
+        .map_or_else(|| false, |ct| !ct.starts_with("image"));
 
     let text = resp.text().await.map_err(|e| e.to_string())?;
     let mut metadata = if has_meta {
@@ -105,15 +105,13 @@ async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
         }
     };
 
-    if let Some(bytes) = client
+    if let Ok(bytes) = client
         .get(metadata.image_url.clone())
         .send()
         .await
         .map_err(|e| e.to_string())?
         .bytes()
         .await
-        .ok()
-        .and_then(|bytes| Some(bytes))
     {
         metadata.image = Some(Arc::new(
             image::ImageReader::new(Cursor::new(bytes))
@@ -171,16 +169,10 @@ impl WebsitePreview {
         if let Some(join_handle) = self.handle.take() {
             let data = block_in_place(|| {
                 let handle = Handle::current();
-                match handle.block_on(async { join_handle.await }) {
+                match handle.block_on(join_handle) {
                     Ok(Ok(meta)) => Some(meta),
-                    Ok(Err(err)) => {
-                        eprintln!("Metadata fetch error: {err}");
-                        None
-                    }
-                    Err(join_err) => {
-                        eprintln!("Join error: {join_err}");
-                        None
-                    }
+                    Ok(Err(_)) => None,
+                    Err(_) => None,
                 }
             });
             self.metadata = data;
@@ -217,25 +209,28 @@ impl Draw for WebsitePreview {
                         Constraint::Percentage(100), // Image
                     ])
                     .split(inner_area);
-                let max_width = main_layout[0].width as usize;
                 let mut title = meta.title.clone();
 
-                if title.chars().count() > max_width {
-                    // Keep room for "..."
-                    title = title
-                        .chars()
-                        .take(max_width.saturating_sub(3))
-                        .collect::<String>()
-                        + "...";
+                if let Some(title_layout) = main_layout.first() {
+                    let width = title_layout.width as usize;
+                    if title.chars().count() > width {
+                        // Keep room for "..."
+                        title = title
+                            .chars()
+                            .take(width.saturating_sub(3))
+                            .collect::<String>()
+                            + "...";
+                    }
+                    let span = ratatui::text::Span::raw(title);
+                    frame.render_widget(span, *title_layout);
                 }
 
-                let span = ratatui::text::Span::raw(title);
-                frame.render_widget(span, main_layout[0]);
-
-                if let Some(image_protocol) = &mut self.image {
+                if let Some(image_layout) = main_layout.get(1)
+                    && let Some(image_protocol) = &mut self.image
+                {
                     frame.render_stateful_widget(
                         StatefulImage::new(),
-                        main_layout[1],
+                        *image_layout,
                         image_protocol,
                     );
                 }
@@ -295,8 +290,8 @@ impl Draw for ToolTipDiscussWidget {
             return;
         }
         let area_to_render = ratatui::prelude::Rect {
-            height: (area.height as f32).mul(0.3) as u16,
-            width: (area.width as f32).mul(0.3) as u16,
+            height: f32::from(area.height).mul(0.3) as u16,
+            width: f32::from(area.width).mul(0.3) as u16,
             x: area.x,
             y: area.y,
         };

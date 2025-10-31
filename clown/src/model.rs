@@ -65,14 +65,12 @@ impl Model {
     pub fn pull_server_message(&mut self) -> Option<ServerMessage> {
         self.irc_connection
             .as_mut()
-            .map(|v| v.message_reciever.inner.try_recv().ok())
-            .flatten()
+            .and_then(|v| v.message_reciever.inner.try_recv().ok())
     }
 
     pub fn pull_server_error(&mut self) -> Option<String> {
         self.irc_connection
             .as_mut()
-            .map(|v| v.error_receiver.try_recv().ok())
-            .flatten()
+            .and_then(|v| v.error_receiver.try_recv().ok())
     }
 }
