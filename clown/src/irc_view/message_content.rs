@@ -3,6 +3,7 @@ use textwrap::wrap;
 use crate::irc_view::{
     color_user::nickname_color,
     dimension_discuss::{NICKNAME_LENGTH, TIME_LENGTH},
+    message_parser::get_size_without_format,
 };
 use chrono::{DateTime, Local, Timelike};
 use ratatui::{
@@ -24,6 +25,7 @@ pub struct MessageContent {
     time: std::time::SystemTime, /*Generated time */
     source: Option<String>,      /*Source*/
     content: String,             /*Content */
+    length_without_format: usize,
     kind: MessageKind,
 }
 
@@ -34,6 +36,7 @@ impl MessageContent {
             source,
             content: content.to_string(),
             kind: MessageKind::Normal,
+            length_without_format: get_size_without_format(content),
         }
     }
 
@@ -47,6 +50,7 @@ impl MessageContent {
             time: std::time::SystemTime::now(),
             source,
             content: content.to_string(),
+            length_without_format: get_size_without_format(content),
             kind,
         }
     }
@@ -55,6 +59,7 @@ impl MessageContent {
         Self {
             time: std::time::SystemTime::now(),
             source: None,
+            length_without_format: get_size_without_format(&content),
             content,
             kind: MessageKind::Error,
         }
@@ -66,6 +71,7 @@ impl MessageContent {
             source: None,
             content: content.to_string(),
             kind: MessageKind::Info,
+            length_without_format: get_size_without_format(content),
         }
     }
 
@@ -161,7 +167,7 @@ impl MessageContent {
     }
 
     pub fn get_message_length(&self) -> usize {
-        crate::irc_view::message_parser::get_size_without_color(&self.content)
+        self.length_without_format
     }
 }
 

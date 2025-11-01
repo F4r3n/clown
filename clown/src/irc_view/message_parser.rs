@@ -99,7 +99,7 @@ pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> 
     spans
 }
 
-pub fn get_size_without_color(content: &str) -> usize {
+pub fn get_size_without_format(content: &str) -> usize {
     let bytes = content.as_bytes();
     let mut i = 0;
     let mut count = 0;
@@ -240,9 +240,9 @@ mod tests {
     #[test]
     fn test_size_without_color() {
         let input = "\x034Hello";
-        assert_eq!(get_size_without_color(input), 5);
+        assert_eq!(get_size_without_format(input), 5);
 
         let input = "A\x034B\x037C";
-        assert_eq!(get_size_without_color(input), 3);
+        assert_eq!(get_size_without_format(input), 3);
     }
 }
