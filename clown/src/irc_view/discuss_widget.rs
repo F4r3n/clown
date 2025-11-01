@@ -3,13 +3,15 @@ use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME
 use crate::{MessageEvent, irc_view::message_content::MessageContent};
 use ahash::AHashMap;
 use crossterm::event::KeyCode;
+use ratatui::prelude::CrosstermBackend;
+use ratatui::widgets::Row;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-
+use tracing::info;
 #[derive(Debug)]
 pub struct ChannelMessages {
     messages: AHashMap<String, Vec<MessageContent>>,
@@ -73,11 +75,6 @@ impl Draw for DiscussWidget {
         // Set how many lines can be shown
         self.max_visible_height = area.height as usize;
 
-        let max_scroll = self
-            .get_number_messages()
-            .saturating_sub(self.max_visible_height);
-        let scroll = self.scroll_offset.min(max_scroll);
-
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -97,28 +94,9 @@ impl Draw for DiscussWidget {
             })
             .unwrap_or(0);
         self.content_width = content_width as usize;
-
-        let mut counter: i64 = self.max_visible_height as i64;
-        let mut visible_rows = vec![];
-        if let Some(messages) = self.messages.get_messages(&self.current_channel) {
-            for line in messages.iter().skip(scroll).take(self.max_visible_height) {
-                let mut new_rows = line.create_rows(content_width, &focus_style);
-                counter -= new_rows.len() as i64;
-                if counter < 0 {
-                    for i in 0..counter.abs() {
-                        if let Some(row) = new_rows.get(i as usize) {
-                            visible_rows.push(row.clone());
-                        }
-                    }
-                    break;
-                } else {
-                    visible_rows.append(&mut new_rows);
-                }
-                if counter == 0 {
-                    break;
-                }
-            }
-        }
+        self.vertical_scroll_state = ScrollbarState::new(self.get_total_lines())
+            .position(self.scroll_offset + self.max_visible_height);
+        let visible_rows = self.collect_visible_rows(&focus_style);
 
         let table = Table::new(
             visible_rows,
@@ -131,9 +109,6 @@ impl Draw for DiscussWidget {
         )
         .column_spacing(1)
         .style(text_style);
-
-        self.vertical_scroll_state = ScrollbarState::new(self.get_number_messages())
-            .position(self.scroll_offset + self.max_visible_height);
 
         if let Some(layout) = layout.first() {
             frame.render_widget(table, *layout)
@@ -199,7 +174,7 @@ impl crate::component::EventHandler for DiscussWidget {
                     None
                 }
                 KeyCode::End => {
-                    self.scroll_offset = self.get_number_messages();
+                    self.scroll_offset = self.get_total_lines();
                     None
                 }
                 _ => None,
@@ -232,6 +207,11 @@ impl crate::component::EventHandler for DiscussWidget {
                         None
                     }
                 }
+                _ => None,
+            }
+        } else if let crate::event_handler::Event::Crossterm(cross) = &event {
+            match cross {
+                crossterm::event::Event::Resize(x, y) => None,
                 _ => None,
             }
         } else {
@@ -308,10 +288,61 @@ impl DiscussWidget {
         None
     }
 
-    fn get_number_messages(&self) -> usize {
+    fn collect_visible_rows<'a>(&'a mut self, focus_style: &Style) -> Vec<Row<'a>> {
+        let mut visible_rows = Vec::new();
+        let mut wrapped_rows_seen = 0; // counts all rows, even skipped
+        let mut visible_rows_total = 0; // counts only rendered rows
+
+        if let Some(messages) = self.messages.get_messages(&self.current_channel) {
+            for line in messages {
+                let total_rows = line.get_message_length().div_ceil(self.content_width);
+
+                // Skip rows above scroll
+                if wrapped_rows_seen + total_rows <= self.scroll_offset {
+                    wrapped_rows_seen += total_rows;
+                    continue;
+                }
+
+                // Create all wrapped rows for this message
+                let mut rows = line.create_rows(self.content_width as u16, focus_style);
+
+                // Skip inside this message if scroll_offset lands inside it
+                if self.scroll_offset > wrapped_rows_seen {
+                    let skip = self.scroll_offset - wrapped_rows_seen;
+                    rows = rows.into_iter().skip(skip).collect();
+                }
+
+                // Truncate if screen full
+                let remaining = self.max_visible_height - visible_rows_total;
+                if rows.len() > remaining {
+                    rows.truncate(remaining);
+                }
+
+                visible_rows_total += rows.len();
+                wrapped_rows_seen += total_rows;
+                visible_rows.extend(rows);
+
+                if visible_rows_total >= self.max_visible_height {
+                    break;
+                }
+            }
+        }
+
+        visible_rows
+    }
+
+    fn get_total_lines(&self) -> usize {
+        if self.content_width == 0 {
+            return 0;
+        }
         self.messages
-            .get_number_messages(&self.current_channel)
-            .unwrap_or_default()
+            .get_messages(&self.current_channel)
+            .map(|msgs| {
+                msgs.iter()
+                    .map(|m| m.get_message_length().div_ceil(self.content_width))
+                    .sum()
+            })
+            .unwrap_or(0)
     }
 
     pub fn add_line(&mut self, channel: &str, in_message: &MessageContent) {
@@ -320,7 +351,7 @@ impl DiscussWidget {
         if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view
             self.scroll_offset = self
-                .get_number_messages()
+                .get_total_lines()
                 .saturating_sub(self.max_visible_height);
         }
     }
@@ -331,9 +362,7 @@ impl DiscussWidget {
     }
 
     fn get_max_scroll(&self) -> usize {
-        self.messages
-            .get_number_messages(&self.current_channel)
-            .unwrap_or_default()
+        self.get_total_lines()
             .saturating_sub(self.max_visible_height)
     }
 
@@ -406,5 +435,35 @@ mod tests {
             discuss.get_current_line_index_character(0, (TEXT_START + 100) as u16),
             None
         );
+    }
+
+    #[test]
+    fn test_render_rows() {
+        let mut discuss = DiscussWidget::new("test");
+
+        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
+        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
+        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
+        let focus_style = Style::default();
+
+        discuss.content_width = 10;
+        discuss.scroll_offset = 0;
+        assert_eq!(discuss.collect_visible_rows(&focus_style).len(), 3);
+
+        discuss.content_width = 4;
+        discuss.scroll_offset = 0;
+        assert_eq!(discuss.collect_visible_rows(&focus_style).len(), 6);
+
+        discuss.content_width = 4;
+        discuss.scroll_offset = 0;
+        discuss.max_visible_height = 2;
+        let rows = discuss.collect_visible_rows(&focus_style);
+        assert_eq!(rows.len(), 2);
+
+        discuss.content_width = 4;
+        discuss.scroll_offset = 1;
+        discuss.max_visible_height = 2;
+        let rows = discuss.collect_visible_rows(&focus_style);
+        assert_eq!(rows.len(), 2);
     }
 }
