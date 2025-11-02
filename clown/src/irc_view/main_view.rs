@@ -1,6 +1,5 @@
-use std::collections::VecDeque;
-
 use crate::MessageEvent;
+use crate::MessageQueue;
 use crate::command::connect_irc;
 use crate::command::help;
 use crate::component::Child;
@@ -110,7 +109,7 @@ impl MainView<'_> {
         }
     }
 
-    fn update_pull_irc(&mut self, model: &mut Model, messages: &mut VecDeque<MessageEvent>) {
+    fn update_pull_irc(&mut self, model: &mut Model, messages: &mut MessageQueue) {
         if let Some(recieved) = model.pull_server_message() {
             let reply = recieved.reply();
             let source = recieved.source().map(|v| v.to_string());
@@ -124,9 +123,9 @@ impl MainView<'_> {
                             target
                         };
                         if !from.eq(&model.current_channel) {
-                            messages.push_back(MessageEvent::HighlightUser(from.clone()));
+                            messages.push_message(MessageEvent::HighlightUser(from.clone()));
                         }
-                        messages.push_back(MessageEvent::AddMessageView(
+                        messages.push_message(MessageEvent::AddMessageView(
                             from,
                             MessageContent::new_message(
                                 source,
@@ -135,15 +134,17 @@ impl MainView<'_> {
                             ),
                         ));
                     }
-                    Command::Nick(new_user) => messages.push_back(MessageEvent::ReplaceUser(
+                    Command::Nick(new_user) => messages.push_message(MessageEvent::ReplaceUser(
                         source.unwrap_or_default(),
                         new_user,
                     )),
-                    Command::Topic(_, topic) => messages.push_back(MessageEvent::SetTopic(topic)),
+                    Command::Topic(_, topic) => {
+                        messages.push_message(MessageEvent::SetTopic(topic))
+                    }
                     Command::Quit(_) => {
                         let source = source.unwrap_or_default();
-                        messages.push_back(MessageEvent::RemoveUser(source.clone()));
-                        messages.push_back(MessageEvent::AddMessageView(
+                        messages.push_message(MessageEvent::RemoveUser(source.clone()));
+                        messages.push_message(MessageEvent::AddMessageView(
                             model.current_channel.to_string(),
                             MessageContent::new_info(
                                 format!("{} has quit", source.clone()).as_str(),
@@ -153,9 +154,9 @@ impl MainView<'_> {
                     Command::Join(_) => {
                         let source = source.unwrap_or_default();
 
-                        messages.push_back(MessageEvent::JoinUser(source.clone()));
+                        messages.push_message(MessageEvent::JoinUser(source.clone()));
                         if !source.eq(model.get_nickname()) {
-                            messages.push_back(MessageEvent::AddMessageView(
+                            messages.push_message(MessageEvent::AddMessageView(
                                 model.current_channel.to_string(),
                                 MessageContent::new_info(
                                     format!("{} has joined", source.clone()).as_str(),
@@ -163,7 +164,7 @@ impl MainView<'_> {
                             ));
                         }
                     }
-                    Command::Error(_err) => messages.push_back(MessageEvent::DisConnect),
+                    Command::Error(_err) => messages.push_message(MessageEvent::DisConnect),
                     _ => {}
                 },
                 Response::Rpl(reply) => match reply {
@@ -172,19 +173,19 @@ impl MainView<'_> {
                             model.get_login_channel().to_string(),
                         ));
 
-                        messages.push_back(MessageEvent::AddMessageView(
+                        messages.push_message(MessageEvent::AddMessageView(
                             model.current_channel.to_string(),
                             MessageContent::new(source, content.as_str()),
                         ));
                     }
                     ResponseNumber::NameReply(list_users) => {
-                        messages.push_back(MessageEvent::UpdateUsers(list_users));
+                        messages.push_message(MessageEvent::UpdateUsers(list_users));
                     }
                     ResponseNumber::Topic(topic) => {
-                        messages.push_back(MessageEvent::SetTopic(topic));
+                        messages.push_message(MessageEvent::SetTopic(topic));
                     }
                     ResponseNumber::Err(_, content) => {
-                        messages.push_back(MessageEvent::AddMessageView(
+                        messages.push_message(MessageEvent::AddMessageView(
                             model.current_channel.to_string(),
                             MessageContent::new_error(content),
                         ));
@@ -239,12 +240,7 @@ impl widget_view::WidgetView for MainView<'_> {
         }
     }
 
-    fn handle_event(
-        &mut self,
-        model: &mut Model,
-        event: &Event,
-        messages: &mut VecDeque<MessageEvent>,
-    ) {
+    fn handle_event(&mut self, model: &mut Model, event: &Event, messages: &mut MessageQueue) {
         // Handle focus switching first
 
         match event {
@@ -252,7 +248,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 // Pass event to focused widget
                 for child in self.children().iter_mut() {
                     if let Some(new_message) = child.handle_events(event) {
-                        messages.push_back(new_message);
+                        messages.push_message(new_message);
                     }
                 }
             }
@@ -261,7 +257,7 @@ impl widget_view::WidgetView for MainView<'_> {
                     for child in self.children().iter_mut() {
                         if child.get_id().eq(&id) {
                             if let Some(new_message) = child.handle_events(event) {
-                                messages.push_back(new_message);
+                                messages.push_message(new_message);
                             }
                         }
                     }
@@ -289,7 +285,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 };
 
                 if let Some(message) = message {
-                    messages.push_back(message);
+                    messages.push_message(message);
                 }
 
                 if received_error {
@@ -297,37 +293,35 @@ impl widget_view::WidgetView for MainView<'_> {
                     if model.is_irc_finished() {
                         model.irc_connection = None;
                     }
-                    messages.push_back(MessageEvent::Connect);
+                    messages.push_message_with_time(
+                        MessageEvent::Connect,
+                        std::time::Duration::from_secs(2),
+                    );
                 }
             }
             _ => {}
         };
     }
 
-    fn update(
-        &mut self,
-        model: &mut Model,
-        msg: MessageEvent,
-        messages: &mut VecDeque<MessageEvent>,
-    ) {
+    fn update(&mut self, model: &mut Model, msg: MessageEvent, messages: &mut MessageQueue) {
         match msg {
             MessageEvent::MessageInput(content) => {
                 if let Some(v) = self.update_input(model, content) {
-                    messages.push_back(v)
+                    messages.push_message(v)
                 }
             }
             MessageEvent::Quit(message) => {
                 model.send_command(clown_core::command::Command::Quit(message));
             }
             MessageEvent::Connect => {
-                messages.push_back(MessageEvent::AddMessageView(
+                messages.push_message(MessageEvent::AddMessageView(
                     model.current_channel.to_string(),
                     MessageContent::new_info(
                         format!("Try to connect to {}...", model.get_address()).as_str(),
                     ),
                 ));
                 if let Some(v) = connect_irc(model) {
-                    messages.push_back(v)
+                    messages.push_message(v)
                 }
             }
             MessageEvent::SelectChannel(ref channel) => {
@@ -338,7 +332,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 if !model.is_irc_finished() {
                     model.send_command(clown_core::command::Command::Quit(None));
                 } else {
-                    messages.push_back(MessageEvent::AddMessageView(
+                    messages.push_message(MessageEvent::AddMessageView(
                         model.current_channel.to_string(),
                         MessageContent::new(None, "Disconnected"),
                     ));

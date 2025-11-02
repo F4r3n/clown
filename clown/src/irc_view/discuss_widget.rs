@@ -3,7 +3,6 @@ use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME
 use crate::{MessageEvent, irc_view::message_content::MessageContent};
 use ahash::AHashMap;
 use crossterm::event::KeyCode;
-use ratatui::prelude::CrosstermBackend;
 use ratatui::widgets::Row;
 use ratatui::{
     Frame,
@@ -11,7 +10,6 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-use tracing::info;
 #[derive(Debug)]
 pub struct ChannelMessages {
     messages: AHashMap<String, Vec<MessageContent>>,
@@ -29,10 +27,6 @@ impl ChannelMessages {
             .entry(channel.to_string())
             .or_default()
             .push(in_message.clone());
-    }
-
-    pub fn get_number_messages(&self, channel: &str) -> Option<usize> {
-        self.messages.get(channel).map(|v| v.len())
     }
 
     pub fn get_messages(&self, channel: &str) -> Option<&Vec<MessageContent>> {
@@ -211,7 +205,7 @@ impl crate::component::EventHandler for DiscussWidget {
             }
         } else if let crate::event_handler::Event::Crossterm(cross) = &event {
             match cross {
-                crossterm::event::Event::Resize(x, y) => None,
+                crossterm::event::Event::Resize(_x, _y) => None,
                 _ => None,
             }
         } else {

@@ -2,7 +2,6 @@ use crate::event_handler::Event;
 use crate::irc_view::message_content::MessageContent;
 use ahash::AHashMap;
 use ratatui::Frame;
-use std::collections::VecDeque;
 mod component;
 mod irc_view;
 mod tui;
@@ -10,14 +9,15 @@ use model::Model;
 use model::RunningState;
 use model::View;
 mod message_event;
-use message_event::MessageEvent;
-
 use crate::event_handler::EventHandler;
+use message_event::MessageEvent;
 mod command;
 mod config;
 mod event_handler;
+mod message_queue;
 mod model;
 mod widget_view;
+use message_queue::MessageQueue;
 
 type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
@@ -34,8 +34,8 @@ async fn main() -> color_eyre::Result<()> {
         View::MainView,
         Box::new(irc_view::main_view::MainView::new(&model.current_channel)),
     );
-    let mut list_messages = VecDeque::new();
-    list_messages.push_back(MessageEvent::AddMessageView(
+    let mut list_messages = message_queue::MessageQueue::new();
+    list_messages.push_message(MessageEvent::AddMessageView(
         model.current_channel.clone(),
         MessageContent::new_info("Use the command /help"),
     ));
@@ -47,7 +47,7 @@ async fn main() -> color_eyre::Result<()> {
 
         handle_event(&mut model, &mut views, event, &mut list_messages)?;
 
-        while let Some(current_msg) = list_messages.pop_front() {
+        while let Some(current_msg) = list_messages.next() {
             update(&mut model, &mut views, current_msg, &mut list_messages).await;
         }
     }
@@ -67,7 +67,7 @@ fn handle_event(
     model: &mut Model,
     views: &mut ViewMap,
     event: Event,
-    out_messages: &mut VecDeque<MessageEvent>,
+    out_messages: &mut MessageQueue,
 ) -> color_eyre::Result<Option<MessageEvent>> {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         current_view.handle_event(model, &event, out_messages);
@@ -80,7 +80,7 @@ async fn update(
     model: &mut Model,
     views: &mut ViewMap,
     msg: MessageEvent,
-    out_messages: &mut VecDeque<MessageEvent>,
+    out_messages: &mut MessageQueue,
 ) {
     if let Some(current_view) = views.get_mut(&model.current_view) {
         match msg {
