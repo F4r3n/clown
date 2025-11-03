@@ -45,5 +45,12 @@ scraper = "0.24.0"
 image = "0.25.8"
 ahash = "0.8.12"
 
+[dev-dependencies]
+anyhow = "1.0.100"
+criterion = "0.7.0"
+
+[features]
+bench = []
+
 [lints]
 workspace = true

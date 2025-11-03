@@ -1,6 +1,5 @@
-use crate::MessageEvent;
 use crate::component::Draw;
-
+use crate::message_event::MessageEvent;
 use crossterm::event::KeyCode;
 
 use ratatui::{

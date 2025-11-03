@@ -1,5 +1,3 @@
-use crate::MessageEvent;
-use crate::MessageQueue;
 use crate::command::connect_irc;
 use crate::command::help;
 use crate::component::Child;
@@ -12,6 +10,8 @@ use crate::irc_view::message_content::MessageContent;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
+use crate::message_event::MessageEvent;
+use crate::message_queue::MessageQueue;
 use crate::model::Model;
 use crate::model::RunningState;
 use crate::widget_view;

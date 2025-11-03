@@ -1,5 +1,3 @@
-use textwrap::wrap;
-
 use crate::irc_view::{
     color_user::nickname_color,
     dimension_discuss::{NICKNAME_LENGTH, TIME_LENGTH},
@@ -11,6 +9,8 @@ use ratatui::{
     text::Line,
     widgets::{Cell, Row},
 };
+use std::borrow::Cow;
+use textwrap::wrap;
 
 #[derive(Debug, PartialEq, Clone)]
 enum MessageKind {
@@ -168,6 +168,10 @@ impl MessageContent {
 
     pub fn get_message_length(&self) -> usize {
         self.length_without_format
+    }
+
+    pub fn get_wrapped_line(&self, width: usize) -> Vec<Cow<'_, str>> {
+        textwrap::wrap(&self.content, width)
     }
 }
 

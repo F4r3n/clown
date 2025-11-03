@@ -347,9 +347,11 @@ name = "clown"
 version = "0.1.2"
 dependencies = [
  "ahash",
+ "anyhow",
  "chrono",
  "clown-core",
  "color-eyre",
+ "criterion",
  "crossterm 0.29.0",
  "directories",
  "futures",

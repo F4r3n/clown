@@ -1,4 +1,5 @@
 use crate::event_handler::Event;
+use crate::message_event::MessageEvent;
 use ratatui::{Frame, layout::Rect};
 use std::ops::{Deref, DerefMut};
 
@@ -19,7 +20,7 @@ pub struct Component<'a, T> {
 }
 
 pub type WidgetId<'a> = &'a str;
-use crate::MessageEvent;
+
 impl<'a, T> Component<'a, T> {
     pub fn new(id: WidgetId<'a>, inner: T) -> Self {
         Self { id, inner }

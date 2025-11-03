@@ -1,6 +1,6 @@
-use crate::MessageEvent;
-use crate::MessageQueue;
 use crate::event_handler::Event;
+use crate::message_event::MessageEvent;
+use crate::message_queue::MessageQueue;
 use crate::model::Model;
 use ratatui::Frame;
 pub trait WidgetView {

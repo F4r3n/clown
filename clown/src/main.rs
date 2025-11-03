@@ -1,23 +1,23 @@
-use crate::event_handler::Event;
-use crate::irc_view::message_content::MessageContent;
+mod message_event;
+mod message_queue;
+mod model;
 use ahash::AHashMap;
-use ratatui::Frame;
-mod component;
-mod irc_view;
-mod tui;
+use irc_view::message_content::MessageContent;
+use message_event::MessageEvent;
+use message_queue::MessageQueue;
 use model::Model;
 use model::RunningState;
 use model::View;
-mod message_event;
-use crate::event_handler::EventHandler;
-use message_event::MessageEvent;
-mod command;
-mod config;
+mod component;
 mod event_handler;
-mod message_queue;
-mod model;
 mod widget_view;
-use message_queue::MessageQueue;
+use crate::event_handler::EventHandler;
+mod config;
+mod irc_view;
+mod tui;
+use event_handler::Event;
+use ratatui::Frame;
+mod command;
 
 type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
