@@ -45,59 +45,76 @@ pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> 
         return vec![Span::from(content.to_string())];
     }
     let mut spans = Vec::new();
-    let mut buffer = String::new();
     let mut setting_style = false;
     let mut style_buffer = String::new();
     let mut style = start_style.unwrap_or_default();
     let mut modifier = style.add_modifier & style.sub_modifier;
     let mut colors = [style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
     let mut index_color = 0;
+    let mut start_index = 0;
 
-    for c in content.chars() {
+    for (i, c) in content.char_indices() {
         if c == '\x03' {
-            if !buffer.is_empty() {
-                spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
-                buffer.clear();
+            if start_index != i {
+                spans.push(
+                    Span::from(content[start_index..i].to_string())
+                        .style(style.fg(colors[0]).bg(colors[1])),
+                );
             }
             setting_style = true;
             style_buffer.clear();
             index_color = 0;
+            start_index = i;
         } else if setting_style && style_buffer.len() < 2 && c.is_ascii_digit() {
             style_buffer.push(c);
+            start_index = i;
         } else if setting_style && c == ',' && index_color == 0 {
             if let Some(color) = colors.get_mut(index_color) {
                 *color = irc_to_color(&style_buffer);
             }
             index_color += 1;
             style_buffer.clear();
+            start_index = i;
         } else if c == '\x02' {
-            spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
-            buffer.clear();
+            spans.push(
+                Span::from(content[start_index..i].to_string())
+                    .style(style.fg(colors[0]).bg(colors[1])),
+            );
+            start_index = i;
             style = toggle_modifier(style, &mut modifier, Modifier::BOLD);
         } else if c == '\x1D' {
-            spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
-            buffer.clear();
+            spans.push(
+                Span::from(content[start_index..i].to_string())
+                    .style(style.fg(colors[0]).bg(colors[1])),
+            );
+            start_index = i;
             style = toggle_modifier(style, &mut modifier, Modifier::ITALIC);
         } else if c == '\x1F' {
-            spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
-            buffer.clear();
+            spans.push(
+                Span::from(content[start_index..i].to_string())
+                    .style(style.fg(colors[0]).bg(colors[1])),
+            );
+            start_index = i;
             style = toggle_modifier(style, &mut modifier, Modifier::UNDERLINED);
         } else if c == '\x1E' {
-            spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
-            buffer.clear();
+            spans.push(
+                Span::from(content[start_index..i].to_string())
+                    .style(style.fg(colors[0]).bg(colors[1])),
+            );
+            start_index = i;
             style = toggle_modifier(style, &mut modifier, Modifier::CROSSED_OUT);
-        } else {
-            if setting_style {
-                setting_style = false;
-                if let Some(color) = colors.get_mut(index_color) {
-                    *color = irc_to_color(&style_buffer);
-                }
+        } else if setting_style {
+            setting_style = false;
+            if let Some(color) = colors.get_mut(index_color) {
+                *color = irc_to_color(&style_buffer);
             }
-            buffer.push(c);
+            start_index = i;
         }
     }
-    if !buffer.is_empty() {
-        spans.push(Span::from(buffer.clone()).style(style.fg(colors[0]).bg(colors[1])));
+    if start_index < content.len() {
+        spans.push(
+            Span::from(content[start_index..].to_string()).style(style.fg(colors[0]).bg(colors[1])),
+        );
     }
     spans
 }
@@ -145,7 +162,7 @@ pub fn get_size_without_format(content: &str) -> usize {
 
 pub fn is_string_plain(content: &str) -> bool {
     for c in content.bytes() {
-        if c == 0x01 || c == 0x02 || c == 0x1D || c == 0x1E || c == 0x1F || c == 0x0F {
+        if c == 0x03 || c == 0x01 || c == 0x02 || c == 0x1D || c == 0x1E || c == 0x1F || c == 0x0F {
             return false;
         }
     }
@@ -164,6 +181,11 @@ mod tests {
             span.style.fg.unwrap_or_default(),
             span.style.bg.unwrap_or_default(),
         )
+    }
+    #[test]
+    fn test_is_plain() {
+        assert!(is_string_plain("Hello world"));
+        assert!(!is_string_plain("\x034Hello"));
     }
 
     #[test]
