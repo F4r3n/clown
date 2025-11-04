@@ -41,15 +41,17 @@ fn toggle_modifier(mut style: Style, current: &mut Modifier, toggled: Modifier) 
 }
 
 pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> {
+    let mut style = start_style.unwrap_or_default();
+    let mut colors = [style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
     if is_string_plain(content) {
-        return vec![Span::from(content.to_string())];
+        return vec![Span::from(content.to_string()).style(style.fg(colors[0]).bg(colors[1]))];
     }
+    let mut modifier = style.add_modifier & style.sub_modifier;
+
     let mut spans = Vec::new();
     let mut setting_style = false;
     let mut style_buffer = String::new();
-    let mut style = start_style.unwrap_or_default();
-    let mut modifier = style.add_modifier & style.sub_modifier;
-    let mut colors = [style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
+
     let mut index_color = 0;
     let mut start_index = 0;
 
