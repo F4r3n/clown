@@ -41,6 +41,9 @@ fn toggle_modifier(mut style: Style, current: &mut Modifier, toggled: Modifier) 
 }
 
 pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> {
+    if is_string_plain(content) {
+        return vec![Span::from(content.to_string())];
+    }
     let mut spans = Vec::new();
     let mut buffer = String::new();
     let mut setting_style = false;
@@ -100,6 +103,9 @@ pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> 
 }
 
 pub fn get_size_without_format(content: &str) -> usize {
+    if is_string_plain(content) {
+        return content.len();
+    }
     let bytes = content.as_bytes();
     let mut i = 0;
     let mut count = 0;
@@ -135,6 +141,15 @@ pub fn get_size_without_format(content: &str) -> usize {
     }
 
     count
+}
+
+pub fn is_string_plain(content: &str) -> bool {
+    for c in content.bytes() {
+        if c == 0x01 || c == 0x02 || c == 0x1D || c == 0x1E || c == 0x1F || c == 0x0F {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]

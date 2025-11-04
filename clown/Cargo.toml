@@ -47,10 +47,14 @@ ahash = "0.8.12"
 
 [dev-dependencies]
 anyhow = "1.0.100"
-criterion = "0.7.0"
+criterion = { version = "0.7.0", features = ["plotters"] }
 
 [features]
 bench = []
+
+[[bench]]
+name = "message_parser"
+harness = false
 
 [lints]
 workspace = true
