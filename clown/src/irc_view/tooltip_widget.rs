@@ -40,23 +40,23 @@ impl MetaData {
         if let Ok(selector) = Selector::parse("head meta") {
             let s = in_html.select(&selector);
             for element in s {
-                if let Some(property) = element.attr("property") {
-                    if let Some(content) = element.attr("content") {
-                        match property {
-                            "og:title" => {
-                                meta.title = String::from(content);
-                            }
-                            "og:image" => {
-                                meta.image_url = String::from(content);
-                            }
-                            "og:description" => {
-                                meta.description = String::from(content);
-                            }
-                            "og:site" => {
-                                meta.site = String::from(content);
-                            }
-                            _ => {}
+                if let Some(property) = element.attr("property")
+                    && let Some(content) = element.attr("content")
+                {
+                    match property {
+                        "og:title" => {
+                            meta.title = String::from(content);
                         }
+                        "og:image" => {
+                            meta.image_url = String::from(content);
+                        }
+                        "og:description" => {
+                            meta.description = String::from(content);
+                        }
+                        "og:site" => {
+                            meta.site = String::from(content);
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -191,49 +191,45 @@ impl WebsitePreview {
 
 impl Draw for WebsitePreview {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        if let Some(picker) = self.picker.clone() {
-            if let Some(meta) = self.get_metadata(&picker) {
-                frame.render_widget(ratatui::widgets::Clear, area);
-                let block = Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Gray))
-                    .style(Style::default().bg(Color::Black));
+        if let Some(picker) = self.picker.clone()
+            && let Some(meta) = self.get_metadata(&picker)
+        {
+            frame.render_widget(ratatui::widgets::Clear, area);
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Gray))
+                .style(Style::default().bg(Color::Black));
 
-                let inner_area = block.inner(area);
-                frame.render_widget(block, area);
+            let inner_area = block.inner(area);
+            frame.render_widget(block, area);
 
-                let main_layout = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([
-                        Constraint::Length(1),       // Title
-                        Constraint::Percentage(100), // Image
-                    ])
-                    .split(inner_area);
-                let mut title = meta.title.clone();
+            let main_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(1),       // Title
+                    Constraint::Percentage(100), // Image
+                ])
+                .split(inner_area);
+            let mut title = meta.title.clone();
 
-                if let Some(title_layout) = main_layout.first() {
-                    let width = title_layout.width as usize;
-                    if title.chars().count() > width {
-                        // Keep room for "..."
-                        title = title
-                            .chars()
-                            .take(width.saturating_sub(3))
-                            .collect::<String>()
-                            + "...";
-                    }
-                    let span = ratatui::text::Span::raw(title);
-                    frame.render_widget(span, *title_layout);
+            if let Some(title_layout) = main_layout.first() {
+                let width = title_layout.width as usize;
+                if title.chars().count() > width {
+                    // Keep room for "..."
+                    title = title
+                        .chars()
+                        .take(width.saturating_sub(3))
+                        .collect::<String>()
+                        + "...";
                 }
+                let span = ratatui::text::Span::raw(title);
+                frame.render_widget(span, *title_layout);
+            }
 
-                if let Some(image_layout) = main_layout.get(1)
-                    && let Some(image_protocol) = &mut self.image
-                {
-                    frame.render_stateful_widget(
-                        StatefulImage::new(),
-                        *image_layout,
-                        image_protocol,
-                    );
-                }
+            if let Some(image_layout) = main_layout.get(1)
+                && let Some(image_protocol) = &mut self.image
+            {
+                frame.render_stateful_widget(StatefulImage::new(), *image_layout, image_protocol);
             }
         }
     }

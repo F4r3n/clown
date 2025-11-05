@@ -55,10 +55,7 @@ pub fn help(channel: &str) -> MessageEvent {
             .as_str(),
         );
     }
-    MessageEvent::AddMessageView(
-        channel.to_string(),
-        MessageContent::new_info(output.as_str()),
-    )
+    MessageEvent::AddMessageView(channel.to_string(), MessageContent::new_info(output))
 }
 
 pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {

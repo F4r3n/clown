@@ -18,11 +18,11 @@ pub struct ChannelMessages {
 }
 
 impl ChannelMessages {
-    pub fn add_message(&mut self, channel: &str, in_message: &MessageContent) {
+    pub fn add_message(&mut self, channel: &str, in_message: MessageContent) {
         self.messages
             .entry(channel.to_string())
             .or_default()
-            .push(in_message.clone());
+            .push(in_message);
     }
 
     pub fn get_messages(&self, channel: &str) -> Option<&Vec<MessageContent>> {
@@ -126,19 +126,15 @@ impl DiscussWidget {
                 }
 
                 if index_y < visible_rows_total + rows.len() {
-                    let pointed_row = index_y - visible_rows_total;
+                    let pointed_row = (index_y - visible_rows_total).min(rows.len() - 1);
                     //it will be an approximation, because wrapping can remove spaces,
                     //  but sometimes does not remove characters
-                    if let Some(row) = rows.get(pointed_row) {
-                        let char_position: usize =
-                            rows[..pointed_row].iter().map(|v| v.chars().count()).sum();
-                        if char_skipped + char_position + pos_x > line.get_message_length() {
-                            return None;
-                        }
-                        return Some((line_index, char_skipped + char_position + pos_x));
+                    let char_position: usize =
+                        rows[..pointed_row].iter().map(|v| v.chars().count()).sum();
+                    if char_skipped + char_position + pos_x > line.get_message_length() {
+                        return None;
                     }
-
-                    return None;
+                    return Some((line_index, char_skipped + char_position + pos_x));
                 }
 
                 visible_rows_total += rows.len();
@@ -206,7 +202,7 @@ impl DiscussWidget {
             .unwrap_or(0)
     }
 
-    pub fn add_line(&mut self, channel: &str, in_message: &MessageContent) {
+    pub fn add_line(&mut self, channel: &str, in_message: MessageContent) {
         self.messages.add_message(channel, in_message);
 
         if self.follow_last && channel.eq(&self.current_channel) {
@@ -309,7 +305,7 @@ impl crate::component::EventHandler for DiscussWidget {
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         match event {
             MessageEvent::AddMessageView(channel, in_message) => {
-                self.add_line(channel, in_message);
+                self.add_line(channel, in_message.clone());
                 None
             }
             MessageEvent::SelectChannel(channel) => {
@@ -423,9 +419,18 @@ mod tests {
         let mut discuss = DiscussWidget::new("test");
         discuss.content_width = 4;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;
-        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
-        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
-        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
+        discuss.add_line(
+            "test",
+            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+        );
+        discuss.add_line(
+            "test",
+            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+        );
+        discuss.add_line(
+            "test",
+            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+        );
 
         assert_eq!(discuss.scroll_offset, 0);
         let mouse_x = TEXT_START as u16;
@@ -484,9 +489,18 @@ mod tests {
     fn test_render_rows() {
         let mut discuss = DiscussWidget::new("test");
 
-        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
-        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
-        discuss.add_line("test", &MessageContent::new_message(None, "HELLO", "hey"));
+        discuss.add_line(
+            "test",
+            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+        );
+        discuss.add_line(
+            "test",
+            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+        );
+        discuss.add_line(
+            "test",
+            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+        );
         let focus_style = Style::default();
 
         discuss.content_width = 10;

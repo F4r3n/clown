@@ -36,6 +36,20 @@ pub struct MessageQueue {
     qtimed: BinaryHeap<Reverse<TimedMessage>>,
 }
 
+impl std::iter::Iterator for MessageQueue {
+    type Item = MessageEvent;
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.qtimed.is_empty()
+            && let Some(item) = self.qtimed.peek()
+            && std::time::Instant::now() > item.0.time
+        {
+            return self.qtimed.pop().map(|reverved| reverved.0.event);
+        }
+
+        self.qnow.pop_front()
+    }
+}
+
 impl MessageQueue {
     pub fn new() -> Self {
         Self {
@@ -59,19 +73,6 @@ impl MessageQueue {
 
     pub fn push_message(&mut self, event: MessageEvent) {
         self.qnow.push_back(event);
-    }
-
-    pub fn next(&mut self) -> Option<MessageEvent> {
-        if !self.qtimed.is_empty() {
-            if let Some(item) = self.qtimed.peek() {
-                let current_time = std::time::Instant::now();
-                if current_time > item.0.time {
-                    return self.qtimed.pop().map(|reverved| reverved.0.event);
-                }
-            }
-        }
-
-        self.qnow.pop_front()
     }
 }
 

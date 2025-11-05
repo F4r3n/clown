@@ -30,18 +30,18 @@ pub struct MessageContent {
 }
 
 impl MessageContent {
-    pub fn new(source: Option<String>, content: &str) -> Self {
+    pub fn new(source: Option<String>, content: String) -> Self {
         Self {
             time: std::time::SystemTime::now(),
             source,
-            content: content.to_string(),
+            length_without_format: get_size_without_format(&content),
+            content,
             kind: MessageKind::Normal,
-            length_without_format: get_size_without_format(content),
         }
     }
 
-    pub fn new_message(source: Option<String>, content: &str, current_nickname: &str) -> Self {
-        let kind = if content.contains(current_nickname) {
+    pub fn new_message(source: Option<String>, content: String, current_nickname: String) -> Self {
+        let kind = if content.contains(&current_nickname) {
             MessageKind::Highlight
         } else {
             MessageKind::Normal
@@ -49,8 +49,8 @@ impl MessageContent {
         Self {
             time: std::time::SystemTime::now(),
             source,
-            content: content.to_string(),
-            length_without_format: get_size_without_format(content),
+            length_without_format: get_size_without_format(&content),
+            content,
             kind,
         }
     }
@@ -65,13 +65,13 @@ impl MessageContent {
         }
     }
 
-    pub fn new_info(content: &str) -> Self {
+    pub fn new_info(content: String) -> Self {
         Self {
             time: std::time::SystemTime::now(),
             source: None,
-            content: content.to_string(),
             kind: MessageKind::Info,
-            length_without_format: get_size_without_format(content),
+            length_without_format: get_size_without_format(&content),
+            content,
         }
     }
 
@@ -181,11 +181,11 @@ mod test {
 
     #[test]
     fn test_url_find() {
-        let message = MessageContent::new(None, "https://test.com");
+        let message = MessageContent::new(None, "https://test.com".to_string());
         assert_eq!(message.get_url(0), Some("https://test.com"));
         assert_eq!(message.get_url(100), None);
 
-        let message = MessageContent::new(None, "a aa aa https://test.com");
+        let message = MessageContent::new(None, "a aa aa https://test.com".to_string());
         assert_eq!(message.get_url(0), None);
         assert_eq!(message.get_url(100), None);
         assert_eq!(message.get_url(10), Some("https://test.com"));

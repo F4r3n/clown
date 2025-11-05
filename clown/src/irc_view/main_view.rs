@@ -104,7 +104,7 @@ impl MainView<'_> {
             self.messages_display
                 .handle_actions(&MessageEvent::AddMessageView(
                     model.current_channel.to_string(),
-                    MessageContent::new(Some(nickname), content.as_str()),
+                    MessageContent::new(Some(nickname), content),
                 ))
         }
     }
@@ -129,8 +129,8 @@ impl MainView<'_> {
                             from,
                             MessageContent::new_message(
                                 source,
-                                content.as_str(),
-                                model.get_nickname(),
+                                content,
+                                model.get_nickname().to_string(),
                             ),
                         ));
                     }
@@ -146,9 +146,7 @@ impl MainView<'_> {
                         messages.push_message(MessageEvent::RemoveUser(source.clone()));
                         messages.push_message(MessageEvent::AddMessageView(
                             model.current_channel.to_string(),
-                            MessageContent::new_info(
-                                format!("{} has quit", source.clone()).as_str(),
-                            ),
+                            MessageContent::new_info(format!("{} has quit", source.clone())),
                         ));
                     }
                     Command::Join(_) => {
@@ -158,9 +156,7 @@ impl MainView<'_> {
                         if !source.eq(model.get_nickname()) {
                             messages.push_message(MessageEvent::AddMessageView(
                                 model.current_channel.to_string(),
-                                MessageContent::new_info(
-                                    format!("{} has joined", source.clone()).as_str(),
-                                ),
+                                MessageContent::new_info(format!("{} has joined", source.clone())),
                             ));
                         }
                     }
@@ -175,7 +171,7 @@ impl MainView<'_> {
 
                         messages.push_message(MessageEvent::AddMessageView(
                             model.current_channel.to_string(),
-                            MessageContent::new(source, content.as_str()),
+                            MessageContent::new(source, content),
                         ));
                     }
                     ResponseNumber::NameReply(list_users) => {
@@ -255,10 +251,10 @@ impl widget_view::WidgetView for MainView<'_> {
             Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => {
                 if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row) {
                     for child in self.children().iter_mut() {
-                        if child.get_id().eq(&id) {
-                            if let Some(new_message) = child.handle_events(event) {
-                                messages.push_message(new_message);
-                            }
+                        if child.get_id().eq(&id)
+                            && let Some(new_message) = child.handle_events(event)
+                        {
+                            messages.push_message(new_message);
                         }
                     }
                 }
@@ -316,9 +312,10 @@ impl widget_view::WidgetView for MainView<'_> {
             MessageEvent::Connect => {
                 messages.push_message(MessageEvent::AddMessageView(
                     model.current_channel.to_string(),
-                    MessageContent::new_info(
-                        format!("Try to connect to {}...", model.get_address()).as_str(),
-                    ),
+                    MessageContent::new_info(format!(
+                        "Try to connect to {}...",
+                        model.get_address()
+                    )),
                 ));
                 if let Some(v) = connect_irc(model) {
                     messages.push_message(v)
@@ -334,7 +331,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 } else {
                     messages.push_message(MessageEvent::AddMessageView(
                         model.current_channel.to_string(),
-                        MessageContent::new(None, "Disconnected"),
+                        MessageContent::new(None, "Disconnected".to_string()),
                     ));
                 }
             }
