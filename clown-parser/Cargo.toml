@@ -6,13 +6,13 @@ edition = "2024"
 [dependencies]
 nom = { version = "8.0.0", default-features = false }
 ouroboros = { version = "0.18.5", default-features = false }
-thiserror = "2.0.12"
+thiserror = "2.0.17"
 
 [lints]
 workspace = true
 
 [dev-dependencies]
-anyhow = "1.0.98"
+anyhow = "1.0.100"
 criterion = { version = "0.7" }
 
 
