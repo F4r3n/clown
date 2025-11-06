@@ -19,7 +19,7 @@ impl PartialEq for TimedMessage {
 
 impl PartialOrd for TimedMessage {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.time.cmp(&other.time))
+        Some(self.cmp(other))
     }
 }
 
@@ -62,6 +62,11 @@ impl MessageQueue {
         self.qnow.len() + self.qtimed.len()
     }
 
+    #[cfg(test)]
+    pub fn is_empty(&self) -> bool {
+        self.qnow.is_empty() && self.qtimed.is_empty()
+    }
+
     pub fn push_message_with_time(&mut self, event: MessageEvent, duration: Duration) {
         self.qtimed.push(Reverse(TimedMessage {
             event,
@@ -83,7 +88,11 @@ mod test {
     #[test]
     pub fn push_test() {
         let mut message_queue = MessageQueue::new();
+        assert!(message_queue.is_empty());
+
         message_queue.push_message(MessageEvent::Connect);
+        assert!(!message_queue.is_empty());
+
         message_queue.push_message(MessageEvent::Connect);
         message_queue.push_message(MessageEvent::Connect);
         message_queue.push_message_with_time(

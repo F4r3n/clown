@@ -283,6 +283,11 @@ impl widget_view::WidgetView for MainView<'_> {
                 if let Some(message) = message {
                     messages.push_message(message);
                 }
+                for mut child in self.children() {
+                    if let Some(message) = child.handle_events(event) {
+                        messages.push_message(message);
+                    }
+                }
 
                 if received_error {
                     //Try to reconnect
@@ -305,6 +310,9 @@ impl widget_view::WidgetView for MainView<'_> {
                 if let Some(v) = self.update_input(model, content) {
                     messages.push_message(v)
                 }
+            }
+            MessageEvent::OpenWeb(url) => {
+                let _ = open::that(&url);
             }
             MessageEvent::Quit(message) => {
                 model.send_command(clown_core::command::Command::Quit(message));

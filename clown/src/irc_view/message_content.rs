@@ -12,6 +12,21 @@ use ratatui::{
 use std::borrow::Cow;
 use textwrap::wrap;
 
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct WordPos {
+    character_start: usize,
+    character_end: usize,
+}
+
+impl WordPos {
+    pub fn from(character_start: usize, character_end: usize) -> Self {
+        Self {
+            character_start,
+            character_end,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 enum MessageKind {
     Error,
@@ -38,6 +53,15 @@ impl MessageContent {
             content,
             kind: MessageKind::Normal,
         }
+    }
+
+    pub fn get_word_from_pos(&self, pos: &WordPos) -> Option<&str> {
+        self.content.get(pos.character_start..pos.character_end)
+    }
+
+    pub fn get_url_from_pos(&self, pos: &WordPos) -> Option<&str> {
+        self.get_word_from_pos(pos)
+            .filter(|w| w.starts_with("http://") || w.starts_with("https://"))
     }
 
     pub fn new_message(source: Option<String>, content: String, current_nickname: String) -> Self {
@@ -75,7 +99,7 @@ impl MessageContent {
         }
     }
 
-    pub fn get_url(&self, character_pos: usize) -> Option<&str> {
+    pub fn get_word_pos(&self, character_pos: usize) -> Option<WordPos> {
         let text = self.content.as_str(); //Lets say the URL is in a RAW message
         let bytes = text.as_bytes();
 
@@ -96,11 +120,7 @@ impl MessageContent {
         while end < bytes.len() && !bytes.get(end).is_some_and(|c| c.is_ascii_whitespace()) {
             end += 1;
         }
-        let word = &text[start..end];
-        if word.starts_with("https://") {
-            return Some(word);
-        }
-        None
+        Some(WordPos::from(start, end))
     }
 
     fn time_format(&self) -> String {
@@ -179,17 +199,35 @@ impl MessageContent {
 
 #[cfg(test)]
 mod test {
-    use crate::irc_view::message_content::MessageContent;
+    use crate::irc_view::message_content::{MessageContent, WordPos};
+
+    #[test]
+    fn test_word_find() {
+        let message = MessageContent::new(None, "https://test.com".to_string());
+        assert_eq!(message.get_word_pos(0), Some(WordPos::from(0, 16)));
+        assert_eq!(message.get_word_pos(100), None);
+
+        let message = MessageContent::new(None, "a aa aa https://test.com".to_string());
+        assert_eq!(message.get_word_pos(0), Some(WordPos::from(0, 1)));
+        assert_eq!(message.get_word_pos(100), None);
+        assert_eq!(message.get_word_pos(10), Some(WordPos::from(8, 24)));
+    }
 
     #[test]
     fn test_url_find() {
         let message = MessageContent::new(None, "https://test.com".to_string());
-        assert_eq!(message.get_url(0), Some("https://test.com"));
-        assert_eq!(message.get_url(100), None);
+        assert_eq!(
+            message.get_url_from_pos(&WordPos::from(0, 16)),
+            Some("https://test.com")
+        );
+        assert_eq!(message.get_url_from_pos(&WordPos::from(0, 100)), None);
 
         let message = MessageContent::new(None, "a aa aa https://test.com".to_string());
-        assert_eq!(message.get_url(0), None);
-        assert_eq!(message.get_url(100), None);
-        assert_eq!(message.get_url(10), Some("https://test.com"));
+        assert_eq!(message.get_url_from_pos(&WordPos::from(0, 0)), None);
+        assert_eq!(message.get_url_from_pos(&WordPos::from(0, 100)), None);
+        assert_eq!(
+            message.get_url_from_pos(&WordPos::from(8, 24)),
+            Some("https://test.com")
+        );
     }
 }

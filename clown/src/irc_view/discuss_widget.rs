@@ -1,10 +1,13 @@
 use std::time::Duration;
 
 use crate::component::Draw;
+use crate::event_handler::Event;
 use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
+use crate::irc_view::message_content::WordPos;
 use crate::{irc_view::message_content::MessageContent, message_event::MessageEvent};
 use ahash::AHashMap;
-use crossterm::event::KeyCode;
+use crossterm::event::MouseButton;
+use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::widgets::Row;
 use ratatui::{
     Frame,
@@ -12,6 +15,14 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
+use tracing::info;
+
+#[derive(PartialEq, Eq, Clone)]
+struct Range {
+    line: usize,
+    word_pos: WordPos,
+}
+
 #[derive(Debug, Default)]
 pub struct ChannelMessages {
     messages: AHashMap<String, Vec<MessageContent>>,
@@ -29,24 +40,34 @@ impl ChannelMessages {
         self.messages.get(channel)
     }
 
-    pub fn get_url(&self, channel: &str, index: usize, character_pos: usize) -> Option<String> {
+    fn get_url_from_range(&self, channel: &str, range: &Range) -> Option<String> {
+        self.messages
+            .get(channel)
+            .and_then(|messages| messages.get(range.line))
+            .and_then(|message| message.get_url_from_pos(&range.word_pos))
+            .map(|str| str.to_string())
+    }
+
+    fn get_word_pos(&self, channel: &str, index: usize, character_pos: usize) -> Option<Range> {
         self.messages
             .get(channel)
             .and_then(|messages| messages.get(index))
-            .and_then(|message| message.get_url(character_pos))
-            .map(|str| str.to_string())
+            .and_then(|message| message.get_word_pos(character_pos))
+            .map(|w| Range {
+                line: index,
+                word_pos: w,
+            })
     }
 }
-
 struct Hovered {
-    last_url: String,
     time: std::time::Instant,
+    range: Range,
 }
 
 impl Hovered {
-    pub fn new(last_url: &str) -> Self {
+    pub fn new(range: Range) -> Self {
         Self {
-            last_url: last_url.to_string(),
+            range,
             time: std::time::Instant::now(),
         }
     }
@@ -61,7 +82,9 @@ pub struct DiscussWidget {
     content_width: usize,
     messages: ChannelMessages,
     current_channel: String,
+
     last_hovered: Option<Hovered>,
+    last_ctrl_hovered: Option<Range>,
 }
 
 impl DiscussWidget {
@@ -76,6 +99,7 @@ impl DiscussWidget {
             area: Rect::default(),
             content_width: 0,
             last_hovered: None,
+            last_ctrl_hovered: None,
         }
     }
 
@@ -85,6 +109,22 @@ impl DiscussWidget {
         self.scroll_offset = max_scroll;
         self.follow_last = true;
     }
+
+    fn get_range_from_mouse(&self, row: u16, col: u16) -> Option<Range> {
+        let mouse_position = ratatui::prelude::Position::new(col, row);
+
+        if self.area.contains(mouse_position) {
+            if let Some((index, character)) = self.get_current_line_index_character(row, col) {
+                self.messages
+                    .get_word_pos(&self.current_channel, index, character)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     pub fn get_current_line_index_character(
         &self,
         mouse_pos_y: u16,
@@ -351,39 +391,47 @@ impl crate::component::EventHandler for DiscussWidget {
                     self.scroll_up();
                     None
                 }
-                crossterm::event::MouseEventKind::Moved => {
-                    let mouse_position =
-                        ratatui::prelude::Position::new(mouse_event.column, mouse_event.row);
-
-                    if self.area.contains(mouse_position) {
-                        if let Some((index, character)) = self
-                            .get_current_line_index_character(mouse_event.row, mouse_event.column)
+                crossterm::event::MouseEventKind::Down(button) => {
+                    if button == MouseButton::Left {
+                        if let Some(range) =
+                            self.get_range_from_mouse(mouse_event.row, mouse_event.column)
                         {
-                            if let Some(url) =
-                                self.messages
-                                    .get_url(&self.current_channel, index, character)
-                                && let Some(last_hovered) = &self.last_hovered
-                            {
-                                if url.eq(&last_hovered.last_url) {
-                                    if std::time::Instant::now().duration_since(last_hovered.time)
-                                        > Duration::from_secs(2)
-                                    {
-                                        Some(MessageEvent::Hover(url))
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    self.last_hovered = Some(Hovered::new(&url));
-                                    None
-                                }
-                            } else {
-                                self.last_hovered = None;
-                                None
-                            }
+                            self.messages
+                                .get_url_from_range(&self.current_channel, &range)
+                                .map(MessageEvent::OpenWeb)
                         } else {
                             None
                         }
                     } else {
+                        None
+                    }
+                }
+                crossterm::event::MouseEventKind::Moved => {
+                    if let Some(range) =
+                        self.get_range_from_mouse(mouse_event.row, mouse_event.column)
+                    {
+                        if mouse_event.modifiers == KeyModifiers::CONTROL {
+                            self.last_ctrl_hovered = Some(range.clone())
+                        }
+
+                        if let Some(last_hovered) = &self.last_hovered
+                            && range.eq(&last_hovered.range)
+                        {
+                            if std::time::Instant::now().duration_since(last_hovered.time)
+                                > Duration::from_secs(2)
+                            {
+                                self.messages
+                                    .get_url_from_range(&self.current_channel, &last_hovered.range)
+                                    .map(MessageEvent::Hover)
+                            } else {
+                                None
+                            }
+                        } else {
+                            self.last_hovered = Some(Hovered::new(range));
+                            None
+                        }
+                    } else {
+                        self.last_hovered = None;
                         None
                     }
                 }
@@ -395,7 +443,24 @@ impl crate::component::EventHandler for DiscussWidget {
                 _ => None,
             }
         } else {
-            None
+            match event {
+                crate::event_handler::Event::Tick => {
+                    if let Some(last_hovered) = &self.last_hovered {
+                        if std::time::Instant::now().duration_since(last_hovered.time)
+                            > Duration::from_secs(2)
+                        {
+                            self.messages
+                                .get_url_from_range(&self.current_channel, &last_hovered.range)
+                                .map(MessageEvent::Hover)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
         }
     }
 }

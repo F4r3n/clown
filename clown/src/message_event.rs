@@ -15,5 +15,6 @@ pub enum MessageEvent {
     PullIRC,
     Connect,
     DisConnect,
+    OpenWeb(String),
     Quit(Option<String>),
 }
