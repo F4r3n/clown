@@ -57,7 +57,6 @@ pub struct DiscussWidget {
     scroll_offset: usize,
     max_visible_height: usize,
     follow_last: bool,
-    focus: bool,
     area: Rect,
     content_width: usize,
     messages: ChannelMessages,
@@ -70,7 +69,6 @@ impl DiscussWidget {
         Self {
             current_channel: current_channel.to_string(),
             messages: ChannelMessages::default(),
-            focus: false,
             scroll_offset: 0,
             max_visible_height: 10,
             follow_last: true,
@@ -145,7 +143,7 @@ impl DiscussWidget {
         None
     }
 
-    fn collect_visible_rows<'a>(&'a mut self, focus_style: &Style) -> Vec<Row<'a>> {
+    fn collect_visible_rows<'a>(&'a mut self) -> Vec<Row<'a>> {
         let mut visible_rows = Vec::new();
         let mut wrapped_rows_seen = 0; // counts all rows, even skipped
         let mut visible_rows_total = 0; // counts only rendered rows
@@ -161,7 +159,7 @@ impl DiscussWidget {
                 }
 
                 // Create all wrapped rows for this message
-                let mut rows = line.create_rows(self.content_width as u16, focus_style);
+                let mut rows = line.create_rows(self.content_width as u16);
 
                 // Skip inside this message if scroll_offset lands inside it
                 if self.scroll_offset > wrapped_rows_seen {
@@ -233,12 +231,6 @@ impl DiscussWidget {
 impl Draw for DiscussWidget {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
-        let focused = self.focus;
-        let focus_style = if focused {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default()
-        };
 
         let text_style = Style::default().fg(Color::White);
 
@@ -266,7 +258,7 @@ impl Draw for DiscussWidget {
         self.content_width = content_width as usize;
         self.vertical_scroll_state = ScrollbarState::new(self.get_total_lines())
             .position(self.scroll_offset + self.max_visible_height);
-        let visible_rows = self.collect_visible_rows(&focus_style);
+        let visible_rows = self.collect_visible_rows();
 
         let table = Table::new(
             visible_rows,
@@ -501,26 +493,25 @@ mod tests {
             "test",
             MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
         );
-        let focus_style = Style::default();
 
         discuss.content_width = 10;
         discuss.scroll_offset = 0;
-        assert_eq!(discuss.collect_visible_rows(&focus_style).len(), 3);
+        assert_eq!(discuss.collect_visible_rows().len(), 3);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
-        assert_eq!(discuss.collect_visible_rows(&focus_style).len(), 6);
+        assert_eq!(discuss.collect_visible_rows().len(), 6);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows(&focus_style);
+        let rows = discuss.collect_visible_rows();
         assert_eq!(rows.len(), 2);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 1;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows(&focus_style);
+        let rows = discuss.collect_visible_rows();
         assert_eq!(rows.len(), 2);
     }
 }

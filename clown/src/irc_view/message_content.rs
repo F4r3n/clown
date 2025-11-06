@@ -116,7 +116,7 @@ impl MessageContent {
         formatted_time
     }
 
-    pub fn create_rows(&self, content_width: u16, focus_style: &Style) -> Vec<Row<'_>> {
+    pub fn create_rows(&self, content_width: u16) -> Vec<Row<'_>> {
         let mut visible_rows = Vec::new();
         let time_str = format!("{:>width$}", self.time_format(), width = TIME_LENGTH);
         let mut nickname_style = if let Some(source) = &self.source {
@@ -139,31 +139,33 @@ impl MessageContent {
             _ => Style::default(),
         };
         let wrapped = wrap(&self.content, content_width as usize);
-        let first_part = wrapped
-            .first()
-            .map(|v| crate::irc_view::message_parser::to_spans(v, Some(default_style)))
-            .unwrap_or_default();
-        let style_first_part = first_part.last().map(|v| v.style);
 
-        visible_rows.push(Row::new(vec![
+        visible_rows.push(vec![
             Cell::from(time_str),
             Cell::from(source_str).style(nickname_style),
-            Cell::from("┃ ").style(*focus_style),
-            Cell::from(Line::from(first_part)),
-        ]));
-        for w in wrapped.iter().skip(1) {
-            visible_rows.push(Row::new(vec![
+            Cell::from("┃ "),
+        ]);
+
+        visible_rows.extend(vec![
+            vec![
                 Cell::from(format!("{:<width$}", " ", width = TIME_LENGTH)),
                 Cell::from(format!("{:<width$}", " ", width = NICKNAME_LENGTH))
                     .style(nickname_style),
-                Cell::from("┃ ").style(*focus_style),
-                Cell::from(Line::from(crate::irc_view::message_parser::to_spans(
-                    w,
-                    style_first_part,
-                ))),
-            ]));
+                Cell::from("┃ ")
+            ];
+            wrapped.len() - 1
+        ]);
+
+        //FIXME: colors on multiline is broken
+        for (i, w) in wrapped.into_iter().enumerate() {
+            if let Some(row) = visible_rows.get_mut(i) {
+                row.push(Cell::from(Line::from(
+                    crate::irc_view::message_parser::to_spans(w, Some(default_style)),
+                )))
+            }
         }
-        visible_rows
+
+        visible_rows.into_iter().map(Row::new).collect()
     }
 
     pub fn get_message_length(&self) -> usize {

@@ -1,9 +1,10 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use ahash::AHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::ops::Add;
 
 fn hash_nickname(nickname: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = AHasher::default();
     nickname.hash(&mut hasher);
     hasher.finish()
 }

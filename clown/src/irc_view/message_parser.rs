@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
@@ -40,10 +42,11 @@ fn toggle_modifier(mut style: Style, current: &mut Modifier, toggled: Modifier) 
     style
 }
 
-pub fn to_spans<'a>(content: &str, start_style: Option<Style>) -> Vec<Span<'a>> {
+pub fn to_spans<'a>(content: impl Into<Cow<'a, str>>, start_style: Option<Style>) -> Vec<Span<'a>> {
     let mut style = start_style.unwrap_or_default();
     let mut colors = [style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
-    if is_string_plain(content) {
+    let content = content.into();
+    if is_string_plain(&content) {
         return vec![Span::from(content.to_string()).style(style.fg(colors[0]).bg(colors[1]))];
     }
     let mut modifier = style.add_modifier & style.sub_modifier;
