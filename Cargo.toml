@@ -2,6 +2,7 @@
 resolver = "2"
 package.repository = "https://github.com/F4r3n/clown"
 package.authors = ["Guillaume Kotulski"]
+package.description = "A TUI based IRC client"
 
 members = ["clown", "clown-core", "clown-parser"]
 
