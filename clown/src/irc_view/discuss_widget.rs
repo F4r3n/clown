@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::component::Draw;
-use crate::event_handler::Event;
+use crate::irc_view::color_user::nickname_color;
 use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::irc_view::message_content::WordPos;
 use crate::{irc_view::message_content::MessageContent, message_event::MessageEvent};
@@ -15,7 +15,6 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-use tracing::info;
 
 #[derive(PartialEq, Eq, Clone)]
 struct Range {
@@ -85,6 +84,8 @@ pub struct DiscussWidget {
 
     last_hovered: Option<Hovered>,
     last_ctrl_hovered: Option<Range>,
+
+    color_map: AHashMap<String, ratatui::style::Color>,
 }
 
 impl DiscussWidget {
@@ -100,10 +101,14 @@ impl DiscussWidget {
             content_width: 0,
             last_hovered: None,
             last_ctrl_hovered: None,
+            color_map: AHashMap::new(),
         }
     }
 
     pub fn set_current_channel(&mut self, channel: &str) {
+        self.color_map
+            .entry(channel.to_string())
+            .or_insert(nickname_color(channel));
         self.current_channel = channel.to_string();
         let max_scroll = self.get_max_scroll();
         self.scroll_offset = max_scroll;
@@ -199,7 +204,10 @@ impl DiscussWidget {
                 }
 
                 // Create all wrapped rows for this message
-                let mut rows = line.create_rows(self.content_width as u16);
+                let mut rows = line.create_rows(
+                    self.content_width as u16,
+                    line.get_source().and_then(|s| self.color_map.get(s)),
+                );
 
                 // Skip inside this message if scroll_offset lands inside it
                 if self.scroll_offset > wrapped_rows_seen {
@@ -241,6 +249,12 @@ impl DiscussWidget {
     }
 
     pub fn add_line(&mut self, channel: &str, in_message: MessageContent) {
+        if let Some(source) = in_message.get_source() {
+            self.color_map
+                .entry(source.to_string())
+                .or_insert(nickname_color(source));
+        }
+
         self.messages.add_message(channel, in_message);
 
         if self.follow_last && channel.eq(&self.current_channel) {

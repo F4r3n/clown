@@ -1,10 +1,10 @@
 mod color_user;
-pub mod dimension_discuss;
-pub mod discuss_widget;
-pub mod input_widget;
+mod dimension_discuss;
+mod discuss_widget;
+mod input_widget;
 pub mod main_view;
 pub mod message_content;
 pub mod message_parser;
-pub mod tooltip_widget;
-pub mod topic_widget;
-pub mod users_widget;
+mod tooltip_widget;
+mod topic_widget;
+mod users_widget;

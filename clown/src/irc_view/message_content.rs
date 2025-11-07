@@ -1,5 +1,4 @@
 use crate::irc_view::{
-    color_user::nickname_color,
     dimension_discuss::{NICKNAME_LENGTH, TIME_LENGTH},
     message_parser::get_size_without_format,
 };
@@ -53,6 +52,10 @@ impl MessageContent {
             content,
             kind: MessageKind::Normal,
         }
+    }
+
+    pub fn get_source(&self) -> Option<&str> {
+        self.source.as_deref()
     }
 
     pub fn get_word_from_pos(&self, pos: &WordPos) -> Option<&str> {
@@ -136,14 +139,17 @@ impl MessageContent {
         formatted_time
     }
 
-    pub fn create_rows(&self, content_width: u16) -> Vec<Row<'_>> {
+    pub fn create_rows(
+        &self,
+        content_width: u16,
+        color_source: Option<&ratatui::style::Color>,
+    ) -> Vec<Row<'_>> {
         let mut visible_rows = Vec::new();
         let time_str = format!("{:>width$}", self.time_format(), width = TIME_LENGTH);
-        let mut nickname_style = if let Some(source) = &self.source {
-            Style::default().fg(nickname_color(source))
-        } else {
-            Style::default()
-        };
+        let mut nickname_style = Style::default();
+        if let Some(color_source) = color_source {
+            nickname_style = nickname_style.fg(*color_source);
+        }
         if self.kind.eq(&MessageKind::Highlight) {
             nickname_style = nickname_style.bg(Color::LightRed);
         }

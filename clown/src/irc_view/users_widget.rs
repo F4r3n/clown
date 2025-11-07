@@ -12,6 +12,7 @@ struct User {
     pub admin: bool,
     pub name: String,
     pub need_hightlight: bool,
+    pub color: ratatui::style::Color,
 }
 
 impl User {
@@ -21,6 +22,7 @@ impl User {
             admin: is_admin,
             name: name.replace("@", ""),
             need_hightlight: false,
+            color: nickname_color(name),
         }
     }
 }
@@ -32,6 +34,7 @@ impl From<String> for User {
             admin: is_admin,
             name: name.replace("@", ""),
             need_hightlight: false,
+            color: nickname_color(&name),
         }
     }
 }
@@ -43,6 +46,7 @@ impl From<&str> for User {
             admin: is_admin,
             name: name.replace("@", ""),
             need_hightlight: false,
+            color: nickname_color(name),
         }
     }
 }
@@ -50,7 +54,6 @@ impl From<&str> for User {
 pub struct UsersWidget {
     list_users: Vec<User>,
     list_state: ListState,
-    focus: bool,
     area: Rect,
     main_channel: String,
 }
@@ -59,15 +62,12 @@ impl UsersWidget {
     pub fn new(main_channel: &str) -> Self {
         Self {
             list_users: vec![],
-            focus: false,
             area: Rect::default(),
             list_state: ListState::default(),
             main_channel: main_channel.to_string(),
         }
     }
-    fn has_focus(&self) -> bool {
-        self.focus
-    }
+
     pub fn set_users(&mut self, list_users: Vec<String>) {
         self.list_state.select(Some(0));
         self.list_users.clear();
@@ -106,22 +106,14 @@ impl UsersWidget {
 impl Draw for UsersWidget {
     fn render(&mut self, frame: &mut ratatui::Frame<'_>, area: ratatui::prelude::Rect) {
         self.area = area;
-        let focus_style = if self.has_focus() {
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::UNDERLINED)
-        } else {
-            Style::default()
-        };
 
         let selected = self.list_state.selected().unwrap_or_default();
         let mut items = Vec::with_capacity(self.list_users.len());
         for (id, content) in self.list_users.iter().enumerate() {
             let mut spans = Vec::new();
-            let mut style = Style::default().fg(nickname_color(&content.name));
+            let mut style = Style::default().fg(content.color);
 
             if id == selected {
-                spans.push(Span::styled(">", focus_style));
                 style = style.add_modifier(Modifier::BOLD)
             }
 
