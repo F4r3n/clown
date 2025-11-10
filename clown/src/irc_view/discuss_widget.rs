@@ -420,6 +420,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         None
                     }
                 }
+                #[cfg(feature = "website-preview")]
                 crossterm::event::MouseEventKind::Moved => {
                     if let Some(range) =
                         self.get_range_from_mouse(mouse_event.row, mouse_event.column)
@@ -436,7 +437,7 @@ impl crate::component::EventHandler for DiscussWidget {
                             {
                                 self.messages
                                     .get_url_from_range(&self.current_channel, &last_hovered.range)
-                                    .map(MessageEvent::Hover)
+                                    .map(MessageEvent::HoverURL)
                             } else {
                                 None
                             }
@@ -465,7 +466,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         {
                             self.messages
                                 .get_url_from_range(&self.current_channel, &last_hovered.range)
-                                .map(MessageEvent::Hover)
+                                .map(MessageEvent::HoverURL)
                         } else {
                             None
                         }

@@ -1,243 +1,61 @@
-use std::io::Cursor;
-use std::ops::Mul;
-
+#[cfg(feature = "website-preview")]
+use crate::irc_view::website_preview::WebsitePreview;
 use crate::{component::Draw, message_event::MessageEvent};
 use chrono::Local;
-use image::DynamicImage;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     widgets::{Block, Borders},
 };
-use ratatui_image::{StatefulImage, picker::Picker, protocol::StatefulProtocol};
-use scraper::Html;
-use std::sync::Arc;
-use tokio::{
-    runtime::Handle,
-    task::{JoinHandle, block_in_place},
-};
+use std::ops::Mul;
 
-#[derive(Clone)]
-struct MetaData {
-    image_url: String,
-    title: String,
-    description: String,
-    site: String,
-    image: Option<Arc<DynamicImage>>,
+struct MessagePreview {
+    content: String,
 }
 
-impl MetaData {
-    pub fn new(in_html: Html) -> Self {
-        let mut meta = MetaData {
-            image_url: String::from(""),
-            title: String::from(""),
-            description: String::from(""),
-            site: String::from(""),
-            image: None,
-        };
-        use scraper::Selector;
-        if let Ok(selector) = Selector::parse("head meta") {
-            let s = in_html.select(&selector);
-            for element in s {
-                if let Some(property) = element.attr("property")
-                    && let Some(content) = element.attr("content")
-                {
-                    match property {
-                        "og:title" => {
-                            meta.title = String::from(content);
-                        }
-                        "og:image" => {
-                            meta.image_url = String::from(content);
-                        }
-                        "og:description" => {
-                            meta.description = String::from(content);
-                        }
-                        "og:site" => {
-                            meta.site = String::from(content);
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        meta
+impl MessagePreview {
+    pub fn from_string(content: String) -> Self {
+        Self { content }
     }
 }
 
-fn parse_html(text: &str, is_meta: bool) -> MetaData {
-    if !is_meta {
-        return MetaData {
-            image_url: String::new(),
-            title: String::new(),
-            description: String::new(),
-            site: String::new(),
-            image: None,
-        };
-    }
-    let document = Html::parse_document(text);
-    MetaData::new(document)
-}
-
-async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
-    let client = reqwest::Client::new();
-    let resp = client
-        .get(endpoint)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    let headers = resp.headers();
-    let has_meta = headers
-        .get("content-type")
-        .and_then(|ct| ct.to_str().ok())
-        .map_or_else(|| false, |ct| !ct.starts_with("image"));
-
-    let text = resp.text().await.map_err(|e| e.to_string())?;
-    let mut metadata = if has_meta {
-        parse_html(&text, has_meta)
-    } else {
-        MetaData {
-            image_url: String::from(endpoint),
-            title: String::from(""),
-            description: String::from(""),
-            site: String::from(""),
-            image: None,
-        }
-    };
-
-    if let Ok(bytes) = client
-        .get(metadata.image_url.clone())
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .bytes()
-        .await
-    {
-        metadata.image = Some(Arc::new(
-            image::ImageReader::new(Cursor::new(bytes))
-                .with_guessed_format()
-                .map_err(|e| e.to_string())?
-                .decode()
-                .map_err(|e| e.to_string())?,
-        ));
-    }
-
-    Ok(metadata)
-}
-
-pub struct WebsitePreview {
-    url: String,
-    handle: Option<JoinHandle<Result<MetaData, String>>>,
-    image: Option<StatefulProtocol>,
-    picker: Option<Picker>,
-
-    metadata: Option<MetaData>, //handle: Option<JoinHandle<>,
-}
-impl WebsitePreview {
-    pub fn from_url(url: &str) -> Self {
-        Self {
-            url: url.to_string(),
-            handle: None,
-            metadata: None,
-            image: None,
-            picker: Picker::from_query_stdio().ok(),
-        }
-    }
-
-    pub fn fetch_preview(&mut self) {
-        let handle = Handle::current();
-        let url = self.url.clone();
-        //let url = "https://ogp.me/".to_string();
-        self.handle = Some(handle.spawn(async move { get_url_preview(&url).await }));
-    }
-
-    pub fn has_finished(&self) -> bool {
-        if let Some(handle) = &self.handle {
-            handle.is_finished()
-        } else {
-            true
-        }
-    }
-    fn get_metadata(&mut self, in_picker: &Picker) -> Option<MetaData> {
-        if self.metadata.is_some() {
-            return self.metadata.clone();
-        }
-
-        if !self.has_finished() {
-            return self.metadata.clone();
-        }
-        if let Some(join_handle) = self.handle.take() {
-            let data = block_in_place(|| {
-                let handle = Handle::current();
-                match handle.block_on(join_handle) {
-                    Ok(Ok(meta)) => Some(meta),
-                    Ok(Err(_)) => None,
-                    Err(_) => None,
-                }
-            });
-            self.metadata = data;
-            if let Some(meta) = &mut self.metadata
-                && let Some(dyn_image) = meta.image.take()
-            {
-                self.image = Some(in_picker.new_resize_protocol((*dyn_image).clone()));
-            }
-
-            self.metadata.clone()
-        } else {
-            None
-        }
-    }
-}
-
-impl Draw for WebsitePreview {
+impl Draw for MessagePreview {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        if let Some(picker) = self.picker.clone()
-            && let Some(meta) = self.get_metadata(&picker)
-        {
-            frame.render_widget(ratatui::widgets::Clear, area);
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Gray))
-                .style(Style::default().bg(Color::Black));
+        frame.render_widget(ratatui::widgets::Clear, area);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Gray))
+            .style(Style::default().bg(Color::Black));
+        let inner_area = block.inner(area);
 
-            let inner_area = block.inner(area);
-            frame.render_widget(block, area);
+        let main_layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(10), // Title
+            ])
+            .split(inner_area);
+        let mut title = self.content.clone();
 
-            let main_layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(1),       // Title
-                    Constraint::Percentage(100), // Image
-                ])
-                .split(inner_area);
-            let mut title = meta.title.clone();
-
-            if let Some(title_layout) = main_layout.first() {
-                let width = title_layout.width as usize;
-                if title.chars().count() > width {
-                    // Keep room for "..."
-                    title = title
-                        .chars()
-                        .take(width.saturating_sub(3))
-                        .collect::<String>()
-                        + "...";
-                }
-                let span = ratatui::text::Span::raw(title);
-                frame.render_widget(span, *title_layout);
+        if let Some(title_layout) = main_layout.first() {
+            let width = title_layout.width as usize;
+            if title.chars().count() > width {
+                // Keep room for "..."
+                title = title
+                    .chars()
+                    .take(width.saturating_sub(3))
+                    .collect::<String>()
+                    + "...";
             }
-
-            if let Some(image_layout) = main_layout.get(1)
-                && let Some(image_protocol) = &mut self.image
-            {
-                frame.render_stateful_widget(StatefulImage::new(), *image_layout, image_protocol);
-            }
+            let span = ratatui::text::Span::raw(title);
+            frame.render_widget(span, *title_layout);
         }
     }
 }
 
 pub struct ToolTipDiscussWidget {
     area: ratatui::prelude::Rect,
-    preview: Option<WebsitePreview>,
+    preview: Option<Box<dyn Draw>>,
     start_time: Option<chrono::DateTime<Local>>,
     end_time: Option<chrono::DateTime<Local>>,
 }
@@ -270,13 +88,9 @@ impl ToolTipDiscussWidget {
             .map(|time| time + chrono::Duration::seconds(5));
     }
 
-    pub fn set_message(&mut self, message: &str) {
-        //info!("New message");
-        self.preview = Some(WebsitePreview::from_url(message));
+    pub fn set_message(&mut self, preview: Box<dyn Draw>) {
+        self.preview = Some(preview);
         self.start_timer();
-        if let Some(preview) = &mut self.preview {
-            preview.fetch_preview();
-        }
     }
 }
 
@@ -309,9 +123,19 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
         event: &crate::message_event::MessageEvent,
     ) -> Option<crate::message_event::MessageEvent> {
         match event {
+            #[cfg(feature = "website-preview")]
+            MessageEvent::HoverURL(content) => {
+                if !self.is_open() {
+                    let mut preview = WebsitePreview::from_url(content);
+                    preview.fetch_preview();
+                    self.set_message(Box::new(preview));
+                }
+
+                None
+            }
             MessageEvent::Hover(content) => {
                 if !self.is_open() {
-                    self.set_message(content);
+                    self.set_message(Box::new(MessagePreview::from_string(content.clone())));
                 }
                 None
             }

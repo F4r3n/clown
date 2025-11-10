@@ -4,7 +4,7 @@ package.repository = "https://github.com/F4r3n/clown"
 package.authors = ["Guillaume Kotulski"]
 package.description = "A TUI based IRC client"
 
-members = ["clown", "clown-core", "clown-parser"]
+members = ["clown", "clown-core", "clown-website-preview", "clown-parser"]
 
 [workspace.lints.rust]
 trivial_numeric_casts = "warn"
@@ -38,8 +38,12 @@ inherits = "release"
 lto = "thin"
 debug = false
 
-[profile.release]
+[profile.bloaty]
 debug = true
+lto = false
+strip = false
+inherits = 'release'
+
 
 [profile.bench]
 debug = true

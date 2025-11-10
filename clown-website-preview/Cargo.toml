@@ -1,0 +1,19 @@
+[package]
+name = "clown-website-preview"
+version = "0.1.0"
+edition = "2024"
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+reqwest = {version = "0.12.24", features=["rustls-tls"], default-features=false}
+scraper = {version="0.24.0", features=["main", "errors"], default-features=false}
+image = { version = "^0.25.6", default-features = false, features = ["jpeg", "png"] }
+
+[dev-dependencies]
+httpmock = "0.8.2"
+tokio = "1.48.0"
+
+[lints]
+workspace = true

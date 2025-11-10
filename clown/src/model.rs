@@ -3,7 +3,7 @@ use clown_core::{
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 
-use crate::{config::Config, irc_view};
+use crate::config::Config;
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub enum View {
     #[default]

@@ -11,7 +11,9 @@ pub enum MessageEvent {
     JoinUser(String),
     RemoveUser(String /*user */),
     SetTopic(String /*topic */),
-    Hover(String /*Message or URL */),
+    #[cfg(feature = "website-preview")]
+    HoverURL(String /* URL */),
+    Hover(String),
     PullIRC,
     Connect,
     DisConnect,
