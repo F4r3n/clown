@@ -65,26 +65,29 @@ pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
             MessageContent::new_error("Already connected".to_string()),
         ));
     }
-    let connection_config = model.get_connection_config();
-    let login_config = &model.get_login_config();
+    if let Some(connection_config) = model.get_connection_config() {
+        let login_config = &model.get_login_config();
 
-    let mut client = Client::new(login_config);
-    if let Some(reciever) = client.message_receiver() {
-        let command_sender = client.command_sender();
+        let mut client = Client::new(login_config);
+        if let Some(reciever) = client.message_receiver() {
+            let command_sender = client.command_sender();
 
-        let (error_sender, error_receiver) = mpsc::unbounded_channel();
-
-        model.irc_connection = Some(IRCConnection {
-            command_sender,
-            error_receiver,
-            _error_sender: error_sender.clone(),
-            message_reciever: reciever,
-            task: tokio::spawn(async move {
-                if let Err(err) = client.launch(&connection_config).await {
-                    let _ = error_sender.send(format!("Connection error: {err}"));
-                }
-            }),
-        });
+            let (error_sender, error_receiver) = mpsc::unbounded_channel();
+            if model.retry > 0 {
+                model.retry -= 1;
+                model.irc_connection = Some(IRCConnection {
+                    command_sender,
+                    error_receiver,
+                    _error_sender: error_sender.clone(),
+                    message_reciever: reciever,
+                    task: tokio::spawn(async move {
+                        if let Err(err) = client.launch(&connection_config).await {
+                            let _ = error_sender.send(format!("Connection error: {err}"));
+                        }
+                    }),
+                });
+            }
+        }
     }
 
     None

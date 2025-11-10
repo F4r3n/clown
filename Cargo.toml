@@ -44,6 +44,8 @@ lto = false
 strip = false
 inherits = 'release'
 
+[profile.release]
+debug = true
 
 [profile.bench]
 debug = true

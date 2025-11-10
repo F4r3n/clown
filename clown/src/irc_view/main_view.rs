@@ -165,6 +165,7 @@ impl MainView<'_> {
                 },
                 Response::Rpl(reply) => match reply {
                     ResponseNumber::Welcome(content) => {
+                        model.reset_retry();
                         model.send_command(clown_core::command::Command::Join(
                             model.get_login_channel().to_string(),
                         ));
@@ -322,7 +323,7 @@ impl widget_view::WidgetView for MainView<'_> {
                     model.current_channel.to_string(),
                     MessageContent::new_info(format!(
                         "Try to connect to {}...",
-                        model.get_address()
+                        model.get_address().unwrap_or("No address")
                     )),
                 ));
                 if let Some(v) = connect_irc(model) {

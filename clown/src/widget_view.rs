@@ -6,6 +6,5 @@ use ratatui::Frame;
 pub trait WidgetView {
     fn view(&mut self, model: &mut Model, frame: &mut Frame<'_>);
     fn handle_event(&mut self, model: &mut Model, event: &Event, messages: &mut MessageQueue);
-
     fn update(&mut self, model: &mut Model, msg: MessageEvent, messages: &mut MessageQueue);
 }

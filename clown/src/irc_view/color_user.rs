@@ -110,4 +110,12 @@ mod tests {
             "Color out of range for long nickname"
         );
     }
+
+    #[test]
+    fn test_distinct_color() {
+        let color_a = nickname_color("guill");
+        let color_b = nickname_color("farine");
+
+        assert!(color_a != color_b);
+    }
 }

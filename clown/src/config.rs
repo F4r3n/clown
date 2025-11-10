@@ -16,7 +16,7 @@ impl Default for ClientConfig {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Config {
-    pub connection_config: ConnectionConfig,
+    pub connection_config: Option<ConnectionConfig>,
     pub login_config: LoginConfig,
     pub client_config: ClientConfig,
 }
@@ -31,10 +31,7 @@ impl Default for Config {
                 username: None,
                 channel: "#rust-spam".into(),
             },
-            connection_config: ConnectionConfig {
-                address: "localhost".into(),
-                port: 6667,
-            },
+            connection_config: None,
             client_config: ClientConfig::default(),
         }
     }

@@ -32,6 +32,7 @@ pub struct Model {
     config: Config,
     pub current_channel: String,
     pub irc_connection: Option<IRCConnection>,
+    pub retry: u8,
 }
 
 impl Model {
@@ -44,7 +45,12 @@ impl Model {
             current_channel: channel.to_string(),
             config,
             irc_connection: None,
+            retry: 5,
         }
+    }
+
+    pub fn reset_retry(&mut self) {
+        self.retry = 5;
     }
 
     pub fn save(&self) -> color_eyre::Result<()> {
@@ -65,15 +71,18 @@ impl Model {
         &self.config.login_config.channel
     }
 
-    pub fn get_address(&self) -> &str {
-        &self.config.connection_config.address
+    pub fn get_address(&self) -> Option<&str> {
+        self.config
+            .connection_config
+            .as_ref()
+            .map(|v| v.address.as_ref())
     }
 
     pub fn is_autojoin(&self) -> bool {
         self.config.client_config.auto_join
     }
 
-    pub fn get_connection_config(&self) -> ConnectionConfig {
+    pub fn get_connection_config(&self) -> Option<ConnectionConfig> {
         self.config.connection_config.clone()
     }
 
