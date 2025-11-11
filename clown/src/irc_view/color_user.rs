@@ -10,7 +10,7 @@ fn hash_nickname(nickname: &str) -> u64 {
 }
 
 pub fn nickname_color(nickname: &str) -> ratatui::style::Color {
-    let hash = hash_nickname(nickname);
+    let hash = hash_nickname(nickname) % 500;
     bright_distinct_color(hash)
 }
 
@@ -23,19 +23,12 @@ pub fn bright_distinct_color(index: u64) -> Color {
 
     // Use quasi-random variations for S and V (repeat period is irrational)
     let f = index as f32 * GOLDEN_RATIO_CONJUGATE;
-    let saturation = 0.55 + 0.35 * (f.fract() - 0.5).abs(); // 0.55–0.9
-    let value = 0.8 + 0.15 * ((f * 1.37).fract() - 0.5).abs(); // 0.8–0.95
+    let saturation = 0.55 + 0.45 * f.fract(); // 0.55–0.9
+    let value = 0.8 + 0.2 * f.fract().abs(); // 0.8–1
 
     let hsv: Hsv<EncSrgb, f32> = Hsv::new(hue, saturation, value);
-    let lab: Lab = Lab::from_color_unclamped(hsv);
 
-    // Lighten perceptually, not with hard clamp
-    let lab = Lab {
-        l: lab.l * 1.1, // brighten slightly, keep variation
-        ..lab
-    };
-
-    let srgb: Srgb<u8> = Srgb::from_color_unclamped(lab).into_format();
+    let srgb: Srgb<u8> = Srgb::from_color_unclamped(hsv).into_format();
     Color::Rgb(srgb.red, srgb.green, srgb.blue)
 }
 #[cfg(test)]
@@ -87,12 +80,22 @@ mod tests {
     #[test]
     fn color_is_bright_for_dark_background() {
         // Test a few nicknames and ensure brightness (luminance) is decent.
-        let names = ["A", "B", "C", "Zed", "omega"];
+        let names = [
+            "A",
+            "B",
+            "C",
+            "Zed",
+            "omega",
+            "farine",
+            "guill",
+            "farine_yo",
+        ];
         for &name in &names {
             let (r, g, b) = color_to_tuple(nickname_color(name));
+            //https://stackoverflow.com/questions/596216/formula-to-determine-perceived-brightness-of-rgb-color
             let brightness = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
             assert!(
-                brightness > 100.0,
+                brightness > 70.0,
                 "Color for '{}' ({r},{g},{b}) too dark (brightness={brightness})",
                 name
             );
