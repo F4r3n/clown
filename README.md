@@ -30,8 +30,6 @@ port = 6697
 
 [login_config]
 nickname = "nickname"
-real_name = "real"
-username = "username"
 password = "password"
 channel = "#rust-spam"
 
