@@ -1,0 +1,14 @@
+[package]
+name = "clown-spell"
+version = "0.1.0"
+edition = "2024"
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+anyhow = "1.0.100"
+fst = "0.4.7"
+
+[lints]
+workspace = true
