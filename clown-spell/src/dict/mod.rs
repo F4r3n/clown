@@ -2,7 +2,7 @@ use fst::{IntoStreamer, Set};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::{io::Read, path::Path};
-struct Dictionary {
+pub struct Dictionary {
     words: fst::Set<Vec<u8>>,
 }
 
@@ -40,5 +40,9 @@ impl Dictionary {
         let set = fst::Set::from_iter(words)?;
 
         Ok(Self { words: set })
+    }
+
+    pub fn check_word(&self, word: &str) -> bool {
+        self.words.contains(word)
     }
 }

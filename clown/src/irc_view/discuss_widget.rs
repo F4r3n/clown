@@ -190,6 +190,9 @@ impl DiscussWidget {
 
     fn collect_visible_rows<'a>(&'a mut self) -> Vec<Row<'a>> {
         let mut visible_rows = Vec::new();
+        if self.content_width == 0 {
+            return visible_rows;
+        }
         let mut wrapped_rows_seen = 0; // counts all rows, even skipped
         let mut visible_rows_total = 0; // counts only rendered rows
 

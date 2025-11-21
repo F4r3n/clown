@@ -1,6 +1,6 @@
 use crate::component::Draw;
 use crate::message_event::MessageEvent;
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -95,7 +95,7 @@ struct InputWidget {
 
 impl InputWidget {
     pub fn visual_cursor(&self) -> usize {
-        self.cursor_position
+        UnicodeWidthStr::width(&self.value[..self.cursor_position])
     }
 
     pub fn value(&self) -> &str {
@@ -161,6 +161,20 @@ impl InputWidget {
         }
     }
 
+    fn delete_previous_word(&mut self) {
+        if self.cursor_position == 0 || self.cursor_position > self.value.len() {
+            return;
+        }
+
+        if let Some((idx, _ch)) = self.value[..self.cursor_position]
+            .char_indices()
+            .rev()
+            .find(|&(_, ch)| ch.is_whitespace())
+        {
+            self.cursor_position = idx;
+        }
+    }
+
     fn move_cursor_end(&mut self) {
         self.cursor_position = self.value.len();
     }
@@ -175,8 +189,16 @@ impl InputWidget {
         {
             {
                 match key_event.code {
-                    KeyCode::Char(ch) => self.append_char(ch),
-                    KeyCode::Backspace => self.delete_char_before_cursor(),
+                    KeyCode::Char(ch) => {
+                        if ch == 'w' && key_event.modifiers.contains(KeyModifiers::CONTROL) {
+                            self.delete_previous_word();
+                        } else {
+                            self.append_char(ch)
+                        }
+                    }
+                    KeyCode::Backspace => {
+                        self.delete_char_before_cursor();
+                    }
                     KeyCode::Left => self.move_cursor_left(),
                     KeyCode::Right => self.move_cursor_right(),
                     KeyCode::End => self.move_cursor_end(),
@@ -192,5 +214,136 @@ impl InputWidget {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
+
+    fn make_key(code: KeyCode) -> crate::event_handler::Event {
+        crate::event_handler::Event::Crossterm(CrosstermEvent::Key(KeyEvent::new(
+            code,
+            KeyModifiers::NONE,
+        )))
+    }
+
+    fn make_ctrl_w() -> crate::event_handler::Event {
+        crate::event_handler::Event::Crossterm(CrosstermEvent::Key(KeyEvent::new(
+            KeyCode::Char('w'),
+            KeyModifiers::CONTROL,
+        )))
+    }
+
+    fn make_paste(text: &str) -> crate::event_handler::Event {
+        crate::event_handler::Event::Crossterm(CrosstermEvent::Paste(text.to_string()))
+    }
+
+    #[test]
+    fn test_append_char_and_cursor_movement() {
+        let mut w = InputWidget::default();
+
+        w.handle_events(&make_key(KeyCode::Char('a')));
+        w.handle_events(&make_key(KeyCode::Char('b')));
+        w.handle_events(&make_key(KeyCode::Char('c')));
+
+        assert_eq!(w.value(), "abc");
+        assert_eq!(w.cursor_position, 3);
+    }
+
+    #[test]
+    fn test_move_cursor_left_right() {
+        let mut w = InputWidget::default();
+        w.value = "abc".to_string();
+        w.cursor_position = 3;
+
+        w.handle_events(&make_key(KeyCode::Left));
+        assert_eq!(w.cursor_position, 2);
+
+        w.handle_events(&make_key(KeyCode::Left));
+        assert_eq!(w.cursor_position, 1);
+
+        w.handle_events(&make_key(KeyCode::Right));
+        assert_eq!(w.cursor_position, 2);
+    }
+
+    #[test]
+    fn test_delete_char_before_cursor() {
+        let mut w = InputWidget::default();
+        w.value = "abc".to_string();
+        w.cursor_position = 3;
+
+        w.handle_events(&make_key(KeyCode::Backspace));
+        assert_eq!(w.value(), "ab");
+        assert_eq!(w.cursor_position, 2);
+
+        w.handle_events(&make_key(KeyCode::Backspace));
+        assert_eq!(w.value(), "a");
+        assert_eq!(w.cursor_position, 1);
+    }
+
+    #[test]
+    fn test_delete_previous_word_ctrl_w() {
+        let mut w = InputWidget::default();
+        w.value = "hello world".to_string();
+        w.cursor_position = w.value.len();
+
+        w.handle_events(&make_ctrl_w());
+        assert_eq!(w.cursor_position, 5); // after "hello"
+    }
+
+    #[test]
+    fn test_move_home_end() {
+        let mut w = InputWidget::default();
+        w.value = "abcdef".to_string();
+        w.cursor_position = 3;
+
+        w.handle_events(&make_key(KeyCode::Home));
+        assert_eq!(w.cursor_position, 0);
+
+        w.handle_events(&make_key(KeyCode::End));
+        assert_eq!(w.cursor_position, 6);
+    }
+
+    #[test]
+    fn test_unicode_width_cursor() {
+        // “é” is width 1, “你” is width 2
+        let mut w = InputWidget::default();
+        w.value = "aé你".to_string();
+
+        // cursor after "aé"
+        w.cursor_position = "aé".len();
+        assert_eq!(
+            w.visual_cursor(),
+            unicode_width::UnicodeWidthStr::width("aé")
+        );
+    }
+
+    #[test]
+    fn test_visual_scroll_keeps_cursor_visible() {
+        let mut w = InputWidget::default();
+        w.value = "abcdefghijkl".to_string();
+        w.cursor_position = 10;
+
+        let new_scroll = w.set_visual_scroll(5);
+
+        // Cursor column is 10 → must scroll so cursor is at the far right
+        // scroll = cursor_col + 1 - width = 10 + 1 - 5 = 6
+        assert_eq!(new_scroll, 6);
+    }
+
+    #[test]
+    fn test_reset() {
+        let mut w = InputWidget::default();
+        w.value = "abc".to_string();
+        w.cursor_position = 3;
+        w.visual_scroll = 5;
+
+        w.reset();
+
+        assert_eq!(w.value(), "");
+        assert_eq!(w.cursor_position, 0);
+        assert_eq!(w.visual_scroll, 0);
     }
 }
