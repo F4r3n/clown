@@ -7,6 +7,7 @@ use crate::irc_view::discuss_widget;
 use crate::irc_view::input_widget;
 use crate::irc_view::input_widget::CInput;
 use crate::irc_view::message_content::MessageContent;
+use crate::irc_view::spell_checker::SpellChecker;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
@@ -18,68 +19,13 @@ use crate::widget_view;
 use clown_core::command::Command;
 use clown_core::response::Response;
 use clown_core::response::ResponseNumber;
-use clown_spell::dict;
-use color_eyre::eyre::eyre;
 use ratatui::layout::Position;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
 };
-use tokio::fs::File;
 use tokio::task::JoinHandle;
-struct SpellChecker {
-    words: Option<dict::Dictionary>,
-    download_handle: Option<JoinHandle<()>>,
-}
-use std::{io::Write, path::PathBuf};
-
-impl SpellChecker {
-    async fn download_file(&self, url: &str, to: &PathBuf) -> color_eyre::Result<PathBuf> {
-        let mut response = reqwest::get(url).await?;
-        let mut file = std::fs::File::create(to)?;
-
-        while let Some(chunk) = response.chunk().await? {
-            file.write_all(&chunk)?;
-        }
-        Ok(to.to_path_buf())
-    }
-
-    pub async fn download_affix(&self, language: &str) -> color_eyre::Result<PathBuf> {
-        if let Some(dest) = Model::project_dir()
-            .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.aff", language)))
-        {
-            if dest.exists() {
-                return Ok(dest);
-            }
-            let url = format!(
-                "https://raw.githubusercontent.com/LibreOffice/dictionaries/refs/heads/master/{}_FR/{}.aff",
-                language, language
-            );
-            self.download_file(&url, &dest).await
-        } else {
-            Err(eyre!("Error downloading dict"))
-        }
-    }
-
-    pub async fn download_dict(&self, language: &str) -> color_eyre::Result<PathBuf> {
-        if let Some(dest) = Model::project_dir()
-            .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.dic", language)))
-        {
-            if dest.exists() {
-                return Ok(dest);
-            }
-            let url = format!(
-                "https://raw.githubusercontent.com/LibreOffice/dictionaries/refs/heads/master/{}_FR/{}.dic",
-                language, language
-            );
-            self.download_file(&url, &dest).await
-        } else {
-            Err(eyre!("Error downloading dict"))
-        }
-    }
-
-    pub fn try_build(&mut self) -> color_eyre::Result<()> {}
-}
+use tracing::info;
 
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
@@ -89,6 +35,7 @@ pub struct MainView<'a> {
     tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
 
     spell_checker: Option<SpellChecker>,
+    spellchecker_task: Option<JoinHandle<color_eyre::Result<SpellChecker>>>,
 }
 impl MainView<'_> {
     pub fn new(current_channel: &str) -> Self {
@@ -112,6 +59,7 @@ impl MainView<'_> {
             messages_display,
             tooltip_widget,
             spell_checker: None,
+            spellchecker_task: None,
         }
     }
 
@@ -154,16 +102,8 @@ impl MainView<'_> {
                     model.send_command(Command::Nick(new_nick.clone()));
                     None
                 }
-                command::ClientCommand::Spell => {
-                    if self.spell_checker.is_none() {
-                        self.spell_checker = Some(SpellChecker {
-                            words: None,
-                            download_handle: None,
-                        })
-                    }
-                    let handle = Handle::current();
-                    let url = self.url.clone();
-                    self.handle = Some(handle.spawn(async move { get_url_preview(&url).await }));
+                command::ClientCommand::Spell(language) => {
+                    self.spellchecker_task = Some(SpellChecker::async_build(&language));
                     None
                 }
             }
@@ -185,6 +125,8 @@ impl MainView<'_> {
         if let Some(recieved) = model.pull_server_message() {
             let reply = recieved.reply();
             let source = recieved.source().map(|v| v.to_string());
+
+            info!("{:?}", recieved);
             //log_info_sync(format!("{reply:?}\n").as_str());
             match reply {
                 Response::Cmd(command) => match command {

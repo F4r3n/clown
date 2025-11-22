@@ -24,9 +24,9 @@ pub enum ClientCommand {
     Help,
     #[strum(
         message = "Spell",
-        detailed_message = "To prepare the spellchecker for a specific language"
+        detailed_message = "To prepare the spellchecker for a specific language: fr, en"
     )]
-    Spell,
+    Spell(String),
 }
 
 pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
@@ -38,7 +38,7 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
                 "quit" => Some(ClientCommand::Quit(splits.collect())),
                 "nick" => Some(ClientCommand::Nick(splits.collect())),
                 "help" => Some(ClientCommand::Help),
-                "spell" => Some(ClientCommand::Spell),
+                "spell" => Some(ClientCommand::Spell(splits.collect())),
                 _ => None,
             }
         } else {

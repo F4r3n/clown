@@ -5,6 +5,7 @@ mod input_widget;
 pub mod main_view;
 pub mod message_content;
 pub mod message_parser;
+mod spell_checker;
 mod tooltip_widget;
 mod topic_widget;
 mod users_widget;
