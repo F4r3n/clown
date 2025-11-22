@@ -190,8 +190,12 @@ impl InputWidget {
             {
                 match key_event.code {
                     KeyCode::Char(ch) => {
-                        if ch == 'w' && key_event.modifiers.contains(KeyModifiers::CONTROL) {
-                            self.delete_previous_word();
+                        if key_event.modifiers.contains(KeyModifiers::CONTROL) {
+                            if ch == 'w' {
+                                self.delete_previous_word();
+                            } else if ch == 'h' {
+                                self.delete_char_before_cursor();
+                            }
                         } else {
                             self.append_char(ch)
                         }

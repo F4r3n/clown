@@ -24,10 +24,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
 };
-use tokio::{
-    runtime::Handle,
-    task::{JoinHandle, block_in_place},
-};
+
 use tracing::info;
 
 pub struct MainView<'a> {
@@ -38,7 +35,7 @@ pub struct MainView<'a> {
     tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
 
     spell_checker: Option<SpellChecker>,
-    spellchecker_task: Option<JoinHandle<color_eyre::Result<SpellChecker>>>,
+    spellchecker_task: Option<crate::async_task::AsyncTask<SpellChecker>>,
 }
 
 impl MainView<'_> {
@@ -107,7 +104,10 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Spell(language) => {
-                    self.spellchecker_task = Some(SpellChecker::async_build(&language));
+                    self.spellchecker_task = Some(crate::async_task::AsyncTask {
+                        handle: Some(SpellChecker::async_build(&language)),
+                        result: None,
+                    });
                     None
                 }
             }
@@ -159,27 +159,11 @@ impl MainView<'_> {
     }
 
     fn handle_spellchecker(&mut self) {
-        if self
-            .spellchecker_task
-            .as_ref()
-            .map(|t| t.is_finished())
-            .unwrap_or(false)
+        if self.spellchecker_task.as_mut().is_some_and(|v| v.poll())
+            && let Some(spell_task) = self.spellchecker_task.take()
         {
-            return;
+            self.spell_checker = spell_task.take_result();
         }
-
-        let join_handle = match self.spellchecker_task.take() {
-            Some(h) => h,
-            None => return,
-        };
-
-        block_in_place(|| {
-            let handle = Handle::current();
-            self.spell_checker = match handle.block_on(join_handle) {
-                Ok(Ok(spell_checker)) => Some(spell_checker),
-                _ => None,
-            };
-        });
     }
 
     fn handle_tick(&mut self, model: &mut Model, event: &Event, messages: &mut MessageQueue) {
