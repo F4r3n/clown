@@ -258,7 +258,8 @@ impl DiscussWidget {
                 .or_insert(nickname_color(source));
         }
 
-        self.messages.add_message(channel, in_message);
+        self.messages
+            .add_message(&channel.to_lowercase(), in_message);
 
         if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view

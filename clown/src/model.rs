@@ -42,7 +42,7 @@ impl Model {
         Self {
             running_state: RunningState::Start,
             current_view: View::MainView,
-            current_channel: channel.to_string(),
+            current_channel: channel.to_lowercase(),
             config,
             irc_connection: None,
             retry: 5,
