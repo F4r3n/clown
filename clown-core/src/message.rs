@@ -2,14 +2,14 @@ use clown_parser::message::Message;
 use tokio::sync::mpsc;
 
 use crate::{
-    command::{CommandBuilder},
+    command::CommandBuilder,
     response::{Response, ResponseBuilder},
 };
 pub struct MessageSender {
     pub inner: mpsc::UnboundedSender<ServerMessage>,
 }
 
-pub struct MessageReceiver { 
+pub struct MessageReceiver {
     pub inner: mpsc::UnboundedReceiver<ServerMessage>,
 }
 
@@ -32,18 +32,15 @@ impl ServerMessage {
             let params = self.message.parameters().collect::<Vec<&str>>();
 
             if let Ok(command_number) = command.parse() {
-                Response::Rpl(ResponseBuilder::get_reply(command_number, &params,  self.message.trailing()))
-            } else {
-                CommandBuilder::get_command(
-                    command,
+                Response::Rpl(ResponseBuilder::get_reply(
+                    command_number,
                     &params,
                     self.message.trailing(),
-                )
-                .map(Response::Cmd)
-                .unwrap_or(Response::Unknown(format!(
-                    "{:?}",
-                    self.message
-                )))
+                ))
+            } else {
+                CommandBuilder::get_command(command, &params, self.message.trailing())
+                    .map(Response::Cmd)
+                    .unwrap_or(Response::Unknown(format!("{:?}", self.message)))
             }
         } else {
             Response::Unknown(format!("{:?}", self.message))
@@ -62,10 +59,10 @@ mod tests {
     };
 
     #[test]
-    fn test_privmsg(){
-        let message = create_message(
-            ":Angel PRIVMSG Wiz :Hello are you receiving this message ?".as_bytes(),
-        ).unwrap();
+    fn test_privmsg() {
+        let message =
+            create_message(":Angel PRIVMSG Wiz :Hello are you receiving this message ?".as_bytes())
+                .unwrap();
         let server_message = ServerMessage::new(message);
         let command = server_message.reply();
         if let Response::Cmd(crate::command::Command::PrivMsg(target, message)) = command {
@@ -108,7 +105,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ping(){
+    fn test_ping() {
         let message = create_message(":token PING :token\r\n".as_bytes()).unwrap();
         let server_message = ServerMessage::new(message);
         let command = server_message.reply();
@@ -151,7 +148,7 @@ mod tests {
     }
 
     #[test]
-    fn test_nick_params(){
+    fn test_nick_params() {
         let message = create_message(":test!farine4@inspircd NICK jo\r\n".as_bytes()).unwrap();
         let server_message = ServerMessage::new(message);
         assert_eq!(
@@ -193,7 +190,8 @@ mod tests {
     #[test]
     fn test_notice_found_hostname() {
         let message =
-            create_message(b":irc.example.net NOTICE farine :*** Found your hostname (inspircd)").unwrap();
+            create_message(b":irc.example.net NOTICE farine :*** Found your hostname (inspircd)")
+                .unwrap();
         let server_message = ServerMessage::new(message);
         let reply = server_message.reply();
         if let Response::Cmd(Command::Notice(target, msg)) = reply {
@@ -215,8 +213,6 @@ mod tests {
         );
     }
 
-
-
     #[test]
     fn test_numeric_reply_265() {
         let message =
@@ -224,39 +220,38 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.reply();
         assert!(
-            matches!(reply, Response::Rpl(ResponseNumber::LocalUsers(msg)) 
-            if msg == "Current local users: 0  Max: 0"));
-    }
-
-  
-    #[test]
-    fn test_empty_command(){
-        let message = create_message(b":irc.example.com").unwrap();
-        let server_message = ServerMessage::new(message);
-        let reply = server_message.reply();
-
-        assert!(
-            matches!(reply, Response::Unknown{..}) 
+            matches!(reply, Response::Rpl(ResponseNumber::LocalUsers(msg))
+            if msg == "Current local users: 0  Max: 0")
         );
     }
 
     #[test]
-    fn test_topic_333_command() {
-        let message = create_message(b":IRC-server 333 farine_test #rust-spam farineA 1754165495").unwrap();
+    fn test_empty_command() {
+        let message = create_message(b":irc.example.com").unwrap();
         let server_message = ServerMessage::new(message);
         let reply = server_message.reply();
-                assert!(
-            matches!(reply, Response::Rpl(ResponseNumber::TopicWhoTime(msg)) 
-            if msg == "farine_test #rust-spam farineA 1754165495"));
+
+        assert!(matches!(reply, Response::Unknown { .. }));
     }
 
     #[test]
-        fn test_topic_command() {
+    fn test_topic_333_command() {
+        let message =
+            create_message(b":IRC-server 333 farine_test #rust-spam farineA 1754165495").unwrap();
+        let server_message = ServerMessage::new(message);
+        let reply = server_message.reply();
+        assert!(
+            matches!(reply, Response::Rpl(ResponseNumber::TopicWhoTime(msg))
+            if msg == "farine_test #rust-spam farineA 1754165495")
+        );
+    }
+
+    #[test]
+    fn test_topic_command() {
         let message = create_message(b":farineA!farine4@hidden TOPIC #rust-spam :yo").unwrap();
         let server_message = ServerMessage::new(message);
         let reply = server_message.reply();
-                assert!(
-            matches!(reply, Response::Cmd(Command::Topic(channel, msg)) 
+        assert!(matches!(reply, Response::Cmd(Command::Topic(channel, msg))
             if msg == "yo" && channel == "#rust-spam"));
     }
 }

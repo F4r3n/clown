@@ -7,8 +7,8 @@ authors.workspace = true
 description.workspace = true
 
 [dependencies]
-anyhow = "1.0.100"
 fst = "0.4.7"
+thiserror = "2.0.17"
 
 [lints]
 workspace = true

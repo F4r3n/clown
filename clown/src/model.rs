@@ -1,9 +1,9 @@
+use crate::config::Config;
 use clown_core::{
     client::LoginConfig, command::Command, conn::ConnectionConfig, message::ServerMessage,
 };
+use directories::ProjectDirs;
 use tokio::{sync::mpsc, task::JoinHandle};
-
-use crate::config::Config;
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub enum View {
     #[default]
@@ -42,7 +42,7 @@ impl Model {
         Self {
             running_state: RunningState::Start,
             current_view: View::MainView,
-            current_channel: channel.to_string(),
+            current_channel: channel.to_lowercase(),
             config,
             irc_connection: None,
             retry: 5,
@@ -113,5 +113,9 @@ impl Model {
         self.irc_connection
             .as_mut()
             .and_then(|v| v.error_receiver.try_recv().ok())
+    }
+
+    pub fn project_dir() -> Option<ProjectDirs> {
+        ProjectDirs::from("com", "share", "clown")
     }
 }

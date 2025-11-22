@@ -7,17 +7,40 @@ use nom::{
     sequence::preceded,
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum SourceKind<'a> {
     Nick(&'a [u8]),
     Server(&'a [u8]),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Source<'s> {
     source: Option<SourceKind<'s>>,
     user: Option<&'s [u8]>,
     host: Option<&'s [u8]>,
+}
+
+fn as_str(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
+    String::from_utf8_lossy(bytes)
+}
+
+impl std::fmt::Debug for SourceKind<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SourceKind::Nick(nick) => f.debug_tuple("Nick").field(&as_str(nick)).finish(),
+            SourceKind::Server(serv) => f.debug_tuple("Server").field(&as_str(serv)).finish(),
+        }
+    }
+}
+
+impl std::fmt::Debug for Source<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Source")
+            .field("source", &self.source)
+            .field("user", &self.user.as_ref().map(|u| as_str(u)))
+            .field("host", &self.host.as_ref().map(|h| as_str(h)))
+            .finish()
+    }
 }
 
 #[cfg(test)]

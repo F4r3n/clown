@@ -7,6 +7,7 @@ use crate::irc_view::discuss_widget;
 use crate::irc_view::input_widget;
 use crate::irc_view::input_widget::CInput;
 use crate::irc_view::message_content::MessageContent;
+use crate::irc_view::spell_checker::SpellChecker;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
@@ -24,13 +25,19 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
 };
 
+use tracing::info;
+
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
     messages_display: Component<'a, discuss_widget::DiscussWidget>,
     list_users_view: Component<'a, users_widget::UsersWidget>,
     topic_view: Component<'a, topic_widget::TopicWidget>,
     tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
+
+    spell_checker: Option<SpellChecker>,
+    spellchecker_task: Option<crate::async_task::AsyncTask<SpellChecker>>,
 }
+
 impl MainView<'_> {
     pub fn new(current_channel: &str) -> Self {
         let input = Component::new("input", input_widget::CInput::new());
@@ -52,6 +59,8 @@ impl MainView<'_> {
             input,
             messages_display,
             tooltip_widget,
+            spell_checker: None,
+            spellchecker_task: None,
         }
     }
 
@@ -94,6 +103,13 @@ impl MainView<'_> {
                     model.send_command(Command::Nick(new_nick.clone()));
                     None
                 }
+                command::ClientCommand::Spell(language) => {
+                    self.spellchecker_task = Some(crate::async_task::AsyncTask {
+                        handle: Some(SpellChecker::async_build(&language)),
+                        result: None,
+                    });
+                    None
+                }
             }
         } else {
             let nickname = model.get_nickname().to_string();
@@ -109,10 +125,64 @@ impl MainView<'_> {
         }
     }
 
+    fn handle_irc(&mut self, model: &mut Model, messages: &mut MessageQueue) {
+        let mut received_error = false;
+        let message = if model.running_state == RunningState::Start {
+            model.running_state = RunningState::Running;
+
+            if model.is_autojoin() {
+                Some(MessageEvent::Connect)
+            } else {
+                None
+            }
+        } else if let Some(msg) = model.pull_server_error() {
+            received_error = true;
+            //Received an error
+            Some(MessageEvent::AddMessageView(
+                model.current_channel.clone(),
+                MessageContent::new_error(msg),
+            ))
+        } else {
+            Some(MessageEvent::PullIRC)
+        };
+        if let Some(message) = message {
+            messages.push_message(message);
+        }
+        if received_error {
+            //Try to reconnect
+            if model.is_irc_finished() {
+                model.irc_connection = None;
+            }
+            messages
+                .push_message_with_time(MessageEvent::Connect, std::time::Duration::from_secs(2));
+        }
+    }
+
+    fn handle_spellchecker(&mut self) {
+        if self.spellchecker_task.as_mut().is_some_and(|v| v.poll())
+            && let Some(spell_task) = self.spellchecker_task.take()
+        {
+            self.spell_checker = spell_task.take_result();
+        }
+    }
+
+    fn handle_tick(&mut self, model: &mut Model, event: &Event, messages: &mut MessageQueue) {
+        self.handle_irc(model, messages);
+        self.handle_spellchecker();
+
+        for mut child in self.children() {
+            if let Some(message) = child.handle_events(event) {
+                messages.push_message(message);
+            }
+        }
+    }
+
     fn update_pull_irc(&mut self, model: &mut Model, messages: &mut MessageQueue) {
         if let Some(recieved) = model.pull_server_message() {
             let reply = recieved.reply();
             let source = recieved.source().map(|v| v.to_string());
+
+            info!("{:?}", recieved);
             //log_info_sync(format!("{reply:?}\n").as_str());
             match reply {
                 Response::Cmd(command) => match command {
@@ -261,45 +331,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 }
             }
             Event::Tick => {
-                let mut received_error = false;
-                let message = if model.running_state == RunningState::Start {
-                    model.running_state = RunningState::Running;
-
-                    if model.is_autojoin() {
-                        Some(MessageEvent::Connect)
-                    } else {
-                        None
-                    }
-                } else if let Some(msg) = model.pull_server_error() {
-                    received_error = true;
-                    //Received an error
-                    Some(MessageEvent::AddMessageView(
-                        model.current_channel.clone(),
-                        MessageContent::new_error(msg),
-                    ))
-                } else {
-                    Some(MessageEvent::PullIRC)
-                };
-
-                if let Some(message) = message {
-                    messages.push_message(message);
-                }
-                for mut child in self.children() {
-                    if let Some(message) = child.handle_events(event) {
-                        messages.push_message(message);
-                    }
-                }
-
-                if received_error {
-                    //Try to reconnect
-                    if model.is_irc_finished() {
-                        model.irc_connection = None;
-                    }
-                    messages.push_message_with_time(
-                        MessageEvent::Connect,
-                        std::time::Duration::from_secs(2),
-                    );
-                }
+                self.handle_tick(model, event, messages);
             }
             _ => {}
         };

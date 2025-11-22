@@ -1,7 +1,8 @@
 use clown_core::client::LoginConfig;
 use clown_core::conn::ConnectionConfig;
-use directories::ProjectDirs;
 use std::path::PathBuf;
+
+use crate::model::Model;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ClientConfig {
@@ -55,8 +56,7 @@ impl Config {
     }
 
     fn config_path() -> Option<PathBuf> {
-        ProjectDirs::from("com", "share", "clown")
-            .map(|proj_dirs| proj_dirs.config_dir().join("clown.toml"))
+        Model::project_dir().map(|proj_dirs| proj_dirs.config_dir().join("clown.toml"))
     }
 
     fn read() -> color_eyre::Result<Self> {

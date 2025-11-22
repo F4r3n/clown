@@ -1,2 +1,2 @@
-mod dict;
+pub mod dict;
 mod trie;

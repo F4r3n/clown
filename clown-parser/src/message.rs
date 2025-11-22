@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::parser::{parse_command, parse_parameters, parse_trailing};
 use crate::source::{Source, parse_source};
 use ouroboros::self_referencing;
@@ -11,7 +13,7 @@ pub enum ParsingError {
 }
 
 /// Note: Server sources (used for server-to-server communications) are not handled.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct IRCMessage<'s> {
     source: Option<Source<'s>>,
     command: Option<&'s [u8]>,
@@ -19,13 +21,45 @@ pub struct IRCMessage<'s> {
     trailing: Option<&'s [u8]>,
 }
 
+impl Debug for IRCMessage<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IRCMessage")
+            .field("source", &self.source)
+            .field(
+                "command",
+                &self.command.as_ref().map(|t| String::from_utf8_lossy(t)),
+            )
+            .field(
+                "parameters",
+                &self
+                    .parameters
+                    .iter()
+                    .map(|t| String::from_utf8_lossy(t))
+                    .collect::<Vec<_>>(),
+            )
+            .field(
+                "trailing",
+                &self.trailing.as_ref().map(|t| String::from_utf8_lossy(t)),
+            )
+            .finish()
+    }
+}
+
 #[self_referencing]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Message {
     data: Vec<u8>,
     #[borrows(data)]
     #[covariant]
     internal: IRCMessage<'this>,
+}
+
+impl Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Message")
+            .field("internal", &self.borrow_internal())
+            .finish()
+    }
 }
 
 impl Message {

@@ -190,6 +190,9 @@ impl DiscussWidget {
 
     fn collect_visible_rows<'a>(&'a mut self) -> Vec<Row<'a>> {
         let mut visible_rows = Vec::new();
+        if self.content_width == 0 {
+            return visible_rows;
+        }
         let mut wrapped_rows_seen = 0; // counts all rows, even skipped
         let mut visible_rows_total = 0; // counts only rendered rows
 
@@ -255,7 +258,8 @@ impl DiscussWidget {
                 .or_insert(nickname_color(source));
         }
 
-        self.messages.add_message(channel, in_message);
+        self.messages
+            .add_message(&channel.to_lowercase(), in_message);
 
         if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view

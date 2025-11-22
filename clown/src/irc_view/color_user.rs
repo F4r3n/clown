@@ -1,5 +1,5 @@
 use palette::convert::FromColorUnclamped;
-use palette::{Hsv, Lab, Srgb, encoding::Srgb as EncSrgb};
+use palette::{Hsv, Srgb, encoding::Srgb as EncSrgb};
 use ratatui::style::Color;
 
 fn hash_nickname(nickname: &str) -> u64 {
