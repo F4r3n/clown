@@ -24,7 +24,10 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
 };
-use tokio::task::JoinHandle;
+use tokio::{
+    runtime::Handle,
+    task::{JoinHandle, block_in_place},
+};
 use tracing::info;
 
 pub struct MainView<'a> {
@@ -37,6 +40,7 @@ pub struct MainView<'a> {
     spell_checker: Option<SpellChecker>,
     spellchecker_task: Option<JoinHandle<color_eyre::Result<SpellChecker>>>,
 }
+
 impl MainView<'_> {
     pub fn new(current_channel: &str) -> Self {
         let input = Component::new("input", input_widget::CInput::new());
@@ -118,6 +122,74 @@ impl MainView<'_> {
                     model.current_channel.to_string(),
                     MessageContent::new(Some(nickname), content),
                 ))
+        }
+    }
+
+    fn handle_irc(&mut self, model: &mut Model, messages: &mut MessageQueue) {
+        let mut received_error = false;
+        let message = if model.running_state == RunningState::Start {
+            model.running_state = RunningState::Running;
+
+            if model.is_autojoin() {
+                Some(MessageEvent::Connect)
+            } else {
+                None
+            }
+        } else if let Some(msg) = model.pull_server_error() {
+            received_error = true;
+            //Received an error
+            Some(MessageEvent::AddMessageView(
+                model.current_channel.clone(),
+                MessageContent::new_error(msg),
+            ))
+        } else {
+            Some(MessageEvent::PullIRC)
+        };
+        if let Some(message) = message {
+            messages.push_message(message);
+        }
+        if received_error {
+            //Try to reconnect
+            if model.is_irc_finished() {
+                model.irc_connection = None;
+            }
+            messages
+                .push_message_with_time(MessageEvent::Connect, std::time::Duration::from_secs(2));
+        }
+    }
+
+    fn handle_spellchecker(&mut self) {
+        if self
+            .spellchecker_task
+            .as_ref()
+            .map(|t| t.is_finished())
+            .unwrap_or(false)
+        {
+            return;
+        }
+
+        let join_handle = match self.spellchecker_task.take() {
+            Some(h) => h,
+            None => return,
+        };
+
+        block_in_place(|| {
+            let handle = Handle::current();
+            self.spell_checker = match handle.block_on(join_handle) {
+                Ok(Ok(spell_checker)) => Some(spell_checker),
+                _ => None,
+            };
+        });
+    }
+
+    fn handle_tick(&mut self, model: &mut Model, event: &Event, messages: &mut MessageQueue) {
+        self.handle_irc(model, messages);
+        self.handle_spellchecker();
+
+        for mut child in self.children() {
+            if let Some(message) = child.handle_events(event) {
+                messages.push_message(message);
+            }
         }
     }
 
@@ -275,45 +347,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 }
             }
             Event::Tick => {
-                let mut received_error = false;
-                let message = if model.running_state == RunningState::Start {
-                    model.running_state = RunningState::Running;
-
-                    if model.is_autojoin() {
-                        Some(MessageEvent::Connect)
-                    } else {
-                        None
-                    }
-                } else if let Some(msg) = model.pull_server_error() {
-                    received_error = true;
-                    //Received an error
-                    Some(MessageEvent::AddMessageView(
-                        model.current_channel.clone(),
-                        MessageContent::new_error(msg),
-                    ))
-                } else {
-                    Some(MessageEvent::PullIRC)
-                };
-
-                if let Some(message) = message {
-                    messages.push_message(message);
-                }
-                for mut child in self.children() {
-                    if let Some(message) = child.handle_events(event) {
-                        messages.push_message(message);
-                    }
-                }
-
-                if received_error {
-                    //Try to reconnect
-                    if model.is_irc_finished() {
-                        model.irc_connection = None;
-                    }
-                    messages.push_message_with_time(
-                        MessageEvent::Connect,
-                        std::time::Duration::from_secs(2),
-                    );
-                }
+                self.handle_tick(model, event, messages);
             }
             _ => {}
         };

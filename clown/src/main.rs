@@ -17,8 +17,8 @@ mod irc_view;
 mod tui;
 use event_handler::Event;
 use ratatui::Frame;
+mod async_task;
 mod command;
-
 type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
