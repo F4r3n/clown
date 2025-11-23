@@ -36,13 +36,13 @@ serde = { version = "1.0", features = ["serde_derive"] }
 strum = { version = "0.27", features = ["derive", "strum_macros"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.20"
-unicode-width = "0.2.0"
+unicode-width = "=0.2.0"
 clown-website-preview = {version= "0.1.0", path="../clown-website-preview", optional = true}
 clown-spell = {version= "0.1.0", path="../clown-spell"}
 
 ratatui-image = {version = "8.0.2", features= ["crossterm"], default-features = false, optional = true}
 ahash = "0.8.12"
-open = "5.3.2"
+open = "5.3.3"
 palette = {version="0.7.6", features=["std"], default-features=false}
 reqwest = {version = "0.12.24", features=["rustls-tls"], default-features=false}
 tracing-appender = "0.2.3"
