@@ -1,6 +1,7 @@
-use crate::component::Draw;
+use crate::irc_view::spell_checker::SpellChecker;
 use crate::message_event::MessageEvent;
-use crossterm::event::{KeyCode, KeyModifiers};
+use crate::{component::Draw, event_handler::Event};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -9,11 +10,15 @@ use ratatui::{
     widgets::Paragraph,
 };
 use unicode_width::UnicodeWidthStr;
-#[derive(Debug, Default, Clone)]
+
+#[derive(Default)]
 pub struct CInput {
     input: InputWidget,
     /// Current input mode
     area: Rect,
+
+    spell_checker: Option<SpellChecker>,
+    spellchecker_task: Option<crate::async_task::AsyncTask<SpellChecker>>,
 }
 
 impl Draw for CInput {
@@ -41,31 +46,49 @@ impl crate::component::EventHandler for CInput {
         self.area
     }
 
-    fn handle_actions(&mut self, _event: &MessageEvent) -> Option<MessageEvent> {
+    fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
+        match event {
+            MessageEvent::InitSpellChecker(language) => {
+                self.spellchecker_task = Some(crate::async_task::AsyncTask {
+                    handle: Some(SpellChecker::async_build(&language)),
+                    result: None,
+                });
+            }
+            _ => {}
+        }
+
         None
     }
 
     fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
-        let mut message = None;
-        if let Some(key_event) = event.get_key() {
-            message = match key_event.code {
-                KeyCode::Enter => {
-                    let m = self.get_current_input().to_string();
-                    self.reset_value();
-                    if !m.is_empty() {
-                        Some(MessageEvent::MessageInput(m))
-                    } else {
-                        None
+        match event {
+            crate::event_handler::Event::Crossterm(event) => {
+                if let Some(key_event) = event.as_key_event() {
+                    match key_event.code {
+                        KeyCode::Enter => {
+                            let m = self.get_current_input().to_string();
+                            self.reset_value();
+                            if !m.is_empty() {
+                                Some(MessageEvent::MessageInput(m))
+                            } else {
+                                None
+                            }
+                        }
+                        _ => {
+                            self.input.handle_key_events(&key_event);
+                            None
+                        }
                     }
-                }
-                _ => {
-                    self.input.handle_events(event);
+                } else {
                     None
                 }
-            };
+            }
+            crate::event_handler::Event::Tick => {
+                self.handle_spellchecker();
+                None
+            }
+            _ => None,
         }
-
-        message
     }
 }
 
@@ -74,6 +97,8 @@ impl CInput {
         Self {
             input: InputWidget::default(),
             area: Rect::default(),
+            spell_checker: None,
+            spellchecker_task: None,
         }
     }
 
@@ -83,6 +108,14 @@ impl CInput {
 
     pub fn reset_value(&mut self) {
         self.input.reset();
+    }
+
+    fn handle_spellchecker(&mut self) {
+        if self.spellchecker_task.as_mut().is_some_and(|v| v.poll())
+            && let Some(spell_task) = self.spellchecker_task.take()
+        {
+            self.spell_checker = spell_task.take_result();
+        }
     }
 }
 
@@ -183,40 +216,27 @@ impl InputWidget {
         self.cursor_position = 0;
     }
 
-    pub fn handle_events(&mut self, event: &crate::event_handler::Event) {
-        if let Some(key_event) = event.get_key()
-            && (key_event.is_press() || key_event.is_repeat())
-        {
-            {
-                match key_event.code {
-                    KeyCode::Char(ch) => {
-                        if key_event.modifiers.contains(KeyModifiers::CONTROL) {
-                            if ch == 'w' {
-                                self.delete_previous_word();
-                            } else if ch == 'h' {
-                                self.delete_char_before_cursor();
-                            }
-                        } else {
-                            self.append_char(ch)
-                        }
-                    }
-                    KeyCode::Backspace => {
+    pub fn handle_key_events(&mut self, key_event: &KeyEvent) {
+        match key_event.code {
+            KeyCode::Char(ch) => {
+                if key_event.modifiers.contains(KeyModifiers::CONTROL) {
+                    if ch == 'w' {
+                        self.delete_previous_word();
+                    } else if ch == 'h' {
                         self.delete_char_before_cursor();
                     }
-                    KeyCode::Left => self.move_cursor_left(),
-                    KeyCode::Right => self.move_cursor_right(),
-                    KeyCode::End => self.move_cursor_end(),
-                    KeyCode::Home => self.move_cursor_home(),
-                    _ => {
-                        if let crate::event_handler::Event::Crossterm(cross) = event
-                            && let crossterm::event::Event::Paste(content) = cross
-                        {
-                            self.value.insert_str(self.cursor_position, content);
-                            self.cursor_position += content.len();
-                        }
-                    }
+                } else {
+                    self.append_char(ch)
                 }
             }
+            KeyCode::Backspace => {
+                self.delete_char_before_cursor();
+            }
+            KeyCode::Left => self.move_cursor_left(),
+            KeyCode::Right => self.move_cursor_right(),
+            KeyCode::End => self.move_cursor_end(),
+            KeyCode::Home => self.move_cursor_home(),
+            _ => {}
         }
     }
 }
@@ -224,33 +244,23 @@ impl InputWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-    fn make_key(code: KeyCode) -> crate::event_handler::Event {
-        crate::event_handler::Event::Crossterm(CrosstermEvent::Key(KeyEvent::new(
-            code,
-            KeyModifiers::NONE,
-        )))
+    fn make_key(code: KeyCode) -> crossterm::event::KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
     }
 
-    fn make_ctrl_w() -> crate::event_handler::Event {
-        crate::event_handler::Event::Crossterm(CrosstermEvent::Key(KeyEvent::new(
-            KeyCode::Char('w'),
-            KeyModifiers::CONTROL,
-        )))
-    }
-
-    fn make_paste(text: &str) -> crate::event_handler::Event {
-        crate::event_handler::Event::Crossterm(CrosstermEvent::Paste(text.to_string()))
+    fn make_ctrl_w() -> crossterm::event::KeyEvent {
+        KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL)
     }
 
     #[test]
     fn test_append_char_and_cursor_movement() {
         let mut w = InputWidget::default();
 
-        w.handle_events(&make_key(KeyCode::Char('a')));
-        w.handle_events(&make_key(KeyCode::Char('b')));
-        w.handle_events(&make_key(KeyCode::Char('c')));
+        w.handle_key_events(&make_key(KeyCode::Char('a')));
+        w.handle_key_events(&make_key(KeyCode::Char('b')));
+        w.handle_key_events(&make_key(KeyCode::Char('c')));
 
         assert_eq!(w.value(), "abc");
         assert_eq!(w.cursor_position, 3);
@@ -262,13 +272,13 @@ mod tests {
         w.value = "abc".to_string();
         w.cursor_position = 3;
 
-        w.handle_events(&make_key(KeyCode::Left));
+        w.handle_key_events(&make_key(KeyCode::Left));
         assert_eq!(w.cursor_position, 2);
 
-        w.handle_events(&make_key(KeyCode::Left));
+        w.handle_key_events(&make_key(KeyCode::Left));
         assert_eq!(w.cursor_position, 1);
 
-        w.handle_events(&make_key(KeyCode::Right));
+        w.handle_key_events(&make_key(KeyCode::Right));
         assert_eq!(w.cursor_position, 2);
     }
 
@@ -278,11 +288,11 @@ mod tests {
         w.value = "abc".to_string();
         w.cursor_position = 3;
 
-        w.handle_events(&make_key(KeyCode::Backspace));
+        w.handle_key_events(&make_key(KeyCode::Backspace));
         assert_eq!(w.value(), "ab");
         assert_eq!(w.cursor_position, 2);
 
-        w.handle_events(&make_key(KeyCode::Backspace));
+        w.handle_key_events(&make_key(KeyCode::Backspace));
         assert_eq!(w.value(), "a");
         assert_eq!(w.cursor_position, 1);
     }
@@ -293,7 +303,7 @@ mod tests {
         w.value = "hello world".to_string();
         w.cursor_position = w.value.len();
 
-        w.handle_events(&make_ctrl_w());
+        w.handle_key_events(&make_ctrl_w());
         assert_eq!(w.cursor_position, 5); // after "hello"
     }
 
@@ -303,10 +313,10 @@ mod tests {
         w.value = "abcdef".to_string();
         w.cursor_position = 3;
 
-        w.handle_events(&make_key(KeyCode::Home));
+        w.handle_key_events(&make_key(KeyCode::Home));
         assert_eq!(w.cursor_position, 0);
 
-        w.handle_events(&make_key(KeyCode::End));
+        w.handle_key_events(&make_key(KeyCode::End));
         assert_eq!(w.cursor_position, 6);
     }
 

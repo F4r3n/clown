@@ -7,7 +7,6 @@ use crate::irc_view::discuss_widget;
 use crate::irc_view::input_widget;
 use crate::irc_view::input_widget::CInput;
 use crate::irc_view::message_content::MessageContent;
-use crate::irc_view::spell_checker::SpellChecker;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
@@ -33,9 +32,6 @@ pub struct MainView<'a> {
     list_users_view: Component<'a, users_widget::UsersWidget>,
     topic_view: Component<'a, topic_widget::TopicWidget>,
     tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
-
-    spell_checker: Option<SpellChecker>,
-    spellchecker_task: Option<crate::async_task::AsyncTask<SpellChecker>>,
 }
 
 impl MainView<'_> {
@@ -59,8 +55,6 @@ impl MainView<'_> {
             input,
             messages_display,
             tooltip_widget,
-            spell_checker: None,
-            spellchecker_task: None,
         }
     }
 
@@ -104,11 +98,7 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Spell(language) => {
-                    self.spellchecker_task = Some(crate::async_task::AsyncTask {
-                        handle: Some(SpellChecker::async_build(&language)),
-                        result: None,
-                    });
-                    None
+                    Some(MessageEvent::InitSpellChecker(language))
                 }
             }
         } else {
@@ -158,17 +148,8 @@ impl MainView<'_> {
         }
     }
 
-    fn handle_spellchecker(&mut self) {
-        if self.spellchecker_task.as_mut().is_some_and(|v| v.poll())
-            && let Some(spell_task) = self.spellchecker_task.take()
-        {
-            self.spell_checker = spell_task.take_result();
-        }
-    }
-
     fn handle_tick(&mut self, model: &mut Model, event: &Event, messages: &mut MessageQueue) {
         self.handle_irc(model, messages);
-        self.handle_spellchecker();
 
         for mut child in self.children() {
             if let Some(message) = child.handle_events(event) {

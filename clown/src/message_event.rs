@@ -18,5 +18,6 @@ pub enum MessageEvent {
     Connect,
     DisConnect,
     OpenWeb(String),
+    InitSpellChecker(String),
     Quit(Option<String>),
 }
