@@ -1,6 +1,6 @@
+use crate::component::Draw;
 use crate::irc_view::spell_checker::SpellChecker;
 use crate::message_event::MessageEvent;
-use crate::{component::Draw, event_handler::Event};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
@@ -217,26 +217,28 @@ impl InputWidget {
     }
 
     pub fn handle_key_events(&mut self, key_event: &KeyEvent) {
-        match key_event.code {
-            KeyCode::Char(ch) => {
-                if key_event.modifiers.contains(KeyModifiers::CONTROL) {
-                    if ch == 'w' {
-                        self.delete_previous_word();
-                    } else if ch == 'h' {
-                        self.delete_char_before_cursor();
+        if key_event.is_press() || key_event.is_repeat() {
+            match key_event.code {
+                KeyCode::Char(ch) => {
+                    if key_event.modifiers.contains(KeyModifiers::CONTROL) {
+                        if ch == 'w' {
+                            self.delete_previous_word();
+                        } else if ch == 'h' {
+                            self.delete_char_before_cursor();
+                        }
+                    } else {
+                        self.append_char(ch)
                     }
-                } else {
-                    self.append_char(ch)
                 }
+                KeyCode::Backspace => {
+                    self.delete_char_before_cursor();
+                }
+                KeyCode::Left => self.move_cursor_left(),
+                KeyCode::Right => self.move_cursor_right(),
+                KeyCode::End => self.move_cursor_end(),
+                KeyCode::Home => self.move_cursor_home(),
+                _ => {}
             }
-            KeyCode::Backspace => {
-                self.delete_char_before_cursor();
-            }
-            KeyCode::Left => self.move_cursor_left(),
-            KeyCode::Right => self.move_cursor_right(),
-            KeyCode::End => self.move_cursor_end(),
-            KeyCode::Home => self.move_cursor_home(),
-            _ => {}
         }
     }
 }
