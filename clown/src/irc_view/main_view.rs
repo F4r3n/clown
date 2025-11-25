@@ -200,6 +200,18 @@ impl MainView<'_> {
                             MessageContent::new_info(format!("{} has quit", source.clone())),
                         ));
                     }
+                    Command::Part(_channel, _) => {
+                        //TODO: for the support of multiple channels
+                        let source = source.unwrap_or_default();
+                        messages.push_message(MessageEvent::RemoveUser(source.clone()));
+                        messages.push_message(MessageEvent::AddMessageView(
+                            None,
+                            MessageContent::new_info(format!(
+                                "{} has quit the channel",
+                                source.clone()
+                            )),
+                        ));
+                    }
                     Command::Join(_) => {
                         let source = source.unwrap_or_default();
 
