@@ -21,19 +21,71 @@ pub struct CInput {
     spellchecker_task: Option<crate::async_task::AsyncTask<SpellChecker>>,
 }
 
+pub fn spans_with_spellcheck<'a>(input: &'a str, check: impl Fn(&str) -> bool) -> Vec<Span<'a>> {
+    let mut spans = Vec::new();
+    let mut start = 0;
+    let mut in_word = false;
+
+    for (i, ch) in input.char_indices() {
+        if ch.is_ascii_whitespace() {
+            if in_word {
+                let word = &input[start..i];
+                let color = if !check(word) {
+                    ratatui::style::Color::LightBlue
+                } else {
+                    ratatui::style::Color::default()
+                };
+                spans.push(Span::from(word).style(Style::default().bg(color)));
+                in_word = false;
+            }
+
+            // push whitespace as-is
+            spans.push(Span::from(&input[i..i + ch.len_utf8()]));
+            start = i + ch.len_utf8();
+        } else if !in_word {
+            in_word = true;
+            start = i;
+        }
+    }
+
+    // flush last word if ends without whitespace
+    if in_word {
+        let word = &input[start..];
+        let color = if !check(word) {
+            ratatui::style::Color::LightBlue
+        } else {
+            ratatui::style::Color::default()
+        };
+        spans.push(Span::from(word).style(Style::default().bg(color)));
+    }
+
+    spans
+}
+
 impl Draw for CInput {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
         // keep 2 for borders and 1 for cursor
         let width = area.width.max(3) - 3;
         let scroll = self.input.set_visual_scroll(width as usize);
+        let input = if let Some(spell_checker) = self.spell_checker.as_ref() {
+            let mut spans = Vec::new();
 
-        let input = Paragraph::new(Line::from(vec![
-            Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)),
-            Span::from(self.input.value()),
-        ]))
-        .scroll((0, scroll as u16));
-        frame.render_widget(input, area);
+            spans.push(Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)));
+
+            spans.extend(spans_with_spellcheck(self.input.value(), |w| {
+                spell_checker.check_word(w)
+            }));
+
+            Paragraph::new(Line::from(spans))
+        } else {
+            Paragraph::new(Line::from(vec![
+                Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)),
+                Span::from(self.input.value()),
+            ]))
+        };
+
+        frame.render_widget(input.scroll((0, scroll as u16)), area);
 
         // Ratatui hides the cursor unless it's explicitly set. Position the  cursor past the
         let x = self.input.visual_cursor().max(scroll) - scroll + 1;

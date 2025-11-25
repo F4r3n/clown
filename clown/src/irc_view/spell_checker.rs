@@ -6,7 +6,7 @@ use tokio::task::JoinHandle;
 use tracing::info;
 
 pub struct SpellChecker {
-    words: Option<dict::Dictionary>,
+    dict: Option<dict::Dictionary>,
 }
 use std::{io::Write, path::PathBuf};
 impl SpellChecker {
@@ -63,7 +63,7 @@ impl SpellChecker {
         let affix = SpellChecker::download_affix(language).await?;
 
         Ok(SpellChecker {
-            words: Some(dict::Dictionary::try_build_from_path(&dict, &affix)?),
+            dict: Some(dict::Dictionary::try_build_from_path(&dict, &affix)?),
         })
     }
 
@@ -71,5 +71,9 @@ impl SpellChecker {
         let handle = Handle::current();
         let language = language.to_string();
         handle.spawn(async move { SpellChecker::try_build(&language).await })
+    }
+
+    pub fn check_word(&self, word: &str) -> bool {
+        self.dict.as_ref().is_some_and(|v| v.check_word(word))
     }
 }
