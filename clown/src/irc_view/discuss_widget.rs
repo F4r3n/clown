@@ -91,7 +91,7 @@ pub struct DiscussWidget {
 impl DiscussWidget {
     pub fn new(current_channel: &str) -> Self {
         Self {
-            current_channel: current_channel.to_string(),
+            current_channel: current_channel.to_lowercase(),
             messages: ChannelMessages::default(),
             scroll_offset: 0,
             max_visible_height: 10,
@@ -109,7 +109,7 @@ impl DiscussWidget {
         self.color_map
             .entry(channel.to_string())
             .or_insert(nickname_color(channel));
-        self.current_channel = channel.to_string();
+        self.current_channel = channel.to_lowercase();
         let max_scroll = self.get_max_scroll();
         self.scroll_offset = max_scroll;
         self.follow_last = true;
@@ -257,15 +257,12 @@ impl DiscussWidget {
                 .entry(source.to_string())
                 .or_insert(nickname_color(source));
         }
-
-        self.messages
-            .add_message(&channel.to_lowercase(), in_message);
+        let channel = channel.to_lowercase();
+        self.messages.add_message(&channel, in_message);
 
         if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view
-            self.scroll_offset = self
-                .get_total_lines()
-                .saturating_sub(self.max_visible_height);
+            self.scroll_offset = self.get_max_scroll();
         }
     }
 
