@@ -76,7 +76,6 @@ impl Dictionary {
             words.push(word.to_string());
 
             if let Some(flags) = split.next() {
-                let vec: Vec<String> = Dictionary::apply_rule(word, &affix, flags).collect();
                 words.extend(Dictionary::apply_rule(word, &affix, flags));
             }
         }

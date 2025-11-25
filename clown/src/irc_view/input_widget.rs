@@ -1,4 +1,4 @@
-use crate::irc_view::spell_checker::{self, SpellChecker};
+use crate::irc_view::spell_checker::SpellChecker;
 use crate::message_event::MessageEvent;
 use crate::{component::Draw, irc_view::message_content::MessageContent};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -74,7 +74,7 @@ impl Draw for CInput {
             spans.push(Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)));
 
             spans.extend(spans_with_spellcheck(self.input.value(), |w| {
-                spell_checker.check_word(w)
+                spell_checker.check_word(&w.to_lowercase())
             }));
 
             Paragraph::new(Line::from(spans))
@@ -241,6 +241,17 @@ impl InputWidget {
         }
     }
 
+    fn delete_char_after_cursor(&mut self) {
+        if self.cursor_position >= self.value.len() {
+            return;
+        }
+
+        if let Some(ch) = self.value[..self.cursor_position].chars().next() {
+            self.value
+                .drain(self.cursor_position..self.cursor_position + ch.len_utf8());
+        }
+    }
+
     fn move_cursor_left(&mut self) {
         if self.cursor_position == 0 || self.cursor_position > self.value.len() {
             return;
@@ -307,6 +318,7 @@ impl InputWidget {
                 KeyCode::Right => self.move_cursor_right(),
                 KeyCode::End => self.move_cursor_end(),
                 KeyCode::Home => self.move_cursor_home(),
+                KeyCode::Delete => self.delete_char_after_cursor(),
                 _ => {}
             }
         }
@@ -367,6 +379,21 @@ mod tests {
         w.handle_key_events(&make_key(KeyCode::Backspace));
         assert_eq!(w.value(), "a");
         assert_eq!(w.cursor_position, 1);
+    }
+
+    #[test]
+    fn test_delete_char_after_cursor() {
+        let mut w = InputWidget::default();
+        w.value = "abc".to_string();
+        w.cursor_position = 2;
+
+        w.handle_key_events(&make_key(KeyCode::Delete));
+        assert_eq!(w.value(), "ab");
+        assert_eq!(w.cursor_position, 2);
+
+        w.handle_key_events(&make_key(KeyCode::Delete));
+        assert_eq!(w.value(), "ab");
+        assert_eq!(w.cursor_position, 2);
     }
 
     #[test]
