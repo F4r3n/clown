@@ -21,61 +21,18 @@ pub struct CInput {
     spellchecker_task: Option<crate::async_task::AsyncTask<SpellChecker>>,
 }
 
-pub fn spans_with_spellcheck<'a>(input: &'a str, check: impl Fn(&str) -> bool) -> Vec<Span<'a>> {
-    let mut spans = Vec::new();
-    let mut start = 0;
-    let mut in_word = false;
-
-    for (i, ch) in input.char_indices() {
-        if ch.is_ascii_whitespace() {
-            if in_word {
-                let word = &input[start..i];
-                let color = if !check(word) {
-                    ratatui::style::Color::LightBlue
-                } else {
-                    ratatui::style::Color::default()
-                };
-                spans.push(Span::from(word).style(Style::default().bg(color)));
-                in_word = false;
-            }
-
-            // push whitespace as-is
-            spans.push(Span::from(&input[i..i + ch.len_utf8()]));
-            start = i + ch.len_utf8();
-        } else if !in_word {
-            in_word = true;
-            start = i;
-        }
-    }
-
-    // flush last word if ends without whitespace
-    if in_word {
-        let word = &input[start..];
-        let color = if !check(word) {
-            ratatui::style::Color::LightBlue
-        } else {
-            ratatui::style::Color::default()
-        };
-        spans.push(Span::from(word).style(Style::default().bg(color)));
-    }
-
-    spans
-}
-
 impl Draw for CInput {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
         // keep 2 for borders and 1 for cursor
         let width = area.width.max(3) - 3;
         let scroll = self.input.set_visual_scroll(width as usize);
-        let input = if let Some(spell_checker) = self.spell_checker.as_ref() {
+        let input = if self.spell_checker.is_some() {
             let mut spans = Vec::new();
 
             spans.push(Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)));
 
-            spans.extend(spans_with_spellcheck(self.input.value(), |w| {
-                spell_checker.check_word(&w.to_lowercase())
-            }));
+            spans.extend(self.spans_with_spellcheck(self.input.value()));
 
             Paragraph::new(Line::from(spans))
         } else {
@@ -149,6 +106,47 @@ impl CInput {
             spell_checker: None,
             spellchecker_task: None,
         }
+    }
+
+    pub fn spans_with_spellcheck<'a>(&self, input: &'a str) -> Vec<Span<'a>> {
+        let mut spans = Vec::new();
+        let mut start = 0;
+        let mut in_word = false;
+        if let Some(spell_checker) = self.spell_checker.as_ref() {
+            for (i, ch) in input.char_indices() {
+                if ch.is_ascii_whitespace() {
+                    if in_word {
+                        let word = &input[start..i];
+                        let color = if !spell_checker.check_word(&word.to_lowercase()) {
+                            ratatui::style::Color::LightBlue
+                        } else {
+                            ratatui::style::Color::default()
+                        };
+                        spans.push(Span::from(word).style(Style::default().bg(color)));
+                        in_word = false;
+                    }
+
+                    // push whitespace as-is
+                    spans.push(Span::from(&input[i..i + ch.len_utf8()]));
+                    start = i + ch.len_utf8();
+                } else if !in_word {
+                    in_word = true;
+                    start = i;
+                }
+            }
+            // flush last word if ends without whitespace
+            if in_word {
+                let word = &input[start..];
+                let color = if !spell_checker.check_word(&word.to_lowercase()) {
+                    ratatui::style::Color::LightBlue
+                } else {
+                    ratatui::style::Color::default()
+                };
+                spans.push(Span::from(word).style(Style::default().bg(color)));
+            }
+        }
+
+        spans
     }
 
     pub fn get_current_input(&self) -> &str {
@@ -242,14 +240,10 @@ impl InputWidget {
     }
 
     fn delete_char_after_cursor(&mut self) {
-        if self.cursor_position >= self.value.len() {
-            return;
+        if self.cursor_position < self.value.len() {
+            self.value.remove(self.cursor_position);
         }
-
-        if let Some(ch) = self.value[..self.cursor_position].chars().next() {
-            self.value
-                .drain(self.cursor_position..self.cursor_position + ch.len_utf8());
-        }
+        // No need to adjust cursor — it stays where it is
     }
 
     fn move_cursor_left(&mut self) {
@@ -391,9 +385,11 @@ mod tests {
         assert_eq!(w.value(), "ab");
         assert_eq!(w.cursor_position, 2);
 
+        w.value = "a".to_string();
+        w.cursor_position = 0;
         w.handle_key_events(&make_key(KeyCode::Delete));
-        assert_eq!(w.value(), "ab");
-        assert_eq!(w.cursor_position, 2);
+        assert_eq!(w.value(), "");
+        assert_eq!(w.cursor_position, 0);
     }
 
     #[test]
