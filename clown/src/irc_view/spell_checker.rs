@@ -12,6 +12,7 @@ use std::{io::Write, path::PathBuf};
 impl SpellChecker {
     async fn download_file(url: &str, to: &PathBuf) -> color_eyre::Result<PathBuf> {
         let mut response = reqwest::get(url).await?;
+        to.parent().map(std::fs::create_dir_all);
         let mut file = std::fs::File::create(to)?;
 
         while let Some(chunk) = response.chunk().await? {
