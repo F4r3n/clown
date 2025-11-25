@@ -355,7 +355,11 @@ impl crate::component::EventHandler for DiscussWidget {
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         match event {
             MessageEvent::AddMessageView(channel, in_message) => {
-                self.add_line(channel, in_message.clone());
+                if let Some(channel) = channel {
+                    self.add_line(channel, in_message.clone());
+                } else {
+                    self.add_line(&self.current_channel.clone(), in_message.clone());
+                }
                 None
             }
             MessageEvent::SelectChannel(channel) => {

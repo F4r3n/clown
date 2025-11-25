@@ -49,7 +49,7 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
     }
 }
 
-pub fn help(channel: &str) -> MessageEvent {
+pub fn help() -> MessageEvent {
     let mut output: String = "List of commands, type /command:\n".into();
     for e in ClientCommand::iter() {
         output.push_str(
@@ -61,13 +61,13 @@ pub fn help(channel: &str) -> MessageEvent {
             .as_str(),
         );
     }
-    MessageEvent::AddMessageView(channel.to_string(), MessageContent::new_info(output))
+    MessageEvent::AddMessageView(None, MessageContent::new_info(output))
 }
 
 pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
     if !model.is_irc_finished() {
         return Some(MessageEvent::AddMessageView(
-            model.current_channel.clone(),
+            None,
             MessageContent::new_error("Already connected".to_string()),
         ));
     }

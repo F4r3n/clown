@@ -41,7 +41,7 @@ async fn main() -> color_eyre::Result<()> {
     );
     let mut list_messages = message_queue::MessageQueue::new();
     list_messages.push_message(MessageEvent::AddMessageView(
-        model.current_channel.clone(),
+        None,
         MessageContent::new_info("Use the command /help".to_string()),
     ));
 

@@ -91,7 +91,7 @@ impl MainView<'_> {
                         Some(message)
                     }))
                 }
-                command::ClientCommand::Help => Some(help(&model.current_channel)),
+                command::ClientCommand::Help => Some(help()),
                 command::ClientCommand::Nick(new_nick) => {
                     let _ = model.set_nickname(&new_nick);
                     model.send_command(Command::Nick(new_nick.clone()));
@@ -109,7 +109,7 @@ impl MainView<'_> {
             ));
             self.messages_display
                 .handle_actions(&MessageEvent::AddMessageView(
-                    model.current_channel.to_string(),
+                    None,
                     MessageContent::new(Some(nickname), content),
                 ))
         }
@@ -129,7 +129,7 @@ impl MainView<'_> {
             received_error = true;
             //Received an error
             Some(MessageEvent::AddMessageView(
-                model.current_channel.clone(),
+                None,
                 MessageContent::new_error(msg),
             ))
         } else {
@@ -177,7 +177,7 @@ impl MainView<'_> {
                             messages.push_message(MessageEvent::HighlightUser(from.clone()));
                         }
                         messages.push_message(MessageEvent::AddMessageView(
-                            from,
+                            Some(from),
                             MessageContent::new_message(
                                 source,
                                 content,
@@ -196,7 +196,7 @@ impl MainView<'_> {
                         let source = source.unwrap_or_default();
                         messages.push_message(MessageEvent::RemoveUser(source.clone()));
                         messages.push_message(MessageEvent::AddMessageView(
-                            model.current_channel.to_string(),
+                            None,
                             MessageContent::new_info(format!("{} has quit", source.clone())),
                         ));
                     }
@@ -206,7 +206,7 @@ impl MainView<'_> {
                         messages.push_message(MessageEvent::JoinUser(source.clone()));
                         if !source.eq(model.get_nickname()) {
                             messages.push_message(MessageEvent::AddMessageView(
-                                model.current_channel.to_string(),
+                                None,
                                 MessageContent::new_info(format!("{} has joined", source.clone())),
                             ));
                         }
@@ -222,7 +222,7 @@ impl MainView<'_> {
                         ));
 
                         messages.push_message(MessageEvent::AddMessageView(
-                            model.current_channel.to_string(),
+                            None,
                             MessageContent::new(source, content),
                         ));
                     }
@@ -234,7 +234,7 @@ impl MainView<'_> {
                     }
                     ResponseNumber::Err(_, content) => {
                         messages.push_message(MessageEvent::AddMessageView(
-                            model.current_channel.to_string(),
+                            None,
                             MessageContent::new_error(content),
                         ));
                     }
@@ -333,7 +333,7 @@ impl widget_view::WidgetView for MainView<'_> {
             }
             MessageEvent::Connect => {
                 messages.push_message(MessageEvent::AddMessageView(
-                    model.current_channel.to_string(),
+                    None,
                     MessageContent::new_info(format!(
                         "Try to connect to {}...",
                         model.get_address().unwrap_or("No address")
@@ -352,7 +352,7 @@ impl widget_view::WidgetView for MainView<'_> {
                     model.send_command(clown_core::command::Command::Quit(None));
                 } else {
                     messages.push_message(MessageEvent::AddMessageView(
-                        model.current_channel.to_string(),
+                        None,
                         MessageContent::new(None, "Disconnected".to_string()),
                     ));
                 }

@@ -3,6 +3,7 @@ use clown_spell::dict;
 use color_eyre::eyre::eyre;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
+use tracing::info;
 
 pub struct SpellChecker {
     words: Option<dict::Dictionary>,
@@ -23,6 +24,7 @@ impl SpellChecker {
         if let Some(dest) = Model::project_dir()
             .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.aff", language)))
         {
+            info!("affix found here: {}", dest.clone().display());
             if dest.exists() {
                 return Ok(dest);
             }
@@ -40,6 +42,8 @@ impl SpellChecker {
         if let Some(dest) = Model::project_dir()
             .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.dic", language)))
         {
+            info!("dic found here: {}", dest.clone().display());
+
             if dest.exists() {
                 return Ok(dest);
             }
@@ -54,8 +58,8 @@ impl SpellChecker {
     }
 
     pub async fn try_build(language: &str) -> color_eyre::Result<Self> {
-        let dict = SpellChecker::download_dict(&language).await?;
-        let affix = SpellChecker::download_affix(&language).await?;
+        let dict = SpellChecker::download_dict(language).await?;
+        let affix = SpellChecker::download_affix(language).await?;
 
         Ok(SpellChecker {
             words: Some(dict::Dictionary::try_build_from_path(&dict, &affix)?),

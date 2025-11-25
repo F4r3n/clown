@@ -1,6 +1,6 @@
-use crate::component::Draw;
-use crate::irc_view::spell_checker::SpellChecker;
+use crate::irc_view::spell_checker::{self, SpellChecker};
 use crate::message_event::MessageEvent;
+use crate::{component::Draw, irc_view::message_content::MessageContent};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
@@ -83,10 +83,7 @@ impl crate::component::EventHandler for CInput {
                     None
                 }
             }
-            crate::event_handler::Event::Tick => {
-                self.handle_spellchecker();
-                None
-            }
+            crate::event_handler::Event::Tick => self.handle_spellchecker(),
             _ => None,
         }
     }
@@ -110,11 +107,32 @@ impl CInput {
         self.input.reset();
     }
 
-    fn handle_spellchecker(&mut self) {
+    fn handle_spellchecker(&mut self) -> Option<MessageEvent> {
         if self.spellchecker_task.as_mut().is_some_and(|v| v.poll())
             && let Some(spell_task) = self.spellchecker_task.take()
         {
-            self.spell_checker = spell_task.take_result();
+            if let Some(spell_checker) = spell_task.take_result() {
+                match spell_checker {
+                    Ok(spell_checker) => {
+                        self.spell_checker = Some(spell_checker);
+                        Some(MessageEvent::AddMessageView(
+                            None,
+                            MessageContent::new_info("Spell checker is ready".to_string()),
+                        ))
+                    }
+                    Err(e) => Some(MessageEvent::AddMessageView(
+                        None,
+                        MessageContent::new_error(format!("Spell checker error: {}", e)),
+                    )),
+                }
+            } else {
+                Some(MessageEvent::AddMessageView(
+                    None,
+                    MessageContent::new_error("Error no spell checker retrieved".to_string()),
+                ))
+            }
+        } else {
+            None
         }
     }
 }
