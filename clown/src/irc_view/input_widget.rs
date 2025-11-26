@@ -279,6 +279,7 @@ impl InputWidget {
             .rev()
             .find(|&(_, ch)| ch.is_whitespace())
         {
+            self.value.drain(idx..self.cursor_position);
             self.cursor_position = idx;
         }
     }
@@ -400,6 +401,7 @@ mod tests {
 
         w.handle_key_events(&make_ctrl_w());
         assert_eq!(w.cursor_position, 5); // after "hello"
+        assert_eq!(w.value, "hello");
     }
 
     #[test]

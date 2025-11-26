@@ -8,6 +8,7 @@ use message_queue::MessageQueue;
 use model::Model;
 use model::RunningState;
 use model::View;
+use tracing::info;
 mod component;
 mod event_handler;
 mod widget_view;
@@ -19,6 +20,7 @@ use event_handler::Event;
 use ratatui::Frame;
 mod async_task;
 mod command;
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
@@ -26,8 +28,13 @@ async fn main() -> color_eyre::Result<()> {
 
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
-    tracing_subscriber::fmt().with_writer(non_blocking).init();
+    let fmt_layer = fmt::layer().with_writer(non_blocking); // <-- writer goes here
 
+    tracing_subscriber::registry()
+        .with(fmt_layer)
+        .with(EnvFilter::from_default_env())
+        .init();
+    info!("LOGGG");
     color_eyre::install()?;
     let mut events = EventHandler::new();
     EventHandler::enable_mouse_event()?;

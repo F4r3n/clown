@@ -368,98 +368,91 @@ impl crate::component::EventHandler for DiscussWidget {
     }
 
     fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
-        if let Some(key) = event.get_key() {
-            match key.code {
-                KeyCode::Up => {
-                    self.scroll_up();
-                    None
-                }
-                KeyCode::PageUp => {
-                    for _ in 0..5 {
-                        self.scroll_up();
-                    }
-                    None
-                }
-                KeyCode::Down => {
-                    self.scroll_down();
-                    None
-                }
-                KeyCode::PageDown => {
-                    for _ in 0..5 {
+        if let crate::event_handler::Event::Crossterm(cross) = &event {
+            match cross {
+                crossterm::event::Event::Resize(_x, _y) => None,
+                crossterm::event::Event::Mouse(mouse_event) => match mouse_event.kind {
+                    crossterm::event::MouseEventKind::ScrollDown => {
                         self.scroll_down();
-                    }
-                    None
-                }
-                KeyCode::Home => {
-                    self.scroll_offset = 0;
-                    None
-                }
-                KeyCode::End => {
-                    self.scroll_offset = self.get_total_lines();
-                    None
-                }
-                _ => None,
-            }
-        } else if let Some(mouse_event) = event.get_mouse() {
-            match mouse_event.kind {
-                crossterm::event::MouseEventKind::ScrollDown => {
-                    self.scroll_down();
-                    None
-                }
-                crossterm::event::MouseEventKind::ScrollUp => {
-                    self.scroll_up();
-                    None
-                }
-                crossterm::event::MouseEventKind::Down(button) => {
-                    if button == MouseButton::Left {
-                        if let Some(range) =
-                            self.get_range_from_mouse(mouse_event.row, mouse_event.column)
-                        {
-                            self.messages
-                                .get_url_from_range(&self.current_channel, &range)
-                                .map(MessageEvent::OpenWeb)
-                        } else {
-                            None
-                        }
-                    } else {
                         None
                     }
-                }
-                #[cfg(feature = "website-preview")]
-                crossterm::event::MouseEventKind::Moved => {
-                    if let Some(range) =
-                        self.get_range_from_mouse(mouse_event.row, mouse_event.column)
-                    {
-                        if mouse_event.modifiers == KeyModifiers::CONTROL {
-                            self.last_ctrl_hovered = Some(range.clone())
-                        }
-
-                        if let Some(last_hovered) = &self.last_hovered
-                            && range.eq(&last_hovered.range)
-                        {
-                            if std::time::Instant::now().duration_since(last_hovered.time)
-                                > Duration::from_secs(2)
+                    crossterm::event::MouseEventKind::ScrollUp => {
+                        self.scroll_up();
+                        None
+                    }
+                    crossterm::event::MouseEventKind::Down(button) => {
+                        if button == MouseButton::Left {
+                            if let Some(range) =
+                                self.get_range_from_mouse(mouse_event.row, mouse_event.column)
                             {
                                 self.messages
-                                    .get_url_from_range(&self.current_channel, &last_hovered.range)
-                                    .map(MessageEvent::HoverURL)
+                                    .get_url_from_range(&self.current_channel, &range)
+                                    .map(MessageEvent::OpenWeb)
                             } else {
                                 None
                             }
                         } else {
-                            self.last_hovered = Some(Hovered::new(range));
                             None
                         }
-                    } else {
-                        self.last_hovered = None;
+                    }
+                    #[cfg(feature = "website-preview")]
+                    crossterm::event::MouseEventKind::Moved => {
+                        if let Some(range) =
+                            self.get_range_from_mouse(mouse_event.row, mouse_event.column)
+                        {
+                            if mouse_event.modifiers == KeyModifiers::CONTROL {
+                                self.last_ctrl_hovered = Some(range.clone())
+                            }
+
+                            if let Some(last_hovered) = &self.last_hovered
+                                && range.eq(&last_hovered.range)
+                            {
+                                if std::time::Instant::now().duration_since(last_hovered.time)
+                                    > Duration::from_secs(2)
+                                {
+                                    self.messages
+                                        .get_url_from_range(
+                                            &self.current_channel,
+                                            &last_hovered.range,
+                                        )
+                                        .map(MessageEvent::HoverURL)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                self.last_hovered = Some(Hovered::new(range));
+                                None
+                            }
+                        } else {
+                            self.last_hovered = None;
+                            None
+                        }
+                    }
+                    _ => None,
+                },
+                crossterm::event::Event::Key(key_event) => match key_event.code {
+                    KeyCode::PageUp => {
+                        for _ in 0..5 {
+                            self.scroll_up();
+                        }
                         None
                     }
-                }
-                _ => None,
-            }
-        } else if let crate::event_handler::Event::Crossterm(cross) = &event {
-            match cross {
-                crossterm::event::Event::Resize(_x, _y) => None,
+                    KeyCode::PageDown => {
+                        for _ in 0..5 {
+                            self.scroll_down();
+                        }
+                        None
+                    }
+                    KeyCode::Home => {
+                        self.scroll_offset = 0;
+                        None
+                    }
+                    KeyCode::End => {
+                        self.scroll_offset = self.get_total_lines();
+                        None
+                    }
+                    _ => None,
+                },
                 _ => None,
             }
         } else {

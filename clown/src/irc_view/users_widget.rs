@@ -172,6 +172,7 @@ impl crate::component::EventHandler for UsersWidget {
             && key.is_press()
             && !key.is_repeat()
         {
+            let previous_selected = self.list_state.selected();
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 match key.code {
                     crossterm::event::KeyCode::Char('p') => {
@@ -186,6 +187,8 @@ impl crate::component::EventHandler for UsersWidget {
 
             if let Some(current_id) = self.list_state.selected()
                 && let Some(user) = self.list_users.get_mut(current_id)
+                && let Some(previous_selected) = previous_selected
+                && current_id != previous_selected
             {
                 user.need_hightlight = false;
                 return Some(MessageEvent::SelectChannel(user.name.to_string()));
