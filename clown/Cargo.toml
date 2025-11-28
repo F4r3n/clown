@@ -46,10 +46,15 @@ open = "5.3.3"
 palette = {version="0.7.6", features=["std"], default-features=false}
 reqwest = {version = "0.12.24", features=["rustls-tls"], default-features=false}
 tracing-appender = "0.2.3"
+shadow-rs = {version="1.4.0", default-features=false}
+clap = { version = "4.5.53", features = ["derive", "help", "std"], default-features = false }
 
 [dev-dependencies]
 anyhow = "1.0.100"
 criterion = { version = "0.7.0", features = ["plotters"] }
+
+[build-dependencies]
+shadow-rs = "1.4.0"
 
 [features]
 default = ["website-preview"]

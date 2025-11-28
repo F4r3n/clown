@@ -8,7 +8,7 @@ use message_queue::MessageQueue;
 use model::Model;
 use model::RunningState;
 use model::View;
-use tracing::{debug, info};
+use tracing::info;
 mod component;
 mod event_handler;
 mod widget_view;
@@ -20,21 +20,36 @@ use event_handler::Event;
 use ratatui::Frame;
 mod async_task;
 mod command;
+use shadow_rs::shadow;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+shadow!(build);
+
+use clap::Parser;
+
+/// Simple program to greet a person
+#[derive(Parser, Debug)]
+#[command(version = build::PKG_VERSION, long_version = build::VERSION)]
+struct Args {
+    /// Name of the person to greet
+    #[arg(short, long)]
+    channel: String,
+}
+
 type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
+    let _args = Args::parse();
     let file_appender = tracing_appender::rolling::never(".", "app.log");
-
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
-    let fmt_layer = fmt::layer().with_writer(non_blocking); // <-- writer goes here
+    let fmt_layer = fmt::layer().with_writer(non_blocking);
 
     tracing_subscriber::registry()
         .with(fmt_layer)
         .with(EnvFilter::from_default_env())
         .init();
-    info!("LOGGG");
+    info!("COMMIT {}", build::SHORT_COMMIT); //8405e28e
+
     color_eyre::install()?;
     let mut events = EventHandler::new();
     EventHandler::enable_mouse_event()?;
