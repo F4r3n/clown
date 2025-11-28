@@ -42,7 +42,7 @@ debug = false
 debug = true
 lto = false
 strip = false
-inherits = 'release'
+inherits = 'dist'
 
 [profile.release]
 debug = true
