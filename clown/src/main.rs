@@ -8,7 +8,7 @@ use message_queue::MessageQueue;
 use model::Model;
 use model::RunningState;
 use model::View;
-use tracing::info;
+use tracing::{debug, info};
 mod component;
 mod event_handler;
 mod widget_view;
@@ -54,7 +54,6 @@ async fn main() -> color_eyre::Result<()> {
 
     while model.running_state != RunningState::Done {
         let event = events.next().await?;
-
         terminal.draw(|f| view(&mut model, &mut views, f))?;
 
         handle_event(&mut model, &mut views, event, &mut list_messages)?;

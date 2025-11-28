@@ -89,6 +89,7 @@ impl crate::component::EventHandler for CInput {
                         }
                     }
                 } else {
+                    self.input.handle_other(event);
                     None
                 }
             }
@@ -225,6 +226,11 @@ impl InputWidget {
         self.cursor_position += ch.len_utf8();
     }
 
+    fn paste(&mut self, content: String) {
+        self.value.push_str(&content);
+        self.cursor_position = UnicodeWidthStr::width(self.value.as_str());
+    }
+
     fn delete_char_before_cursor(&mut self) {
         if self.cursor_position == 0 || self.cursor_position > self.value.len() {
             return;
@@ -281,6 +287,9 @@ impl InputWidget {
         {
             self.value.drain(idx..self.cursor_position);
             self.cursor_position = idx;
+        } else {
+            self.value.clear();
+            self.cursor_position = 0;
         }
     }
 
@@ -290,6 +299,12 @@ impl InputWidget {
 
     fn move_cursor_home(&mut self) {
         self.cursor_position = 0;
+    }
+
+    pub fn handle_other(&mut self, event: &crossterm::event::Event) {
+        if let crossterm::event::Event::Paste(content) = event {
+            self.paste(content.clone());
+        }
     }
 
     pub fn handle_key_events(&mut self, key_event: &KeyEvent) {

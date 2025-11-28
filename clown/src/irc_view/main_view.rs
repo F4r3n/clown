@@ -312,6 +312,9 @@ impl widget_view::WidgetView for MainView<'_> {
                     }
                 }
             }
+            Event::Crossterm(crossterm::event::Event::Paste(_)) => {
+                self.input.handle_events(event);
+            }
             Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => {
                 if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row) {
                     for child in self.children().iter_mut() {
