@@ -26,11 +26,9 @@ shadow!(build);
 
 use clap::Parser;
 
-/// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(version = build::PKG_VERSION, long_version = build::VERSION)]
 struct Args {
-    /// Name of the person to greet
     #[arg(short, long, default_value = "clown.toml")]
     config_name: String,
 }

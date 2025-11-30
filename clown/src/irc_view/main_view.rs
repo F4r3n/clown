@@ -24,7 +24,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
 };
 
-use tracing::info;
+use tracing::{error, info};
 
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
@@ -341,7 +341,9 @@ impl widget_view::WidgetView for MainView<'_> {
                 }
             }
             MessageEvent::OpenWeb(url) => {
-                let _ = open::that(&url);
+                if let Err(e) = open::that(&url) {
+                    error!("Try to open {}, {}", url.clone(), e);
+                }
             }
             MessageEvent::Quit(message) => {
                 model.send_command(clown_core::command::Command::Quit(message));
