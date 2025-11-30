@@ -31,14 +31,14 @@ use clap::Parser;
 #[command(version = build::PKG_VERSION, long_version = build::VERSION)]
 struct Args {
     /// Name of the person to greet
-    #[arg(short, long)]
-    channel: String,
+    #[arg(short, long, default_value = "clown.toml")]
+    config_name: String,
 }
 
 type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    let _args = Args::parse();
+    let args = Args::parse();
     let file_appender = tracing_appender::rolling::never(".", "app.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
@@ -55,7 +55,7 @@ async fn main() -> color_eyre::Result<()> {
     EventHandler::enable_mouse_event()?;
     let mut terminal = tui::init()?;
 
-    let mut model = model::Model::new();
+    let mut model = model::Model::new(args.config_name);
     let mut views: ViewMap = AHashMap::new();
     views.insert(
         View::MainView,

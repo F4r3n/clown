@@ -26,27 +26,49 @@ pub struct IRCConnection {
     pub task: JoinHandle<()>,
 }
 
+pub struct StoredConfig {
+    config: Config,
+    stored_name: String,
+}
+
+impl StoredConfig {
+    pub fn save(&self) -> color_eyre::Result<()> {
+        self.config.save(&self.stored_name)
+    }
+
+    pub fn set_nickname(&mut self, nickname: String) {
+        self.config.login_config.nickname = nickname;
+    }
+}
+
 pub struct Model {
     pub running_state: RunningState,
     pub current_view: View,
-    config: Config,
+    stored_config: StoredConfig,
     pub current_channel: String,
     pub irc_connection: Option<IRCConnection>,
     pub retry: u8,
 }
 
 impl Model {
-    pub fn new() -> Self {
-        let config = Config::new();
+    pub fn new(config_name: String) -> Self {
+        let config = Config::new(&config_name);
         let channel = config.login_config.channel.to_string();
         Self {
             running_state: RunningState::Start,
             current_view: View::MainView,
             current_channel: channel.to_lowercase(),
-            config,
+            stored_config: StoredConfig {
+                config,
+                stored_name: config_name,
+            },
             irc_connection: None,
             retry: 5,
         }
+    }
+
+    fn get_config(&self) -> &Config {
+        &self.stored_config.config
     }
 
     pub fn reset_retry(&mut self) {
@@ -54,40 +76,40 @@ impl Model {
     }
 
     pub fn save(&self) -> color_eyre::Result<()> {
-        self.config.save()
+        self.stored_config.save()
     }
 
-    pub fn set_nickname(&mut self, nickname: &str) -> color_eyre::Result<&str> {
-        self.config.login_config.nickname = nickname.to_string();
+    pub fn set_nickname(&mut self, nickname: String) -> color_eyre::Result<&str> {
+        self.stored_config.set_nickname(nickname);
         self.save()?;
-        Ok(&self.config.login_config.nickname)
+        Ok(&self.get_config().login_config.nickname)
     }
 
     pub fn get_nickname(&self) -> &str {
-        &self.config.login_config.nickname
+        &self.get_config().login_config.nickname
     }
 
     pub fn get_login_channel(&self) -> &str {
-        &self.config.login_config.channel
+        &self.get_config().login_config.channel
     }
 
     pub fn get_address(&self) -> Option<&str> {
-        self.config
+        self.get_config()
             .connection_config
             .as_ref()
             .map(|v| v.address.as_ref())
     }
 
     pub fn is_autojoin(&self) -> bool {
-        self.config.client_config.auto_join
+        self.get_config().client_config.auto_join
     }
 
     pub fn get_connection_config(&self) -> Option<ConnectionConfig> {
-        self.config.connection_config.clone()
+        self.get_config().connection_config.clone()
     }
 
     pub fn get_login_config(&self) -> LoginConfig {
-        self.config.login_config.clone()
+        self.get_config().login_config.clone()
     }
 
     pub fn send_command(&mut self, in_command: Command) {

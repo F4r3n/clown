@@ -39,15 +39,15 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn new() -> Self {
-        Self::read().unwrap_or_default()
+    pub fn new(config_name: &str) -> Self {
+        Self::read(config_name).unwrap_or_default()
     }
 
-    pub fn save(&self) -> color_eyre::Result<()> {
+    pub fn save(&self, config_name: &str) -> color_eyre::Result<()> {
         let result = toml::to_string(self)?;
 
         let config_path =
-            Self::config_path().ok_or(color_eyre::eyre::Error::msg("Invalid Path"))?;
+            Self::config_path(config_name).ok_or(color_eyre::eyre::Error::msg("Invalid Path"))?;
         if let Some(parent) = config_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -55,12 +55,12 @@ impl Config {
         Ok(())
     }
 
-    fn config_path() -> Option<PathBuf> {
-        Model::project_dir().map(|proj_dirs| proj_dirs.config_dir().join("clown.toml"))
+    fn config_path(config_name: &str) -> Option<PathBuf> {
+        Model::project_dir().map(|proj_dirs| proj_dirs.config_dir().join(config_name))
     }
 
-    fn read() -> color_eyre::Result<Self> {
-        if let Some(config_path) = Self::config_path() {
+    fn read(config_name: &str) -> color_eyre::Result<Self> {
+        if let Some(config_path) = Self::config_path(config_name) {
             let content = std::fs::read_to_string(config_path)?;
             if let Ok(config) = toml::from_str::<Config>(&content) {
                 Ok(config)
