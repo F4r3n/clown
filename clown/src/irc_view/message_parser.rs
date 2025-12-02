@@ -128,36 +128,48 @@ pub fn get_size_without_format(content: &str) -> usize {
     if is_string_plain(content) {
         return content.len();
     }
-    let bytes = content.as_bytes();
-    let mut i = 0;
     let mut count = 0;
-
+    let mut i = 0;
+    let bytes = content.as_bytes();
     while i < bytes.len() {
         match bytes.get(i) {
-            Some(0x02) | Some(0x1D) | Some(0x1E) | Some(0x1F) | Some(0x0F) => i += 1,
+            // Simple formatting bytes to skip
+            Some(0x02) | Some(0x1D) | Some(0x1E) | Some(0x1F) | Some(0x0F) => {
+                i += 1;
+            }
+
+            // Color format: \x03([0-9]{1,2})(,[0-9]{1,2})?
             Some(0x03) => {
                 i += 1;
-                let mut n = 0;
-                while n < 2 && i < bytes.len() && bytes.get(i).is_some_and(|b| b.is_ascii_digit()) {
-                    i += 1;
-                    n += 1;
-                }
-                if i < bytes.len() && bytes.get(i).is_some_and(|b| b == &b',') {
-                    i += 1;
-                    let mut n = 0;
-                    while n < 2
-                        && i < bytes.len()
-                        && bytes.get(i).is_some_and(|b| b.is_ascii_digit())
-                    {
+
+                // up to 2 digits
+                for _ in 0..2 {
+                    if i < bytes.len() && bytes.get(i).is_some_and(|f| f.is_ascii_digit()) {
                         i += 1;
-                        n += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                // optional ",NN"
+                if i < bytes.len() && bytes.get(i).is_some_and(|f| f == &b',') {
+                    i += 1;
+                    for _ in 0..2 {
+                        if i < bytes.len() && bytes.get(i).is_some_and(|f| f.is_ascii_digit()) {
+                            i += 1;
+                        } else {
+                            break;
+                        }
                     }
                 }
             }
-
             _ => {
-                count += 1;
-                i += 1;
+                if let Some(ch) = content[i..].chars().next() {
+                    count += 1;
+                    i += ch.len_utf8();
+                } else {
+                    i += 1;
+                }
             }
         }
     }
@@ -286,5 +298,18 @@ mod tests {
 
         let input = "A\x034B\x037C";
         assert_eq!(get_size_without_format(input), 3);
+    }
+
+    #[test]
+    fn test_mixed_unicode_and_formatting() {
+        let input = "A\x032,3(ﾉ´ヮ｀)ﾉ✧B";
+        // A + unicode(7) + B = 9
+        assert_eq!(get_size_without_format(input), 10);
+    }
+
+    #[test]
+    fn test_multiple_formats() {
+        let input = "\x0312H\x02e\x1Dl\x1El\x037o\x0F!";
+        assert_eq!(get_size_without_format(input), 6);
     }
 }

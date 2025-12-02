@@ -228,7 +228,7 @@ impl InputWidget {
 
     fn paste(&mut self, content: String) {
         self.value.push_str(&content);
-        self.cursor_position = UnicodeWidthStr::width(self.value.as_str());
+        self.cursor_position = self.value.len();
     }
 
     fn delete_char_before_cursor(&mut self) {
