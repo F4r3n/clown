@@ -164,7 +164,9 @@ impl DiscussWidget {
                 let mut char_skipped: usize = 0;
                 if self.scroll_offset > wrapped_rows_seen {
                     let skip = self.scroll_offset - wrapped_rows_seen;
-                    char_skipped = rows[..skip].iter().map(|v| v.chars().count()).sum();
+                    if let Some(rows) = rows.get(..skip) {
+                        char_skipped = rows.iter().map(|v| v.chars().count()).sum();
+                    }
                     rows = rows.into_iter().skip(skip).collect();
                 }
 
@@ -172,8 +174,10 @@ impl DiscussWidget {
                     let pointed_row = (index_y - visible_rows_total).min(rows.len() - 1);
                     //it will be an approximation, because wrapping can remove spaces,
                     //  but sometimes does not remove characters
-                    let char_position: usize =
-                        rows[..pointed_row].iter().map(|v| v.chars().count()).sum();
+                    let char_position: usize = rows
+                        .get(..pointed_row)
+                        .map(|slice| slice.iter().map(|v| v.chars().count()).sum())
+                        .unwrap_or(0);
                     if char_skipped + char_position + pos_x > line.get_message_length() {
                         return None;
                     }
