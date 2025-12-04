@@ -9,6 +9,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::Paragraph,
 };
+use tracing::info;
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Default)]
@@ -118,7 +119,12 @@ impl CInput {
                 if ch.is_ascii_whitespace() {
                     if in_word {
                         let word = &input[start..i];
-                        let color = if !spell_checker.check_word(&word.to_lowercase()) {
+                        /*info!(
+                            "Word to be checked: '{}' {}",
+                            &word,
+                            spell_checker.check_word(word)
+                        );*/
+                        let color = if !spell_checker.check_word(word) {
                             ratatui::style::Color::LightBlue
                         } else {
                             ratatui::style::Color::default()

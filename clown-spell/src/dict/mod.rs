@@ -10,6 +10,7 @@ use crate::dict::affix::DictAffix;
 #[derive(Debug)]
 pub struct Dictionary {
     words: fst::Set<Vec<u8>>,
+    affix_rules: DictAffix,
 }
 
 impl Dictionary {
@@ -83,11 +84,15 @@ impl Dictionary {
 
         let set = fst::Set::from_iter(words).map_err(DictionaryBuildError::WordsIterator)?;
 
-        Ok(Self { words: set })
+        Ok(Self {
+            words: set,
+            affix_rules: affix,
+        })
     }
 
     pub fn check_word(&self, word: &str) -> bool {
-        self.words.contains(word)
+        self.words
+            .contains(self.affix_rules.transform_word(word).as_bytes())
     }
 }
 
@@ -127,6 +132,36 @@ PFX U re pre .";
         // Negative cases
         assert!(!dict.check_word("walkingly"));
         assert!(!dict.check_word("rewalk"));
+    }
+
+    #[test]
+    fn test_dictionary_build_savoir() {
+        let dict_data = "\
+2
+savoir/S.
+savoir/pE";
+
+        let affix_data = "\
+SFX pE Y 7
+SFX pE avoir avoir/n'q'd'l'm't's' savoir
+SFX pE avoir achant/n'q'd'l'm't's' savoir
+SFX pE avoir u/L'D'Q' savoir
+SFX pE avoir us/D'Q' savoir
+SFX pE avoir ue/L'D'Q' savoir
+SFX pE avoir ues/D'Q' savoir
+SFX pE avoir ais/j'n'q'l'm't' savoir
+";
+
+        let dict = Dictionary::try_build(
+            BufReader::new(dict_data.as_bytes()),
+            BufReader::new(affix_data.as_bytes()),
+        )
+        .unwrap();
+
+        // Base words
+        assert!(dict.check_word("savoir"));
+        assert!(dict.check_word("sais"));
+        assert!(!dict.check_word("sai"));
     }
 
     #[test]
