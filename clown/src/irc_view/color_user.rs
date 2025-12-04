@@ -10,22 +10,21 @@ fn hash_nickname(nickname: &str) -> u64 {
 }
 
 pub fn nickname_color(nickname: &str) -> ratatui::style::Color {
-    let hash = hash_nickname(nickname) % 500;
+    let hash = hash_nickname(nickname);
     bright_distinct_color(hash)
 }
 
 pub fn bright_distinct_color(index: u64) -> Color {
-    const GOLDEN_RATIO_CONJUGATE: f32 = 0.618034;
-    const GOLDEN_ANGLE: f32 = 360.0 * GOLDEN_RATIO_CONJUGATE;
-
+    const GOLDEN_RATIO_CONJUGATE: f64 = 0.618033988749;
+    const GOLDEN_ANGLE: f64 = GOLDEN_RATIO_CONJUGATE;
+    let index = index % 12345;
     // Spread hue evenly around the color wheel
-    let hue = (index as f32 * GOLDEN_ANGLE) % 360.0;
+    let hue = ((index as f64 * GOLDEN_ANGLE) % 360.0) as f32;
 
     // Use quasi-random variations for S and V (repeat period is irrational)
-    let f = index as f32 * GOLDEN_RATIO_CONJUGATE;
-    let saturation = 0.55 + 0.45 * f.fract(); // 0.55–0.9
-    let value = 0.8 + 0.2 * f.fract().abs(); // 0.8–1
-
+    let f = index as f32 * GOLDEN_RATIO_CONJUGATE as f32;
+    let saturation = 0.2 + 0.8 * f.fract(); // 0.55–0.9
+    let value = 0.55 + 0.45 * f.fract().abs(); // 0.8–1
     let hsv: Hsv<EncSrgb, f32> = Hsv::new(hue, saturation, value);
 
     let srgb: Srgb<u8> = Srgb::from_color_unclamped(hsv).into_format();
@@ -80,18 +79,12 @@ mod tests {
     #[test]
     fn color_is_bright_for_dark_background() {
         // Test a few nicknames and ensure brightness (luminance) is decent.
-        let names = [
-            "A",
-            "B",
-            "C",
-            "Zed",
-            "omega",
-            "farine",
-            "guill",
-            "farine_yo",
-        ];
-        for &name in &names {
-            let (r, g, b) = color_to_tuple(nickname_color(name));
+        for i in 0..26 {
+            let c = char::from(b'a' + i);
+            let mut name = String::new();
+            name.push(c);
+
+            let (r, g, b) = color_to_tuple(nickname_color(&name));
             //https://stackoverflow.com/questions/596216/formula-to-determine-perceived-brightness-of-rgb-color
             let brightness = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
             assert!(
