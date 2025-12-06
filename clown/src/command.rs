@@ -30,10 +30,10 @@ pub enum ClientCommand {
 }
 
 pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
-    if let Some(next) = in_content.trim().to_ascii_lowercase().strip_prefix('/') {
+    if let Some(next) = in_content.trim().strip_prefix('/') {
         let mut splits = next.split_ascii_whitespace();
         if let Some(command) = splits.next() {
-            match command {
+            match command.to_lowercase().as_str() {
                 "connect" => Some(ClientCommand::Connect),
                 "quit" => Some(ClientCommand::Quit(splits.collect())),
                 "nick" => Some(ClientCommand::Nick(splits.collect())),

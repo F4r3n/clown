@@ -8,7 +8,7 @@ use message_queue::MessageQueue;
 use model::Model;
 use model::RunningState;
 use model::View;
-use tracing::info;
+use tracing::error;
 mod component;
 mod event_handler;
 mod widget_view;
@@ -46,7 +46,6 @@ async fn main() -> color_eyre::Result<()> {
         .with(fmt_layer)
         .with(EnvFilter::from_default_env())
         .init();
-    info!("COMMIT {}", build::SHORT_COMMIT); //8405e28e
 
     color_eyre::install()?;
     let mut events = EventHandler::new();
@@ -67,12 +66,19 @@ async fn main() -> color_eyre::Result<()> {
 
     while model.running_state != RunningState::Done {
         let event = events.next().await?;
+        //info!("{:?}", &event);
+
         terminal.draw(|f| view(&mut model, &mut views, f))?;
 
         handle_event(&mut model, &mut views, event, &mut list_messages)?;
-
+        let mut limit: i8 = 10;
         while let Some(current_msg) = list_messages.next() {
             update(&mut model, &mut views, current_msg, &mut list_messages).await;
+            limit -= 1;
+            if limit <= 0 {
+                error!("Too many events");
+                break;
+            }
         }
     }
     EventHandler::disable_mouse_event()?;

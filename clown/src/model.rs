@@ -4,6 +4,8 @@ use clown_core::{
 };
 use directories::ProjectDirs;
 use tokio::{sync::mpsc, task::JoinHandle};
+use tracing::info;
+
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub enum View {
     #[default]
@@ -81,6 +83,7 @@ impl Model {
 
     pub fn set_nickname(&mut self, nickname: String) -> color_eyre::Result<&str> {
         self.stored_config.set_nickname(nickname);
+
         self.save()?;
         Ok(&self.get_config().login_config.nickname)
     }

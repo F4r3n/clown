@@ -8,7 +8,6 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Block, Borders},
 };
-use std::ops::Mul;
 
 struct MessagePreview {
     content: String,
@@ -100,8 +99,8 @@ impl Draw for ToolTipDiscussWidget {
             return;
         }
         let area_to_render = ratatui::prelude::Rect {
-            height: f32::from(area.height).mul(0.3) as u16,
-            width: f32::from(area.width).mul(0.3) as u16,
+            height: std::cmp::min(area.height, 10),
+            width: std::cmp::min(area.width, 30),
             x: area.x,
             y: area.y,
         };

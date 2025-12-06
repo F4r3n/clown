@@ -94,34 +94,41 @@ impl Draw for WebsitePreview {
 
             let inner_area = block.inner(area);
             frame.render_widget(block, area);
+            if !meta.get_title().is_empty() {
+                let main_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(1),       // Title
+                        Constraint::Percentage(100), // Image
+                    ])
+                    .split(inner_area);
+                let mut title = meta.get_title().to_string();
 
-            let main_layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(1),       // Title
-                    Constraint::Percentage(100), // Image
-                ])
-                .split(inner_area);
-            let mut title = meta.get_title().to_string();
-
-            if let Some(title_layout) = main_layout.first() {
-                let width = title_layout.width as usize;
-                if title.chars().count() > width {
-                    // Keep room for "..."
-                    title = title
-                        .chars()
-                        .take(width.saturating_sub(3))
-                        .collect::<String>()
-                        + "...";
+                if let Some(title_layout) = main_layout.first() {
+                    let width = title_layout.width as usize;
+                    if title.chars().count() > width {
+                        // Keep room for "..."
+                        title = title
+                            .chars()
+                            .take(width.saturating_sub(3))
+                            .collect::<String>()
+                            + "...";
+                    }
+                    let span = ratatui::text::Span::raw(title);
+                    frame.render_widget(span, *title_layout);
                 }
-                let span = ratatui::text::Span::raw(title);
-                frame.render_widget(span, *title_layout);
-            }
 
-            if let Some(image_layout) = main_layout.get(1)
-                && let Some(image_protocol) = &mut self.image
-            {
-                frame.render_stateful_widget(StatefulImage::new(), *image_layout, image_protocol);
+                if let Some(image_layout) = main_layout.get(1)
+                    && let Some(image_protocol) = &mut self.image
+                {
+                    frame.render_stateful_widget(
+                        StatefulImage::new(),
+                        *image_layout,
+                        image_protocol,
+                    );
+                }
+            } else if let Some(image_protocol) = &mut self.image {
+                frame.render_stateful_widget(StatefulImage::new(), inner_area, image_protocol);
             }
         }
     }
