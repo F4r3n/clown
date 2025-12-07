@@ -9,7 +9,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::Paragraph,
 };
-use tracing::info;
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Default)]
@@ -57,14 +56,11 @@ impl crate::component::EventHandler for CInput {
     }
 
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
-        match event {
-            MessageEvent::InitSpellChecker(language) => {
-                self.spellchecker_task = Some(crate::async_task::AsyncTask {
-                    handle: Some(SpellChecker::async_build(&language)),
-                    result: None,
-                });
-            }
-            _ => {}
+        if let MessageEvent::InitSpellChecker(language) = event {
+            self.spellchecker_task = Some(crate::async_task::AsyncTask {
+                handle: Some(SpellChecker::async_build(language)),
+                result: None,
+            });
         }
 
         None

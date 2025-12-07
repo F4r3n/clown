@@ -2,9 +2,7 @@ use crate::config::Config;
 use clown_core::{
     client::LoginConfig, command::Command, conn::ConnectionConfig, message::ServerMessage,
 };
-use directories::ProjectDirs;
 use tokio::{sync::mpsc, task::JoinHandle};
-use tracing::info;
 
 #[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub enum View {
@@ -138,9 +136,5 @@ impl Model {
         self.irc_connection
             .as_mut()
             .and_then(|v| v.error_receiver.try_recv().ok())
-    }
-
-    pub fn project_dir() -> Option<ProjectDirs> {
-        ProjectDirs::from("com", "share", "clown")
     }
 }

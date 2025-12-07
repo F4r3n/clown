@@ -9,4 +9,5 @@ pub mod event_handler;
 pub mod message_event;
 pub mod message_queue;
 pub mod model;
+pub mod project_path;
 pub mod widget_view;

@@ -1,27 +1,29 @@
+mod async_task;
+mod command;
+mod component;
+mod config;
+mod event_handler;
+mod irc_view;
 mod message_event;
 mod message_queue;
 mod model;
+mod project_path;
+mod tui;
+mod widget_view;
+
 use ahash::AHashMap;
+use clown::project_path::ProjectPath;
+use event_handler::Event;
+use event_handler::EventHandler;
 use irc_view::message_content::MessageContent;
 use message_event::MessageEvent;
 use message_queue::MessageQueue;
-use model::Model;
-use model::RunningState;
-use model::View;
-use tracing::error;
-mod component;
-mod event_handler;
-mod widget_view;
-use crate::event_handler::EventHandler;
-mod config;
-mod irc_view;
-mod tui;
-use event_handler::Event;
+use model::{Model, RunningState, View};
 use ratatui::Frame;
-mod async_task;
-mod command;
-use shadow_rs::shadow;
+use tracing::error;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+
+use shadow_rs::shadow;
 shadow!(build);
 
 use clap::Parser;
@@ -31,13 +33,20 @@ use clap::Parser;
 struct Args {
     #[arg(short, long, default_value = "clown.toml")]
     config_name: String,
+
+    #[arg(short, long)]
+    debug: bool,
 }
 
-type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
-#[tokio::main]
-async fn main() -> color_eyre::Result<()> {
-    let args = Args::parse();
-    let file_appender = tracing_appender::rolling::never(".", "app.log");
+fn prepare_logs(is_debug: bool) -> color_eyre::Result<()> {
+    let file_appender = tracing_appender::rolling::never(
+        if !is_debug {
+            ProjectPath::cache_dir().unwrap_or(std::env::current_dir()?)
+        } else {
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        },
+        ProjectPath::log_name(),
+    );
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
     let fmt_layer = fmt::layer().with_writer(non_blocking);
@@ -46,6 +55,14 @@ async fn main() -> color_eyre::Result<()> {
         .with(fmt_layer)
         .with(EnvFilter::from_default_env())
         .init();
+    Ok(())
+}
+
+type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
+#[tokio::main]
+async fn main() -> color_eyre::Result<()> {
+    let args = Args::parse();
+    prepare_logs(args.debug)?;
 
     color_eyre::install()?;
     let mut events = EventHandler::new();
@@ -66,8 +83,6 @@ async fn main() -> color_eyre::Result<()> {
 
     while model.running_state != RunningState::Done {
         let event = events.next().await?;
-        //info!("{:?}", &event);
-
         terminal.draw(|f| view(&mut model, &mut views, f))?;
 
         handle_event(&mut model, &mut views, event, &mut list_messages)?;
@@ -76,7 +91,7 @@ async fn main() -> color_eyre::Result<()> {
             update(&mut model, &mut views, current_msg, &mut list_messages).await;
             limit -= 1;
             if limit <= 0 {
-                error!("Too many events");
+                error!("Too many messages");
                 break;
             }
         }

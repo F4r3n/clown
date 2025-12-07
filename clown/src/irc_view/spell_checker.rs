@@ -1,4 +1,4 @@
-use crate::model::Model;
+use crate::project_path::ProjectPath;
 use clown_spell::dict;
 use color_eyre::eyre::eyre;
 use tokio::runtime::Handle;
@@ -22,7 +22,7 @@ impl SpellChecker {
     }
 
     async fn download_affix(language: &str) -> color_eyre::Result<PathBuf> {
-        if let Some(dest) = Model::project_dir()
+        if let Some(dest) = ProjectPath::project_dir()
             .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.aff", language)))
         {
             info!("affix found here: {}", dest.clone().display());
@@ -40,7 +40,7 @@ impl SpellChecker {
     }
 
     async fn download_dict(language: &str) -> color_eyre::Result<PathBuf> {
-        if let Some(dest) = Model::project_dir()
+        if let Some(dest) = ProjectPath::project_dir()
             .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.dic", language)))
         {
             info!("dic found here: {}", dest.clone().display());

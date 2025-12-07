@@ -2,8 +2,7 @@ use clown_core::client::LoginConfig;
 use clown_core::conn::ConnectionConfig;
 use std::path::PathBuf;
 
-use crate::model::Model;
-
+use crate::project_path::ProjectPath;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ClientConfig {
     pub auto_join: bool,
@@ -56,7 +55,7 @@ impl Config {
     }
 
     fn config_path(config_name: &str) -> Option<PathBuf> {
-        Model::project_dir().map(|proj_dirs| proj_dirs.config_dir().join(config_name))
+        ProjectPath::project_dir().map(|proj_dirs| proj_dirs.config_dir().join(config_name))
     }
 
     fn read(config_name: &str) -> color_eyre::Result<Self> {

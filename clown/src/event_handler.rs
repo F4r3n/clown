@@ -17,13 +17,6 @@ impl Event {
             _ => None,
         }
     }
-
-    pub fn get_mouse(&self) -> Option<crossterm::event::MouseEvent> {
-        match self {
-            Self::Crossterm(event) => event.as_mouse_event(),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug)]
