@@ -100,6 +100,19 @@ impl MainView<'_> {
                 command::ClientCommand::Spell(language) => {
                     Some(MessageEvent::InitSpellChecker(language))
                 }
+                command::ClientCommand::Action(content) => {
+                    let nickname = model.get_nickname().to_string();
+
+                    model.send_command(clown_core::command::Command::PrivMsg(
+                        model.current_channel.to_string(),
+                        format!("\x01ACTION {}\x01", content.clone()),
+                    ));
+                    self.messages_display
+                        .handle_actions(&MessageEvent::AddMessageView(
+                            None,
+                            MessageContent::new_action(Some(nickname), content),
+                        ))
+                }
             }
         } else {
             let nickname = model.get_nickname().to_string();
@@ -176,14 +189,24 @@ impl MainView<'_> {
                         if !from.eq(&model.current_channel) {
                             messages.push_message(MessageEvent::HighlightUser(from.clone()));
                         }
-                        messages.push_message(MessageEvent::AddMessageView(
-                            Some(from),
-                            MessageContent::new_message(
-                                source,
-                                content,
-                                model.get_nickname().to_string(),
-                            ),
-                        ));
+
+                        if content.starts_with("\x01ACTION") {
+                            if let Some(parsed_content) = content.get(8..content.len() - 1) {
+                                messages.push_message(MessageEvent::AddMessageView(
+                                    Some(from),
+                                    MessageContent::new_action(source, parsed_content.to_string()),
+                                ));
+                            }
+                        } else {
+                            messages.push_message(MessageEvent::AddMessageView(
+                                Some(from),
+                                MessageContent::new_message(
+                                    source,
+                                    content,
+                                    model.get_nickname().to_string(),
+                                ),
+                            ));
+                        }
                     }
                     Command::Nick(new_user) => messages.push_message(MessageEvent::ReplaceUser(
                         source.unwrap_or_default(),

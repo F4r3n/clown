@@ -27,6 +27,8 @@ pub enum ClientCommand {
         detailed_message = "To prepare the spellchecker for a specific language: fr, en"
     )]
     Spell(String),
+    #[strum(message = "me", detailed_message = "To create an action")]
+    Action(String),
 }
 
 pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
@@ -39,6 +41,7 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
                 "nick" => Some(ClientCommand::Nick(splits.collect())),
                 "help" => Some(ClientCommand::Help),
                 "spell" => Some(ClientCommand::Spell(splits.collect())),
+                "me" => Some(ClientCommand::Action(splits.collect())),
                 _ => None,
             }
         } else {

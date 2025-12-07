@@ -32,6 +32,7 @@ enum MessageKind {
     Info,
     Normal,
     Highlight,
+    Action,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -89,6 +90,18 @@ impl MessageContent {
             length_without_format: get_size_without_format(&content),
             content,
             kind: MessageKind::Error,
+        }
+    }
+
+    pub fn new_action(source: Option<String>, content: String) -> Self {
+        let content = format!("{} {}", source.unwrap_or("".into()), content);
+        let source = Some("*".into());
+        Self {
+            time: std::time::SystemTime::now(),
+            source,
+            length_without_format: get_size_without_format(&content),
+            content,
+            kind: MessageKind::Action,
         }
     }
 
@@ -161,6 +174,7 @@ impl MessageContent {
         let default_style = match &self.kind {
             MessageKind::Error => Style::default().fg(Color::Red),
             MessageKind::Info => Style::default().fg(Color::LightBlue),
+            MessageKind::Action => Style::default().fg(Color::LightBlue),
             MessageKind::Normal => Style::default(),
             _ => Style::default(),
         };

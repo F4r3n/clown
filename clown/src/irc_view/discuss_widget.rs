@@ -15,7 +15,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-
+use tracing::info;
 #[derive(PartialEq, Eq, Clone)]
 struct Range {
     line: usize,
@@ -83,8 +83,6 @@ pub struct DiscussWidget {
     current_channel: String,
 
     last_hovered: Option<Hovered>,
-    last_ctrl_hovered: Option<Range>,
-
     color_map: AHashMap<String, ratatui::style::Color>,
 }
 
@@ -100,7 +98,6 @@ impl DiscussWidget {
             area: Rect::default(),
             content_width: 0,
             last_hovered: None,
-            last_ctrl_hovered: None,
             color_map: AHashMap::new(),
         }
     }
@@ -389,6 +386,12 @@ impl crate::component::EventHandler for DiscussWidget {
                             if let Some(range) =
                                 self.get_range_from_mouse(mouse_event.row, mouse_event.column)
                             {
+                                info!(
+                                    "Try open url {:?}",
+                                    self.messages
+                                        .get_url_from_range(&self.current_channel, &range)
+                                );
+
                                 self.messages
                                     .get_url_from_range(&self.current_channel, &range)
                                     .map(MessageEvent::OpenWeb)
@@ -404,16 +407,17 @@ impl crate::component::EventHandler for DiscussWidget {
                         if let Some(range) =
                             self.get_range_from_mouse(mouse_event.row, mouse_event.column)
                         {
-                            if mouse_event.modifiers == KeyModifiers::CONTROL {
-                                self.last_ctrl_hovered = Some(range.clone())
-                            }
-
                             if let Some(last_hovered) = &self.last_hovered
                                 && range.eq(&last_hovered.range)
                             {
                                 if std::time::Instant::now().duration_since(last_hovered.time)
                                     > Duration::from_secs(2)
                                 {
+                                    info!(
+                                        "Hovering url {:?}",
+                                        self.messages
+                                            .get_url_from_range(&self.current_channel, &range)
+                                    );
                                     self.messages
                                         .get_url_from_range(
                                             &self.current_channel,
