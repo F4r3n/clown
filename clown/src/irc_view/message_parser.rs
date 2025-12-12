@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use color_eyre::owo_colors::OwoColorize;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
@@ -92,8 +93,17 @@ pub fn to_spans<'a>(content: impl Into<Cow<'a, str>>, start_style: Option<Style>
                 Span::from(content[start_index..i].to_string())
                     .style(style.fg(colors[0]).bg(colors[1])),
             );
-            start_index = i;
+            start_index = i + 1;
             style = toggle_modifier(style, &mut modifier, Modifier::ITALIC);
+        } else if c == '\x0F' {
+            spans.push(
+                Span::from(content[start_index..i].to_string())
+                    .style(style.fg(colors[0]).bg(colors[1])),
+            );
+            start_index = i + 1;
+            style = start_style.unwrap_or_default();
+            colors = [style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
+            style_buffer.clear();
         } else if c == '\x1F' {
             spans.push(
                 Span::from(content[start_index..i].to_string())
@@ -106,7 +116,7 @@ pub fn to_spans<'a>(content: impl Into<Cow<'a, str>>, start_style: Option<Style>
                 Span::from(content[start_index..i].to_string())
                     .style(style.fg(colors[0]).bg(colors[1])),
             );
-            start_index = i;
+            start_index = i + 1;
             style = toggle_modifier(style, &mut modifier, Modifier::CROSSED_OUT);
         } else if setting_style {
             setting_style = false;
@@ -173,7 +183,6 @@ pub fn get_size_without_format(content: &str) -> usize {
             }
         }
     }
-
     count
 }
 
@@ -264,6 +273,16 @@ mod tests {
         assert_eq!(fg_b, Color::Red);
         assert_eq!(c, "C");
         assert_eq!(fg_c, Color::Rgb(252, 127, 0)); // Orange
+    }
+
+    #[test]
+    fn test_faut_dormir_reset() {
+        let input = "\x0313f\x0306a\x0302u\x0312t \x0311a\x0310l\x0303l\x0309e\x0308r \x0307d\x0304o\x0305r\x0313m\x0306i\x0302r\x0f";
+        assert_eq!(get_size_without_format(input), 17);
+        let spans = to_spans(input, None);
+        assert_eq!(spans.len(), 15);
+        let (text, fg, bg) = span_data(spans.last().unwrap());
+        assert_eq!(text, "r");
     }
 
     #[test]

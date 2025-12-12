@@ -91,8 +91,7 @@ impl Dictionary {
     }
 
     pub fn check_word(&self, word: &str) -> bool {
-        self.words
-            .contains(self.affix_rules.transform_word(word).as_bytes())
+        self.words.contains(word.to_lowercase())
     }
 }
 
