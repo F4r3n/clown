@@ -1,13 +1,13 @@
 use std::time::Duration;
 
+use super::color_user::nickname_color;
+use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
+use super::message_content::WordPos;
 use crate::component::Draw;
-use crate::irc_view::color_user::nickname_color;
-use crate::irc_view::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
-use crate::irc_view::message_content::WordPos;
 use crate::{irc_view::message_content::MessageContent, message_event::MessageEvent};
 use ahash::AHashMap;
+use crossterm::event::KeyCode;
 use crossterm::event::MouseButton;
-use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::widgets::Row;
 use ratatui::{
     Frame,

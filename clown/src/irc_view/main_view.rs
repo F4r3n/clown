@@ -36,7 +36,7 @@ pub struct MainView<'a> {
 
 impl MainView<'_> {
     pub fn new(current_channel: &str) -> Self {
-        let input = Component::new("input", input_widget::CInput::new());
+        let input = Component::new("input", input_widget::CInput::default());
         let list_users_view: Component<'_, users_widget::UsersWidget> = Component::new(
             "users_view",
             users_widget::UsersWidget::new(current_channel),

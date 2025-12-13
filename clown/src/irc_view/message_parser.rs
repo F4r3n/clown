@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use color_eyre::owo_colors::OwoColorize;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,

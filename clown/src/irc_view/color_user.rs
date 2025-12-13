@@ -4,8 +4,6 @@ use ratatui::style::Color;
 
 fn hash_nickname(nickname: &str) -> u64 {
     let state = ahash::RandomState::with_seeds(1, 2, 3, 4);
-
-    // Build a new hasher with that state
     state.hash_one(nickname)
 }
 
@@ -30,6 +28,7 @@ pub fn bright_distinct_color(index: u64) -> Color {
     let srgb: Srgb<u8> = Srgb::from_color_unclamped(hsv).into_format();
     Color::Rgb(srgb.red, srgb.green, srgb.blue)
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

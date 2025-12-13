@@ -1,4 +1,5 @@
-use crate::irc_view::spell_checker::SpellChecker;
+use super::history::InputHistory;
+use super::spell_checker::SpellChecker;
 use crate::message_event::MessageEvent;
 use crate::{component::Draw, irc_view::message_content::MessageContent};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -14,6 +15,7 @@ use unicode_width::UnicodeWidthStr;
 #[derive(Default)]
 pub struct CInput {
     input: InputWidget,
+    input_history: InputHistory,
     /// Current input mode
     area: Rect,
 
@@ -32,13 +34,13 @@ impl Draw for CInput {
 
             spans.push(Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)));
 
-            spans.extend(self.spans_with_spellcheck(self.input.value()));
+            spans.extend(self.spans_with_spellcheck(self.input.get_value()));
 
             Paragraph::new(Line::from(spans))
         } else {
             Paragraph::new(Line::from(vec![
                 Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)),
-                Span::from(self.input.value()),
+                Span::from(self.input.get_value()),
             ]))
         };
 
@@ -75,10 +77,25 @@ impl crate::component::EventHandler for CInput {
                             let m = self.get_current_input().to_string();
                             self.reset_value();
                             if !m.is_empty() {
+                                self.input_history.add_message(m.clone());
                                 Some(MessageEvent::MessageInput(m))
                             } else {
                                 None
                             }
+                        }
+                        KeyCode::Down => {
+                            self.input_history.down();
+                            if let Some(m) = self.input_history.get_message() {
+                                self.input.reset_with(m.to_string());
+                            }
+                            None
+                        }
+                        KeyCode::Up => {
+                            self.input_history.up();
+                            if let Some(m) = self.input_history.get_message() {
+                                self.input.reset_with(m.to_string());
+                            }
+                            None
                         }
                         _ => {
                             self.input.handle_key_events(&key_event);
@@ -97,15 +114,6 @@ impl crate::component::EventHandler for CInput {
 }
 
 impl CInput {
-    pub fn new() -> Self {
-        Self {
-            input: InputWidget::default(),
-            area: Rect::default(),
-            spell_checker: None,
-            spellchecker_task: None,
-        }
-    }
-
     pub fn spans_with_spellcheck<'a>(&self, input: &'a str) -> Vec<Span<'a>> {
         let mut spans = Vec::new();
         let mut start = 0;
@@ -153,7 +161,7 @@ impl CInput {
     }
 
     pub fn get_current_input(&self) -> &str {
-        self.input.value()
+        self.input.get_value()
     }
 
     pub fn reset_value(&mut self) {
@@ -202,13 +210,19 @@ impl InputWidget {
         UnicodeWidthStr::width(&self.value[..self.cursor_position])
     }
 
-    pub fn value(&self) -> &str {
+    pub fn get_value(&self) -> &str {
         &self.value
     }
 
     pub fn reset(&mut self) {
         self.value.clear();
         self.cursor_position = 0;
+        self.visual_scroll = 0;
+    }
+
+    pub fn reset_with(&mut self, content: String) {
+        self.value = content;
+        self.cursor_position = self.value.len();
         self.visual_scroll = 0;
     }
 
@@ -228,9 +242,9 @@ impl InputWidget {
         self.cursor_position += ch.len_utf8();
     }
 
-    fn paste(&mut self, content: String) {
+    fn append_value(&mut self, content: String) {
         self.value.push_str(&content);
-        self.cursor_position = self.value.len();
+        self.cursor_position += self.value.len();
     }
 
     fn delete_char_before_cursor(&mut self) {
@@ -305,7 +319,7 @@ impl InputWidget {
 
     pub fn handle_other(&mut self, event: &crossterm::event::Event) {
         if let crossterm::event::Event::Paste(content) = event {
-            self.paste(content.clone());
+            self.append_value(content.clone());
         }
     }
 
@@ -358,7 +372,7 @@ mod tests {
         w.handle_key_events(&make_key(KeyCode::Char('b')));
         w.handle_key_events(&make_key(KeyCode::Char('c')));
 
-        assert_eq!(w.value(), "abc");
+        assert_eq!(w.get_value(), "abc");
         assert_eq!(w.cursor_position, 3);
     }
 
@@ -385,11 +399,11 @@ mod tests {
         w.cursor_position = 3;
 
         w.handle_key_events(&make_key(KeyCode::Backspace));
-        assert_eq!(w.value(), "ab");
+        assert_eq!(w.get_value(), "ab");
         assert_eq!(w.cursor_position, 2);
 
         w.handle_key_events(&make_key(KeyCode::Backspace));
-        assert_eq!(w.value(), "a");
+        assert_eq!(w.get_value(), "a");
         assert_eq!(w.cursor_position, 1);
     }
 
@@ -400,13 +414,13 @@ mod tests {
         w.cursor_position = 2;
 
         w.handle_key_events(&make_key(KeyCode::Delete));
-        assert_eq!(w.value(), "ab");
+        assert_eq!(w.get_value(), "ab");
         assert_eq!(w.cursor_position, 2);
 
         w.value = "a".to_string();
         w.cursor_position = 0;
         w.handle_key_events(&make_key(KeyCode::Delete));
-        assert_eq!(w.value(), "");
+        assert_eq!(w.get_value(), "");
         assert_eq!(w.cursor_position, 0);
     }
 
@@ -470,7 +484,7 @@ mod tests {
 
         w.reset();
 
-        assert_eq!(w.value(), "");
+        assert_eq!(w.get_value(), "");
         assert_eq!(w.cursor_position, 0);
         assert_eq!(w.visual_scroll, 0);
     }

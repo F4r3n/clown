@@ -1,6 +1,7 @@
 mod color_user;
 mod dimension_discuss;
 mod discuss_widget;
+mod history;
 mod input_widget;
 pub mod main_view;
 pub mod message_content;
