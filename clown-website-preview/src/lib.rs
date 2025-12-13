@@ -7,7 +7,6 @@ pub struct MetaData {
     image_url: String,
     title: String,
     description: String,
-    site: String,
     image: Option<Arc<DynamicImage>>,
 }
 
@@ -17,7 +16,6 @@ impl MetaData {
             image_url: String::from(""),
             title: String::from(""),
             description: String::from(""),
-            site: String::from(""),
             image: None,
         };
         use scraper::Selector;
@@ -36,9 +34,6 @@ impl MetaData {
                         }
                         "og:description" => {
                             meta.description = String::from(content);
-                        }
-                        "og:site" => {
-                            meta.site = String::from(content);
                         }
                         _ => {}
                     }
@@ -63,7 +58,6 @@ fn parse_html(text: &str, is_meta: bool) -> MetaData {
             image_url: String::new(),
             title: String::new(),
             description: String::new(),
-            site: String::new(),
             image: None,
         };
     }
@@ -71,9 +65,44 @@ fn parse_html(text: &str, is_meta: bool) -> MetaData {
     MetaData::new(document)
 }
 
+fn convert_bytes_to_image(bytes: bytes::Bytes) -> Option<Arc<DynamicImage>> {
+    if let Ok(image_reader) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format()
+        && let Ok(image) = image_reader.decode()
+    {
+        Some(Arc::new(image))
+    } else {
+        None
+    }
+}
+
+const MAX_BYTES: usize = 64 * 1024; // safety cap (64 KB)
+
+async fn fetch_head_html(resp: &mut reqwest::Response) -> Result<String, reqwest::Error> {
+    let mut buf = Vec::new();
+
+    while let Some(chunk) = resp.chunk().await? {
+        let previous_size = buf.len();
+        buf.extend_from_slice(&chunk);
+
+        // Stop if </head> is found
+        if let Some(b) = buf.get((previous_size - 7).max(0)..)
+            && b.windows(7).any(|w| w.eq_ignore_ascii_case(b"</head>"))
+        {
+            break;
+        }
+
+        // Safety cap
+        if buf.len() > MAX_BYTES {
+            break;
+        }
+    }
+
+    Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
 pub async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
     let client = reqwest::Client::new();
-    let resp = client
+    let mut resp = client
         .get(endpoint)
         .send()
         .await
@@ -84,35 +113,34 @@ pub async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
         .and_then(|ct| ct.to_str().ok())
         .map_or_else(|| false, |ct| !ct.starts_with("image"));
 
-    let mut bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-    let mut metadata = if has_meta {
-        let text = String::from_utf8_lossy(&bytes);
-        parse_html(&text, has_meta)
+    let metadata = if has_meta {
+        let head = fetch_head_html(&mut resp)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut m = parse_html(&head, has_meta);
+        if !m.image_url.is_empty() {
+            m.image = convert_bytes_to_image(
+                client
+                    .get(m.image_url.clone())
+                    .send()
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .bytes()
+                    .await
+                    .map_err(|e| e.to_string())?,
+            );
+        }
+        m
     } else {
+        let bytes_request = resp.bytes().await.map_err(|e| e.to_string())?;
+
         MetaData {
             image_url: String::from(endpoint),
             title: String::from(""),
             description: String::from(""),
-            site: String::from(""),
-            image: None,
+            image: convert_bytes_to_image(bytes_request),
         }
     };
-    if metadata.image_url != endpoint {
-        bytes = client
-            .get(metadata.image_url.clone())
-            .send()
-            .await
-            .map_err(|e| e.to_string())?
-            .bytes()
-            .await
-            .map_err(|e| e.to_string())?;
-    }
-
-    if let Ok(image_reader) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format()
-        && let Ok(image) = image_reader.decode()
-    {
-        metadata.image = Some(Arc::new(image));
-    }
 
     Ok(metadata)
 }
@@ -143,7 +171,6 @@ mod tests {
         assert_eq!(meta.title, "Example Title");
         assert_eq!(meta.description, "Example description.");
         assert_eq!(meta.image_url, "https://example.com/image.jpg");
-        assert_eq!(meta.site, "ExampleSite");
         assert!(meta.image.is_none());
     }
 
@@ -168,7 +195,6 @@ mod tests {
             image_url: String::from(""),
             title: String::from(""),
             description: String::from(""),
-            site: String::from(""),
             image: Some(Arc::new(DynamicImage::new_rgb8(1, 1))),
         };
         let img = meta.take_image();
@@ -255,7 +281,6 @@ mod tests {
         println!("Title: {}", meta.get_title());
         println!("Image URL: {}", meta.image_url);
         println!("Description: {}", meta.description);
-        println!("Site: {}", meta.site);
 
         // Basic sanity checks
         assert!(!meta.image_url.is_empty());
