@@ -17,7 +17,7 @@ pub enum ClientCommand {
     )]
     Connect,
     #[strum(message = "Quit", detailed_message = "To quit the server and the app")]
-    Quit(String),
+    Quit(Option<String>),
     #[strum(message = "Nick", detailed_message = "To change your nickname")]
     Nick(String),
     #[strum(message = "Help", detailed_message = "To display the list of commands")]
@@ -33,15 +33,23 @@ pub enum ClientCommand {
 
 pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
     if let Some(next) = in_content.trim().strip_prefix('/') {
-        let mut splits = next.split_ascii_whitespace();
-        if let Some(command) = splits.next() {
+        if let Some((command, args)) = next
+            .find(' ')
+            .map(|v| {
+                Some((
+                    &next[..v],
+                    Some(&next[v.saturating_add(1).min(next.len() - 1)..]),
+                ))
+            })
+            .unwrap_or(Some((next, None)))
+        {
             match command.to_lowercase().as_str() {
                 "connect" => Some(ClientCommand::Connect),
-                "quit" => Some(ClientCommand::Quit(splits.collect())),
-                "nick" => Some(ClientCommand::Nick(splits.collect())),
+                "quit" => Some(ClientCommand::Quit(args.map(|v| v.to_string()))),
+                "nick" => args.and_then(|v| Some(ClientCommand::Nick(v.to_string()))),
                 "help" => Some(ClientCommand::Help),
-                "spell" => Some(ClientCommand::Spell(splits.collect())),
-                "me" => Some(ClientCommand::Action(splits.collect())),
+                "spell" => args.and_then(|v| Some(ClientCommand::Spell(v.to_string()))),
+                "me" => args.and_then(|v| Some(ClientCommand::Action(v.to_string()))),
                 _ => None,
             }
         } else {

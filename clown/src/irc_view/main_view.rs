@@ -84,13 +84,7 @@ impl MainView<'_> {
         if let Some(parsed_message) = command::parse_command(&content) {
             match parsed_message {
                 command::ClientCommand::Connect => Some(MessageEvent::Connect),
-                command::ClientCommand::Quit(message) => {
-                    Some(MessageEvent::Quit(if message.is_empty() {
-                        None
-                    } else {
-                        Some(message)
-                    }))
-                }
+                command::ClientCommand::Quit(message) => Some(MessageEvent::Quit(message)),
                 command::ClientCommand::Help => Some(help()),
                 command::ClientCommand::Nick(new_nick) => {
                     let _ = model.set_nickname(new_nick.clone());
