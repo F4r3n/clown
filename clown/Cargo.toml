@@ -51,7 +51,7 @@ clap = { version = "4.5.53", features = ["derive", "help", "std"], default-featu
 
 [dev-dependencies]
 anyhow = "1.0.100"
-criterion = { version = "0.7.0", features = ["plotters"] }
+criterion = { version = "0.8.0", features = ["plotters"] }
 
 [build-dependencies]
 shadow-rs = "1.4.0"
