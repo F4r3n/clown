@@ -32,14 +32,14 @@ impl Draw for CInput {
         let input = if self.spell_checker.is_some() {
             let mut spans = Vec::new();
 
-            spans.push(Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)));
+            spans.push(Span::from("> ").style(Style::default().fg(ratatui::style::Color::Cyan)));
 
             spans.extend(self.spans_with_spellcheck(self.input.get_value()));
 
             Paragraph::new(Line::from(spans))
         } else {
             Paragraph::new(Line::from(vec![
-                Span::from(">").style(Style::default().fg(ratatui::style::Color::Cyan)),
+                Span::from("> ").style(Style::default().fg(ratatui::style::Color::Cyan)),
                 Span::from(self.input.get_value()),
             ]))
         };
@@ -47,7 +47,7 @@ impl Draw for CInput {
         frame.render_widget(input.scroll((0, scroll as u16)), area);
 
         // Ratatui hides the cursor unless it's explicitly set. Position the  cursor past the
-        let x = self.input.visual_cursor().max(scroll) - scroll + 1;
+        let x = self.input.visual_cursor().max(scroll) - scroll + 2;
         frame.set_cursor_position((area.x + x as u16, area.y))
     }
 }
