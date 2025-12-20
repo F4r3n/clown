@@ -176,7 +176,7 @@ impl MainView<'_> {
             let reply = recieved.reply();
             let source = recieved.source().map(|v| v.to_string());
 
-            info!("{:?}", recieved);
+            //info!("{:?}", recieved);
             //log_info_sync(format!("{reply:?}\n").as_str());
             match reply {
                 Response::Cmd(command) => match command {

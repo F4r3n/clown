@@ -8,13 +8,6 @@ pub struct InputHistory {
 // When pushed at the back, the new index is the size - 1
 // When going up, go to index-1 max is 0
 impl InputHistory {
-    pub fn new() -> Self {
-        Self {
-            messages: Vec::new(),
-            index: 0,
-        }
-    }
-
     pub fn add_message(&mut self, message: String) {
         self.messages.push(message);
         self.index = self.messages.len();

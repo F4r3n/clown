@@ -85,7 +85,7 @@ async fn fetch_head_html(resp: &mut reqwest::Response) -> Result<String, reqwest
         buf.extend_from_slice(&chunk);
 
         // Stop if </head> is found
-        if let Some(b) = buf.get((previous_size - 7).max(0)..)
+        if let Some(b) = buf.get(previous_size.saturating_sub(7)..)
             && b.windows(7).any(|w| w.eq_ignore_ascii_case(b"</head>"))
         {
             break;

@@ -46,7 +46,7 @@ impl WebsitePreview {
         if let Some(handle) = &self.handle {
             handle.is_finished()
         } else {
-            true
+            false
         }
     }
     fn get_metadata(&mut self, in_picker: &Picker) -> Option<MetaData> {
