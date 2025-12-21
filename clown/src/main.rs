@@ -21,7 +21,7 @@ use message_queue::MessageQueue;
 use model::{Model, RunningState, View};
 use ratatui::Frame;
 use shadow_rs::shadow;
-//use tracing::debug;
+use tracing::debug;
 use tracing::error;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
@@ -88,7 +88,7 @@ async fn main() -> color_eyre::Result<()> {
     while model.running_state != RunningState::Done {
         let event = events.next().await?;
         terminal.draw(|f| view(&mut model, &mut views, f))?;
-        //debug!("{:?}", &event);
+        debug!("{:?}", &event);
         handle_event(&mut model, &mut views, event, &mut list_messages)?;
         let mut limit: i8 = 10;
         while let Some(current_msg) = list_messages.next() {

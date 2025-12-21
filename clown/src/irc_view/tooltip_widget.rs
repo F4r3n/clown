@@ -8,7 +8,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Block, Borders},
 };
-
+use ratatui_image::picker::Picker;
 struct MessagePreview {
     content: String,
 }
@@ -57,6 +57,7 @@ pub struct ToolTipDiscussWidget {
     preview: Option<Box<dyn Draw>>,
     start_time: Option<chrono::DateTime<Local>>,
     end_time: Option<chrono::DateTime<Local>>,
+    picker: Option<Picker>,
 }
 
 impl ToolTipDiscussWidget {
@@ -66,6 +67,7 @@ impl ToolTipDiscussWidget {
             end_time: None,
             start_time: None,
             preview: None,
+            picker: Picker::from_query_stdio().ok(),
         }
     }
 
@@ -124,8 +126,10 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
         match event {
             #[cfg(feature = "website-preview")]
             MessageEvent::HoverURL(content) => {
-                if !self.is_open() {
-                    let mut preview = WebsitePreview::from_url(content);
+                if !self.is_open()
+                    && let Some(picker) = self.picker.clone()
+                {
+                    let mut preview = WebsitePreview::from_url(content, picker);
                     preview.fetch_preview();
                     self.set_message(Box::new(preview));
                 }

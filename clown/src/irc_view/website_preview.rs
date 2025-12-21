@@ -20,19 +20,19 @@ pub struct WebsitePreview {
     url: String,
     handle: Option<JoinHandle<Result<MetaData, String>>>,
     image: Option<StatefulProtocol>,
-    picker: Option<Picker>,
+    picker: Picker,
 
     metadata: Option<MetaData>, //handle: Option<JoinHandle<>,
 }
 
 impl WebsitePreview {
-    pub fn from_url(url: &str) -> Self {
+    pub fn from_url(url: &str, picker: Picker) -> Self {
         Self {
             url: url.to_string(),
             handle: None,
             metadata: None,
             image: None,
-            picker: Picker::from_query_stdio().ok(),
+            picker: picker,
         }
     }
 
@@ -83,9 +83,7 @@ impl WebsitePreview {
 #[cfg(feature = "website-preview")]
 impl Draw for WebsitePreview {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        if let Some(picker) = self.picker.clone()
-            && let Some(meta) = self.get_metadata(&picker)
-        {
+        if let Some(meta) = self.get_metadata(&self.picker.clone()) {
             frame.render_widget(ratatui::widgets::Clear, area);
             let block = Block::default()
                 .borders(Borders::ALL)
