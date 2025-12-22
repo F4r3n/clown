@@ -1,6 +1,6 @@
 use crate::irc_view::{
     dimension_discuss::{NICKNAME_LENGTH, TIME_LENGTH},
-    message_parser::get_size_without_format,
+    message_parser::{get_width_without_format},
 };
 use chrono::{DateTime, Local, Timelike};
 use ratatui::{
@@ -40,7 +40,7 @@ pub struct MessageContent {
     time: std::time::SystemTime, /*Generated time */
     source: Option<String>,      /*Source*/
     content: String,             /*Content */
-    length_without_format: usize,
+    width_without_format: usize,
     kind: MessageKind,
 }
 
@@ -49,7 +49,7 @@ impl MessageContent {
         Self {
             time: std::time::SystemTime::now(),
             source,
-            length_without_format: get_size_without_format(&content),
+            width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Normal,
         }
@@ -77,7 +77,7 @@ impl MessageContent {
         Self {
             time: std::time::SystemTime::now(),
             source,
-            length_without_format: get_size_without_format(&content),
+            width_without_format: get_width_without_format(&content),
             content,
             kind,
         }
@@ -87,7 +87,7 @@ impl MessageContent {
         Self {
             time: std::time::SystemTime::now(),
             source: None,
-            length_without_format: get_size_without_format(&content),
+            width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Error,
         }
@@ -99,7 +99,7 @@ impl MessageContent {
         Self {
             time: std::time::SystemTime::now(),
             source,
-            length_without_format: get_size_without_format(&content),
+            width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Action,
         }
@@ -110,7 +110,7 @@ impl MessageContent {
             time: std::time::SystemTime::now(),
             source: None,
             kind: MessageKind::Info,
-            length_without_format: get_size_without_format(&content),
+            width_without_format: get_width_without_format(&content),
             content,
         }
     }
@@ -208,8 +208,8 @@ impl MessageContent {
         visible_rows.into_iter().map(Row::new).collect()
     }
 
-    pub fn get_message_length(&self) -> usize {
-        self.length_without_format
+    pub fn get_message_width(&self) -> usize {
+        self.width_without_format
     }
 
     pub fn get_wrapped_line(&self, width: usize) -> Vec<Cow<'_, str>> {

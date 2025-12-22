@@ -88,7 +88,7 @@ async fn main() -> color_eyre::Result<()> {
     while model.running_state != RunningState::Done {
         let event = events.next().await?;
         terminal.draw(|f| view(&mut model, &mut views, f))?;
-        debug!("{:?}", &event);
+        //debug!("{:?}", &event);
         handle_event(&mut model, &mut views, event, &mut list_messages)?;
         let mut limit: i8 = 10;
         while let Some(current_msg) = list_messages.next() {

@@ -1,4 +1,4 @@
-use clown::irc_view::message_parser::{get_size_without_format, is_string_plain, to_spans};
+use clown::irc_view::message_parser::{get_width_without_format, is_string_plain, to_spans};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
@@ -13,7 +13,7 @@ fn bench_is_message_plain(message: &str) -> anyhow::Result<()> {
 }
 
 fn bench_get_size_witout_format(message: &str) -> anyhow::Result<()> {
-    get_size_without_format(message);
+    get_width_without_format(message);
     Ok(())
 }
 

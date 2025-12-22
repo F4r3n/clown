@@ -150,7 +150,7 @@ impl DiscussWidget {
 
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             for (line_index, line) in messages.iter().enumerate() {
-                let total_rows = line.get_message_length().div_ceil(self.content_width);
+                let total_rows = line.get_message_width().div_ceil(self.content_width);
 
                 if wrapped_rows_seen + total_rows <= self.scroll_offset {
                     wrapped_rows_seen += total_rows;
@@ -175,7 +175,7 @@ impl DiscussWidget {
                         .get(..pointed_row)
                         .map(|slice| slice.iter().map(|v| v.chars().count()).sum())
                         .unwrap_or(0);
-                    if char_skipped + char_position + pos_x > line.get_message_length() {
+                    if char_skipped + char_position + pos_x > line.get_message_width() {
                         return None;
                     }
                     return Some((line_index, char_skipped + char_position + pos_x));
@@ -199,7 +199,7 @@ impl DiscussWidget {
 
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             for line in messages {
-                let total_rows = line.get_message_length().div_ceil(self.content_width);
+                let total_rows = line.get_message_width().div_ceil(self.content_width);
 
                 // Skip rows above scroll
                 if wrapped_rows_seen + total_rows <= self.scroll_offset {
@@ -246,7 +246,7 @@ impl DiscussWidget {
             .get_messages(&self.current_channel)
             .map(|msgs| {
                 msgs.iter()
-                    .map(|m| m.get_message_length().div_ceil(self.content_width))
+                    .map(|m| m.get_message_width().div_ceil(self.content_width))
                     .sum()
             })
             .unwrap_or(0)

@@ -490,7 +490,6 @@ MAP xyz
     #[test]
     fn test_parse_map_ignores_empty_lines() {
         let data = "\
-
 MAP ab
 
 ";

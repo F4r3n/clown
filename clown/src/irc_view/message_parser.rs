@@ -4,6 +4,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
 };
+use unicode_width::UnicodeWidthStr;
 
 fn irc_to_color(code: &str) -> Color {
     if let Ok(code) = code.parse::<u16>() {
@@ -133,22 +134,27 @@ pub fn to_spans<'a>(content: impl Into<Cow<'a, str>>, start_style: Option<Style>
     spans
 }
 
-pub fn get_size_without_format(content: &str) -> usize {
+pub fn get_width_without_format(content: &str) -> usize {
     if is_string_plain(content) {
-        return content.len();
+        return content.width();
     }
     let mut count = 0;
     let mut i = 0;
+    let mut start_i = 0;
     let bytes = content.as_bytes();
     while i < bytes.len() {
         match bytes.get(i) {
             // Simple formatting bytes to skip
             Some(0x02) | Some(0x1D) | Some(0x1E) | Some(0x1F) | Some(0x0F) => {
+                count += content[start_i..i].width();
                 i += 1;
+                start_i = i;
             }
 
             // Color format: \x03([0-9]{1,2})(,[0-9]{1,2})?
             Some(0x03) => {
+                count += content[start_i..i].width();
+
                 i += 1;
 
                 // up to 2 digits
@@ -171,17 +177,14 @@ pub fn get_size_without_format(content: &str) -> usize {
                         }
                     }
                 }
+                start_i = i;
             }
             _ => {
-                if let Some(ch) = content[i..].chars().next() {
-                    count += 1;
-                    i += ch.len_utf8();
-                } else {
-                    i += 1;
-                }
+                i += 1;
             }
         }
     }
+    count += content[start_i..i].width();
     count
 }
 
@@ -196,6 +199,8 @@ pub fn is_string_plain(content: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use unicode_width::UnicodeWidthStr;
+
     use super::*;
 
     // Helper to extract text and colors from spans for assertion
@@ -277,7 +282,7 @@ mod tests {
     #[test]
     fn test_faut_dormir_reset() {
         let input = "\x0313f\x0306a\x0302u\x0312t \x0311a\x0310l\x0303l\x0309e\x0308r \x0307d\x0304o\x0305r\x0313m\x0306i\x0302r\x0f";
-        assert_eq!(get_size_without_format(input), 17);
+        assert_eq!(get_width_without_format(input), 17);
         let spans = to_spans(input, None);
         assert_eq!(spans.len(), 15);
         let (text, fg, bg) = span_data(spans.last().unwrap());
@@ -312,22 +317,31 @@ mod tests {
     #[test]
     fn test_size_without_color() {
         let input = "\x034Hello";
-        assert_eq!(get_size_without_format(input), 5);
+        assert_eq!(get_width_without_format(input), 5);
 
         let input = "A\x034B\x037C";
-        assert_eq!(get_size_without_format(input), 3);
+        assert_eq!(get_width_without_format(input), 3);
+    }
+    //(ﾉ´ヮ´)ﾉ *:･ﾟ✧*:･ﾟ✧*:･ﾟ✧*:･ﾟ✧
+    #[test]
+    fn test_unicode() {
+        let input = " ﾟ";
+        println!("{:?}", input);
+        assert_eq!(input.width(), 1);
+        // A + unicode(7) + B = 9
+        assert_eq!(get_width_without_format(input), 1);
     }
 
     #[test]
-    fn test_mixed_unicode_and_formatting() {
-        let input = "A\x032,3(ﾉ´ヮ｀)ﾉ✧B";
+    fn test_unicode_color() {
+        let input = "\x034✧\x034A";
         // A + unicode(7) + B = 9
-        assert_eq!(get_size_without_format(input), 10);
+        assert_eq!(get_width_without_format(input), 2);
     }
 
     #[test]
     fn test_multiple_formats() {
         let input = "\x0312H\x02e\x1Dl\x1El\x037o\x0F!";
-        assert_eq!(get_size_without_format(input), 6);
+        assert_eq!(get_width_without_format(input), 6);
     }
 }

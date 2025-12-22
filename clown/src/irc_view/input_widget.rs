@@ -244,7 +244,7 @@ impl InputWidget {
 
     fn append_value(&mut self, content: String) {
         self.value.push_str(&content);
-        self.cursor_position += self.value.len();
+        self.cursor_position = self.value.len();
     }
 
     fn delete_char_before_cursor(&mut self) {

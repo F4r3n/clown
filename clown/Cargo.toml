@@ -36,7 +36,7 @@ serde = { version = "1.0", features = ["serde_derive"] }
 strum = { version = "0.27", features = ["derive", "strum_macros"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
-unicode-width = "=0.2.0"
+unicode-width = "0.2.0"
 clown-website-preview = {version= "0.1.0", path="../clown-website-preview", optional = true}
 clown-spell = {version= "0.1.0", path="../clown-spell"}
 
