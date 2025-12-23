@@ -2,6 +2,8 @@
 pub struct InputHistory {
     messages: Vec<String>,
     index: usize,
+
+    saved_message: Option<String>,
 }
 
 //"a", "b", "c"
@@ -13,7 +15,14 @@ impl InputHistory {
         self.index = self.messages.len();
     }
 
-    pub fn up(&mut self) {
+    fn is_at_start(&self) -> bool {
+        self.index == self.messages.len()
+    }
+
+    pub fn up(&mut self, previous_message: &str) {
+        if self.is_at_start() {
+            self.saved_message = Some(previous_message.to_string())
+        }
         self.index = self.index.saturating_sub(1);
     }
 
@@ -22,6 +31,10 @@ impl InputHistory {
     }
 
     pub fn get_message(&self) -> Option<&str> {
-        self.messages.get(self.index).map(|v| v.as_str())
+        if self.is_at_start() {
+            self.saved_message.as_deref()
+        } else {
+            self.messages.get(self.index).map(|v| v.as_str())
+        }
     }
 }
