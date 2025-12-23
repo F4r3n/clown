@@ -1,6 +1,6 @@
 use crate::irc_view::{
     dimension_discuss::{NICKNAME_LENGTH, TIME_LENGTH},
-    message_parser::{get_width_without_format},
+    message_parser::get_width_without_format,
 };
 use chrono::{DateTime, Local, Timelike};
 use ratatui::{
@@ -158,7 +158,6 @@ impl MessageContent {
         color_source: Option<&ratatui::style::Color>,
     ) -> Vec<Row<'_>> {
         let mut visible_rows = Vec::new();
-        let time_str = format!("{:>width$}", self.time_format(), width = TIME_LENGTH);
         let mut nickname_style = Style::default();
         if let Some(color_source) = color_source {
             nickname_style = nickname_style.fg(*color_source);
@@ -166,11 +165,7 @@ impl MessageContent {
         if self.kind.eq(&MessageKind::Highlight) {
             nickname_style = nickname_style.bg(Color::LightRed);
         }
-        let source_str = format!(
-            "{:<width$}",
-            self.source.as_deref().unwrap_or_default(),
-            width = NICKNAME_LENGTH
-        );
+
         let default_style = match &self.kind {
             MessageKind::Error => Style::default().fg(Color::Red),
             MessageKind::Info => Style::default().fg(Color::LightBlue),
@@ -181,20 +176,31 @@ impl MessageContent {
         let wrapped = wrap(&self.content, content_width as usize);
 
         visible_rows.push(vec![
-            Cell::from(time_str),
-            Cell::from(source_str).style(nickname_style),
+            Cell::from(format!(
+                "{:>width$}",
+                self.time_format(),
+                width = TIME_LENGTH
+            )),
+            Cell::from(format!(
+                "{:<width$}",
+                self.source.as_deref().unwrap_or_default(),
+                width = NICKNAME_LENGTH
+            ))
+            .style(nickname_style),
             Cell::from("┃ "),
         ]);
 
-        visible_rows.extend(vec![
-            vec![
-                Cell::from(format!("{:<width$}", " ", width = TIME_LENGTH)),
-                Cell::from(format!("{:<width$}", " ", width = NICKNAME_LENGTH))
-                    .style(nickname_style),
-                Cell::from("┃ ")
-            ];
-            wrapped.len() - 1
-        ]);
+        if wrapped.len() > 1 {
+            visible_rows.extend(vec![
+                vec![
+                    Cell::from(format!("{:<width$}", " ", width = TIME_LENGTH)),
+                    Cell::from(format!("{:<width$}", " ", width = NICKNAME_LENGTH))
+                        .style(nickname_style),
+                    Cell::from("┃ ")
+                ];
+                wrapped.len() - 1
+            ]);
+        }
 
         //FIXME: colors on multiline is broken
         for (i, w) in wrapped.into_iter().enumerate() {
