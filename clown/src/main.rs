@@ -68,9 +68,6 @@ async fn main() -> color_eyre::Result<()> {
     let _guard = prepare_logs(args.debug)?;
     //info!("TEST");
     color_eyre::install()?;
-    let mut events = EventHandler::new();
-    EventHandler::enable_mouse_event()?;
-    let mut terminal = tui::init()?;
 
     let mut model = model::Model::new(args.config_name);
     let mut views: ViewMap = AHashMap::new();
@@ -78,6 +75,11 @@ async fn main() -> color_eyre::Result<()> {
         View::MainView,
         Box::new(irc_view::main_view::MainView::new(&model.current_channel)),
     );
+
+    let mut events = EventHandler::new();
+    EventHandler::enable_mouse_event()?;
+    let mut terminal = tui::init()?;
+
     let mut list_messages = message_queue::MessageQueue::new();
     list_messages.push_message(MessageEvent::AddMessageView(
         None,
