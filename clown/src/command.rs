@@ -26,7 +26,7 @@ pub enum ClientCommand {
         message = "Spell",
         detailed_message = "To prepare the spellchecker for a specific language: fr, en"
     )]
-    Spell(String),
+    Spell(Option<String>),
     #[strum(message = "me", detailed_message = "To create an action")]
     Action(String),
 }
@@ -46,10 +46,10 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
             match command.to_lowercase().as_str() {
                 "connect" => Some(ClientCommand::Connect),
                 "quit" => Some(ClientCommand::Quit(args.map(|v| v.to_string()))),
-                "nick" => args.and_then(|v| Some(ClientCommand::Nick(v.to_string()))),
+                "nick" => args.map(|v| ClientCommand::Nick(v.to_string())),
                 "help" => Some(ClientCommand::Help),
-                "spell" => args.and_then(|v| Some(ClientCommand::Spell(v.to_string()))),
-                "me" => args.and_then(|v| Some(ClientCommand::Action(v.to_string()))),
+                "spell" => Some(ClientCommand::Spell(args.map(|v| v.to_string()))),
+                "me" => args.map(|v| ClientCommand::Action(v.to_string())),
                 _ => None,
             }
         } else {

@@ -58,11 +58,16 @@ impl crate::component::EventHandler for CInput {
     }
 
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
-        if let MessageEvent::InitSpellChecker(language) = event {
-            self.spellchecker_task = Some(crate::async_task::AsyncTask {
-                handle: Some(SpellChecker::async_build(language)),
-                result: None,
-            });
+        if let MessageEvent::SpellChecker(language) = event {
+            if let Some(language) = language {
+                self.spellchecker_task = Some(crate::async_task::AsyncTask {
+                    handle: Some(SpellChecker::async_build(language)),
+                    result: None,
+                });
+            } else {
+                self.spell_checker = None;
+                self.spellchecker_task = None;
+            }
         }
 
         None

@@ -24,7 +24,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
 };
 
-use tracing::{error, info};
+use tracing::error;
 
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
@@ -92,7 +92,7 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Spell(language) => {
-                    Some(MessageEvent::InitSpellChecker(language))
+                    Some(MessageEvent::SpellChecker(language))
                 }
                 command::ClientCommand::Action(content) => {
                     let nickname = model.get_nickname().to_string();

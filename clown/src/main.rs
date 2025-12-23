@@ -21,7 +21,6 @@ use message_queue::MessageQueue;
 use model::{Model, RunningState, View};
 use ratatui::Frame;
 use shadow_rs::shadow;
-use tracing::debug;
 use tracing::error;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};

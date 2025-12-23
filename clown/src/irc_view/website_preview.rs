@@ -32,7 +32,7 @@ impl WebsitePreview {
             handle: None,
             metadata: None,
             image: None,
-            picker: picker,
+            picker,
         }
     }
 
