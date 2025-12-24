@@ -182,6 +182,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bit-vec"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
+
+[[package]]
 name = "bitflags"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -356,6 +362,7 @@ version = "0.1.6"
 dependencies = [
  "ahash",
  "anyhow",
+ "bit-vec",
  "chrono",
  "clap",
  "clown-core",

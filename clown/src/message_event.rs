@@ -6,10 +6,10 @@ pub enum MessageEvent {
     AddMessageView(Option<String>, MessageContent),
     HighlightUser(String),
     SelectChannel(String),
-    UpdateUsers(Vec<String>),
+    UpdateUsers(String /*channel*/, Vec<String> /*list users */),
     ReplaceUser(String /*old */, String /*new */),
-    JoinUser(String),
-    RemoveUser(String /*user */),
+    JoinUser(String /*channel*/, String /*nickname*/),
+    RemoveUser(Option<String> /*channel*/, String /*user */),
     SetTopic(String /*topic */),
     #[cfg(feature = "website-preview")]
     HoverURL(String /* URL */),

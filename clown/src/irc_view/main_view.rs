@@ -24,7 +24,9 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
 };
 
+use tracing::debug;
 use tracing::error;
+use tracing::info;
 
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
@@ -37,10 +39,8 @@ pub struct MainView<'a> {
 impl MainView<'_> {
     pub fn new(current_channel: &str) -> Self {
         let input = Component::new("input", input_widget::CInput::default());
-        let list_users_view: Component<'_, users_widget::UsersWidget> = Component::new(
-            "users_view",
-            users_widget::UsersWidget::new(current_channel),
-        );
+        let list_users_view: Component<'_, users_widget::UsersWidget> =
+            Component::new("users_view", users_widget::UsersWidget::new());
         let topic_view: Component<'_, topic_widget::TopicWidget> =
             Component::new("topic_view", topic_widget::TopicWidget::new());
         //list_components.push()
@@ -170,7 +170,7 @@ impl MainView<'_> {
             let reply = recieved.reply();
             let source = recieved.source().map(|v| v.to_string());
 
-            //info!("{:?}", recieved);
+            debug!("{:?}", recieved);
             //log_info_sync(format!("{reply:?}\n").as_str());
             match reply {
                 Response::Cmd(command) => match command {
@@ -211,16 +211,17 @@ impl MainView<'_> {
                     }
                     Command::Quit(_) => {
                         let source = source.unwrap_or_default();
-                        messages.push_message(MessageEvent::RemoveUser(source.clone()));
+                        messages.push_message(MessageEvent::RemoveUser(None, source.clone()));
                         messages.push_message(MessageEvent::AddMessageView(
                             None,
                             MessageContent::new_info(format!("{} has quit", source.clone())),
                         ));
                     }
-                    Command::Part(_channel, _) => {
+                    Command::Part(channel, _) => {
                         //TODO: for the support of multiple channels
                         let source = source.unwrap_or_default();
-                        messages.push_message(MessageEvent::RemoveUser(source.clone()));
+                        messages
+                            .push_message(MessageEvent::RemoveUser(Some(channel), source.clone()));
                         messages.push_message(MessageEvent::AddMessageView(
                             None,
                             MessageContent::new_info(format!(
@@ -229,10 +230,10 @@ impl MainView<'_> {
                             )),
                         ));
                     }
-                    Command::Join(_) => {
+                    Command::Join(channel) => {
                         let source = source.unwrap_or_default();
 
-                        messages.push_message(MessageEvent::JoinUser(source.clone()));
+                        messages.push_message(MessageEvent::JoinUser(channel, source.clone()));
                         if !source.eq(model.get_nickname()) {
                             messages.push_message(MessageEvent::AddMessageView(
                                 None,
@@ -255,8 +256,9 @@ impl MainView<'_> {
                             MessageContent::new(source, content),
                         ));
                     }
-                    ResponseNumber::NameReply(list_users) => {
-                        messages.push_message(MessageEvent::UpdateUsers(list_users));
+                    ResponseNumber::NameReply(symbol, channel, list_users) => {
+                        //info!("{} {} {:?}", symbol, channel, list_users);
+                        messages.push_message(MessageEvent::UpdateUsers(channel, list_users));
                     }
                     ResponseNumber::Topic(topic) => {
                         messages.push_message(MessageEvent::SetTopic(topic));

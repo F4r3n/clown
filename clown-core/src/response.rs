@@ -217,7 +217,11 @@ pub enum ResponseNumber {
     /// 352: WHO reply
     WhoReply(String),
     /// 353: NAMES reply
-    NameReply(Vec<String>),
+    NameReply(
+        String,      /*Symbol*/
+        String,      /*Channel*/
+        Vec<String>, /*nicknames*/
+    ),
     /// 354: WHO reply extended
     WhoReplyExtended(String),
     /// 361: KILL done
@@ -370,6 +374,8 @@ impl ResponseBuilder {
             351 => Version(string_to_send),
             352 => WhoReply(string_to_send),
             353 => NameReply(
+                parameters.get(1).unwrap_or(&"").to_string(),
+                parameters.get(2).unwrap_or(&"").to_string(),
                 string_to_send
                     .split_ascii_whitespace()
                     .map(|v| v.to_string())
