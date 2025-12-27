@@ -418,6 +418,13 @@ impl crate::component::EventHandler for UsersWidget {
 
                 None
             }
+            MessageEvent::SelectChannel(channel) => {
+                if let Some(id) = self.get_section_id(channel) {
+                    self.list_state.current_section = id;
+                }
+                self.need_redraw = true;
+                None
+            }
             _ => None,
         }
     }
@@ -465,14 +472,15 @@ impl crate::component::EventHandler for UsersWidget {
                     && let Some(user) = self.list_users.get_mut(user_name)
                 {
                     user.need_hightlight = false;
+                    self.need_redraw = true;
                     return Some(MessageEvent::SelectChannel(user.name.to_string()));
                 } else if let Some(channel) = self.list_sections.get_mut(selected) {
                     channel.channel_info.highlight = false;
+                    self.need_redraw = true;
                     return Some(MessageEvent::SelectChannel(
                         channel.channel_info.name.clone(),
                     ));
                 }
-                self.need_redraw = true;
             }
         }
         None

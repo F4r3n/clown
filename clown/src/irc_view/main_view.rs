@@ -34,6 +34,8 @@ pub struct MainView<'a> {
     list_users_view: Component<'a, users_widget::UsersWidget>,
     topic_view: Component<'a, topic_widget::TopicWidget>,
     tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
+
+    need_redraw: bool,
 }
 
 impl MainView<'_> {
@@ -55,6 +57,7 @@ impl MainView<'_> {
             input,
             messages_display,
             tooltip_widget,
+            need_redraw: false,
         }
     }
 
@@ -214,8 +217,8 @@ impl MainView<'_> {
                         source.unwrap_or_default(),
                         new_user,
                     )),
-                    Command::Topic(_, topic) => {
-                        messages.push_message(MessageEvent::SetTopic(topic))
+                    Command::Topic(channel, topic) => {
+                        messages.push_message(MessageEvent::SetTopic(channel, topic))
                     }
                     Command::Quit(_) => {
                         let source = source.unwrap_or_default();
@@ -243,6 +246,7 @@ impl MainView<'_> {
                         let source = source.unwrap_or_default();
                         //Create a new 'user' as IRC-Server
                         messages.push_message(MessageEvent::JoinChannel(channel.clone()));
+                        messages.push_message(MessageEvent::SelectChannel(channel.clone()));
 
                         messages.push_message(MessageEvent::JoinUser(channel, source.clone()));
                         if !source.eq(model.get_nickname()) {
@@ -292,8 +296,8 @@ impl MainView<'_> {
                         //info!("{} {} {:?}", symbol, channel, list_users);
                         messages.push_message(MessageEvent::UpdateUsers(channel, list_users));
                     }
-                    ResponseNumber::Topic(topic) => {
-                        messages.push_message(MessageEvent::SetTopic(topic));
+                    ResponseNumber::Topic(channel, topic) => {
+                        messages.push_message(MessageEvent::SetTopic(channel, topic));
                     }
                     ResponseNumber::Err(_, content) => {
                         messages.push_message(MessageEvent::AddMessageView(
@@ -312,6 +316,10 @@ impl MainView<'_> {
 use crate::command;
 impl widget_view::WidgetView for MainView<'_> {
     fn need_redraw(&mut self, model: &mut Model) -> bool {
+        if self.need_redraw {
+            return self.need_redraw;
+        }
+
         for child in self.children().iter_mut() {
             if child.need_redraw() {
                 return true;
@@ -320,6 +328,9 @@ impl widget_view::WidgetView for MainView<'_> {
         return false;
     }
     fn view(&mut self, _model: &mut Model, frame: &mut Frame<'_>) {
+        if self.need_redraw {
+            self.need_redraw = false;
+        }
         // Create layout
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
@@ -361,7 +372,6 @@ impl widget_view::WidgetView for MainView<'_> {
 
     fn handle_event(&mut self, model: &mut Model, event: &Event, messages: &mut MessageQueue) {
         // Handle focus switching first
-
         match event {
             Event::Crossterm(crossterm::event::Event::Key(_)) => {
                 // Pass event to focused widget
@@ -370,6 +380,9 @@ impl widget_view::WidgetView for MainView<'_> {
                         messages.push_message(new_message);
                     }
                 }
+            }
+            Event::Crossterm(crossterm::event::Event::Resize(_, _)) => {
+                self.need_redraw = true;
             }
             Event::Crossterm(crossterm::event::Event::Paste(_)) => {
                 self.input.handle_events(event);
@@ -422,6 +435,8 @@ impl widget_view::WidgetView for MainView<'_> {
             MessageEvent::SelectChannel(ref channel) => {
                 model.current_channel = channel.to_string();
                 self.messages_display.handle_actions(&msg);
+                self.topic_view.handle_actions(&msg);
+                self.list_users_view.handle_actions(&msg);
             }
             MessageEvent::DisConnect => {
                 if !model.is_irc_finished() {

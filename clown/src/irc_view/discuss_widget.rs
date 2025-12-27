@@ -291,10 +291,11 @@ impl DiscussWidget {
 
 impl Draw for DiscussWidget {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        self.area = area;
         if self.redraw {
             self.redraw = false;
         }
+
+        self.area = area;
 
         let text_style = Style::default().fg(Color::White);
 
@@ -383,6 +384,8 @@ impl crate::component::EventHandler for DiscussWidget {
         if let crate::event_handler::Event::Crossterm(cross) = &event {
             match cross {
                 crossterm::event::Event::Resize(_x, _y) => {
+                    tracing::debug!("Resize discuss {:?}", &event);
+
                     self.redraw = true;
                     None
                 }

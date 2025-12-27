@@ -92,7 +92,6 @@ async fn main() -> color_eyre::Result<()> {
                 //debug!("Need redraw");
                 terminal.draw(|f| view(&mut model, &mut views, f))?;
             }
-            //debug!("{:?}", &event);
             handle_event(&mut model, &mut views, event, &mut list_messages)?;
             while let Some(current_msg) = list_messages.next() {
                 update(&mut model, &mut views, current_msg, &mut list_messages).await;

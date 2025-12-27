@@ -194,8 +194,8 @@ pub enum ResponseNumber {
 
     /// 331: No topic set
     NoTopic(String),
-    /// 332: Topic
-    Topic(String),
+    /// 332: <channel>, Topic
+    Topic(String, String),
     /// 333: Topic who/time
     TopicWhoTime(String),
 
@@ -363,7 +363,10 @@ impl ResponseBuilder {
             324 => ChannelModeIs(string_to_send),
             325 => UniqueOpIs(string_to_send),
             331 => NoTopic(string_to_send),
-            332 => Topic(string_to_send),
+            332 => match parameters.last() {
+                Some(param) => Topic(param.to_string(), string_to_send),
+                _ => Unknown(reply_number, string_to_send),
+            },
             333 => TopicWhoTime(parameters.join(" ")),
             341 => Invite(string_to_send),
             342 => SummonAnswer(string_to_send),

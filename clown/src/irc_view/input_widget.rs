@@ -96,18 +96,23 @@ impl crate::component::EventHandler for CInput {
                             }
                         }
                         KeyCode::Down => {
-                            self.input_history.down();
-                            if let Some(m) = self.input_history.get_message() {
-                                self.input.reset_with(m.to_string());
-                            } else {
-                                self.input.reset();
+                            if key_event.modifiers.is_empty() {
+                                self.input_history.down();
+                                if let Some(m) = self.input_history.get_message() {
+                                    self.input.reset_with(m.to_string());
+                                } else {
+                                    self.input.reset();
+                                }
                             }
+
                             None
                         }
                         KeyCode::Up => {
-                            self.input_history.up(&self.input.value);
-                            if let Some(m) = self.input_history.get_message() {
-                                self.input.reset_with(m.to_string());
+                            if key_event.modifiers.is_empty() {
+                                self.input_history.up(&self.input.value);
+                                if let Some(m) = self.input_history.get_message() {
+                                    self.input.reset_with(m.to_string());
+                                }
                             }
                             None
                         }

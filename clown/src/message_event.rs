@@ -11,7 +11,7 @@ pub enum MessageEvent {
     JoinUser(String /*channel*/, String /*nickname*/),
     JoinChannel(String /*channel*/),
     RemoveUser(Option<String> /*channel*/, String /*user */),
-    SetTopic(String /*topic */),
+    SetTopic(String /*channel */, String /*topic */),
     #[cfg(feature = "website-preview")]
     HoverURL(String /* URL */),
     Hover(String),
