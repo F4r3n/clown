@@ -175,7 +175,7 @@ impl MessageContent {
         };
         let wrapped = wrap(&self.content, content_width as usize);
 
-        visible_rows.push(vec![
+        visible_rows.push([
             Cell::from(format!(
                 "{:>width$}",
                 self.time_format(),
@@ -188,15 +188,17 @@ impl MessageContent {
             ))
             .style(nickname_style),
             Cell::from("┃ "),
+            Cell::from(""),
         ]);
 
         if wrapped.len() > 1 {
             visible_rows.extend(vec![
-                vec![
+                [
                     Cell::from(format!("{:<width$}", " ", width = TIME_LENGTH)),
                     Cell::from(format!("{:<width$}", " ", width = NICKNAME_LENGTH))
                         .style(nickname_style),
-                    Cell::from("┃ ")
+                    Cell::from("┃ "),
+                    Cell::from(""),
                 ];
                 wrapped.len() - 1
             ]);
@@ -205,9 +207,12 @@ impl MessageContent {
         //FIXME: colors on multiline is broken
         for (i, w) in wrapped.into_iter().enumerate() {
             if let Some(row) = visible_rows.get_mut(i) {
-                row.push(Cell::from(Line::from(
-                    crate::irc_view::message_parser::to_spans(w, Some(default_style)),
-                )))
+                if let Some(last) = row.last_mut() {
+                    *last = Cell::from(Line::from(crate::irc_view::message_parser::to_spans(
+                        w,
+                        Some(default_style),
+                    )));
+                }
             }
         }
 
