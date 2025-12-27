@@ -439,7 +439,7 @@ impl crate::component::EventHandler for UsersWidget {
             }
 
             let (selected, id) = self.list_state.selected();
-            if ((previous_selected.0 != selected) || (previous_selected.1 != id)) {
+            if (previous_selected.0 != selected) || (previous_selected.1 != id) {
                 if id > 0
                     && let Some(channel) = self.list_sections.get(selected)
                     && let Some(user_name) = channel.order_user.get(id - 1)
