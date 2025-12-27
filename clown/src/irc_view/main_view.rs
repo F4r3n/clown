@@ -94,6 +94,14 @@ impl MainView<'_> {
                 command::ClientCommand::Spell(language) => {
                     Some(MessageEvent::SpellChecker(language))
                 }
+                command::ClientCommand::Join(channel) => {
+                    model.send_command(Command::Join(channel.clone())); //the server will check
+                    None
+                }
+                command::ClientCommand::Part(channel, reason) => {
+                    model.send_command(Command::Part(channel.clone(), reason)); //the server will check
+                    None
+                }
                 command::ClientCommand::Action(content) => {
                     let nickname = model.get_nickname().to_string();
 
@@ -217,13 +225,14 @@ impl MainView<'_> {
                             MessageContent::new_info(format!("{} has quit", source.clone())),
                         ));
                     }
-                    Command::Part(channel, _) => {
-                        //TODO: for the support of multiple channels
+                    Command::Part(channel, _reason) => {
                         let source = source.unwrap_or_default();
-                        messages
-                            .push_message(MessageEvent::RemoveUser(Some(channel), source.clone()));
+                        messages.push_message(MessageEvent::RemoveUser(
+                            Some(channel.clone()),
+                            source.clone(),
+                        ));
                         messages.push_message(MessageEvent::AddMessageView(
-                            None,
+                            Some(channel),
                             MessageContent::new_info(format!(
                                 "{} has quit the channel",
                                 source.clone()
@@ -232,6 +241,8 @@ impl MainView<'_> {
                     }
                     Command::Join(channel) => {
                         let source = source.unwrap_or_default();
+                        //Create a new 'user' as IRC-Server
+                        messages.push_message(MessageEvent::JoinChannel(channel.clone()));
 
                         messages.push_message(MessageEvent::JoinUser(channel, source.clone()));
                         if !source.eq(model.get_nickname()) {
@@ -250,9 +261,30 @@ impl MainView<'_> {
                         model.send_command(clown_core::command::Command::Join(
                             model.get_login_channel().to_string(),
                         ));
-
+                        //Create a new 'user' as IRC-Server
+                        messages.push_message(MessageEvent::JoinChannel(
+                            source.clone().unwrap_or_default(),
+                        ));
                         messages.push_message(MessageEvent::AddMessageView(
-                            None,
+                            source.clone(),
+                            MessageContent::new(source, content),
+                        ));
+                    }
+                    ResponseNumber::YourHost(content)
+                    | ResponseNumber::Created(content)
+                    | ResponseNumber::MyInfo(content)
+                    | ResponseNumber::Bounce(content)
+                    | ResponseNumber::LUserClient(content)
+                    | ResponseNumber::LUserOp(content)
+                    | ResponseNumber::LUserUnknown(content)
+                    | ResponseNumber::LUserChannels(content)
+                    | ResponseNumber::LUserMe(content)
+                    | ResponseNumber::MOTD(content)
+                    | ResponseNumber::MOTDStart2(content)
+                    | ResponseNumber::MOTDStart(content)
+                    | ResponseNumber::EndOfMOTD(content) => {
+                        messages.push_message(MessageEvent::AddMessageView(
+                            source.clone(),
                             MessageContent::new(source, content),
                         ));
                     }

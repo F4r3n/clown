@@ -29,6 +29,13 @@ pub enum ClientCommand {
     Spell(Option<String>),
     #[strum(message = "me", detailed_message = "To create an action")]
     Action(String),
+    #[strum(message = "join", detailed_message = "To join a channel: {channel}")]
+    Join(String),
+    #[strum(
+        message = "part",
+        detailed_message = "To quit a channel: {channel} {:reason}"
+    )]
+    Part(String, Option<String>),
 }
 
 pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
@@ -50,6 +57,8 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
                 "help" => Some(ClientCommand::Help),
                 "spell" => Some(ClientCommand::Spell(args.map(|v| v.to_string()))),
                 "me" => args.map(|v| ClientCommand::Action(v.to_string())),
+                "join" => args.map(|v| ClientCommand::Join(v.to_string())),
+                "part" => args.map(|v| part(v.to_string())),
                 _ => None,
             }
         } else {
@@ -57,6 +66,23 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
         }
     } else {
         None
+    }
+}
+
+fn part(message: String) -> ClientCommand {
+    if let Some((channel, reason)) = message
+        .find(' ')
+        .map(|v| {
+            Some((
+                &message[..v],
+                Some(&message[v.saturating_add(1).min(message.len() - 1)..]),
+            ))
+        })
+        .unwrap_or(Some((&message, None)))
+    {
+        ClientCommand::Part(channel.to_string(), reason.map(|v| v.to_string()))
+    } else {
+        ClientCommand::Part(message, None)
     }
 }
 

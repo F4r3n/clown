@@ -9,6 +9,7 @@ pub enum MessageEvent {
     UpdateUsers(String /*channel*/, Vec<String> /*list users */),
     ReplaceUser(String /*old */, String /*new */),
     JoinUser(String /*channel*/, String /*nickname*/),
+    JoinChannel(String /*channel*/),
     RemoveUser(Option<String> /*channel*/, String /*user */),
     SetTopic(String /*topic */),
     #[cfg(feature = "website-preview")]

@@ -1,5 +1,3 @@
-use std::ops::RemAssign;
-
 use crate::{component::Draw, irc_view::color_user::nickname_color};
 use ahash::AHashMap;
 use bit_vec::BitVec;
@@ -53,10 +51,6 @@ impl User {
             *channel = false;
         }
     }
-
-    pub fn has_joined_channel(&self, id: usize) -> bool {
-        self.connected_channels.get(id).unwrap_or_default()
-    }
 }
 
 impl DrawableItem for User {
@@ -78,6 +72,7 @@ struct RegisteredChannel {
     name: String,
     id: usize,
     color: ratatui::style::Color,
+    highlight: bool,
 }
 
 impl RegisteredChannel {
@@ -86,6 +81,7 @@ impl RegisteredChannel {
             color: nickname_color(&name),
             name,
             id,
+            highlight: false,
         }
     }
 }
@@ -99,7 +95,6 @@ trait DrawableItem {
 #[derive(Debug)]
 struct Section {
     pub channel_info: RegisteredChannel,
-    is_title_visible: bool,
     pub order_user: Vec<String>,
 }
 
@@ -108,25 +103,14 @@ impl Section {
         Self {
             channel_info: RegisteredChannel::new(channel_name, id),
             order_user: Vec::new(),
-            is_title_visible: true,
-        }
-    }
-
-    fn new_global(id: usize) -> Self {
-        Self {
-            channel_info: RegisteredChannel::new("".to_string(), id),
-            order_user: Vec::new(),
-            is_title_visible: false,
         }
     }
 
     fn set_user_position(&mut self, user: &str) {
         if let Some(id) = self.order_user.iter().position(|v| v.eq(&user)) {
             self.order_user.remove(id);
-            self.order_user.push(user.to_string());
-        } else {
-            self.order_user.push(user.to_string());
         }
+        self.order_user.push(user.to_string());
     }
 
     fn remove_user(&mut self, user: &str) {
@@ -150,16 +134,15 @@ pub struct UsersWidget {
 
 impl UsersWidget {
     pub fn new() -> Self {
-        let c = vec![Section::new_global(0)];
         Self {
             list_users: AHashMap::new(),
             area: Rect::default(),
-            list_sections: c,
+            list_sections: Vec::new(),
             list_state: ListStateWidget::new(),
         }
     }
 
-    fn get_channel_id(&self, channel: &str) -> Option<usize> {
+    fn get_section_id(&self, channel: &str) -> Option<usize> {
         self.list_sections
             .iter()
             .find(|c| c.channel_info.name == channel)
@@ -180,6 +163,18 @@ impl UsersWidget {
             i
         };
         self.list_sections.get(index).map(|c| c.channel_info.id)
+    }
+
+    fn nb_sections(&self) -> usize {
+        self.list_sections.len()
+    }
+
+    fn nb_items(&self, section_id: usize) -> usize {
+        if let Some(section) = self.list_sections.get(section_id) {
+            section.order_user.len() + 1
+        } else {
+            1
+        }
     }
 
     fn set_users(&mut self, channel: &str, list_users: Vec<String>) {
@@ -224,15 +219,19 @@ impl UsersWidget {
     fn hightlight_user(&mut self, user: &str) {
         if let Some(user) = self.list_users.get_mut(user) {
             user.need_hightlight = true;
+        } else if let Some(id) = self.get_section_id(user)
+            && let Some(section) = self.list_sections.get_mut(id)
+        {
+            section.channel_info.highlight = true;
         }
     }
 
-    fn sanitize_name<'a>(user: &'a str) -> &'a str {
+    fn sanitize_name(user: &str) -> &str {
         user.strip_prefix('@').unwrap_or(user)
     }
 
     fn add_user_with_channel(&mut self, channel: &str, user: &str) {
-        if let Some(channel_id) = self.get_channel_id(channel) {
+        if let Some(channel_id) = self.get_section_id(channel) {
             self.add_user(channel_id, user, ChannelMode::User);
         } else if let Some(channel_id) = self.add_channel(channel.to_string()) {
             self.add_user(channel_id, user, ChannelMode::User);
@@ -242,10 +241,10 @@ impl UsersWidget {
     fn add_user(&mut self, channel_id: usize, user: &str, mode: ChannelMode) {
         let user = UsersWidget::sanitize_name(user).to_string();
         if mode == ChannelMode::User {
+            if let Some(channel) = self.list_sections.get_mut(channel_id) {
+                channel.set_user_position(&user);
+            }
             if let Some(user) = self.list_users.get_mut(&user) {
-                if let Some(channel) = self.list_sections.get_mut(channel_id) {
-                    channel.set_user_position(&user.name);
-                }
                 user.join_channel(channel_id);
             } else {
                 let mut new_user = User::new(user.to_string());
@@ -273,8 +272,6 @@ impl Draw for UsersWidget {
 pub struct ListStateWidget {
     current_section: usize,  //#global, #chan
     current_selected: usize, //0 is the main channel, users starts at 1
-
-    start_section: usize,
 }
 
 impl ListStateWidget {
@@ -282,7 +279,6 @@ impl ListStateWidget {
         Self {
             current_section: 1,
             current_selected: 0,
-            start_section: 1,
         }
     }
 
@@ -299,21 +295,18 @@ impl ListStateWidget {
     }
 
     fn next_section(&mut self, max_nb_sections: usize) {
-        self.current_section = self.current_section.saturating_sub(1) % max_nb_sections;
-        if self.current_section < self.start_section {
-            self.current_section = self.start_section;
-        }
+        self.current_section = self.current_section.saturating_add(1) % max_nb_sections;
+        self.current_selected = 0;
     }
 
     fn previous_section(&mut self, max_nb_sections: usize) {
         self.current_section = self.current_section.saturating_sub(1) % max_nb_sections;
-        if self.current_section < self.start_section {
-            self.current_section = self.start_section;
-        }
+        self.current_selected = 0;
     }
 
     fn add_item<'a>(
         &'a self,
+        depth: usize,
         color: ratatui::style::Color,
         title: &'a str,
         is_highlighted: bool,
@@ -329,7 +322,7 @@ impl ListStateWidget {
         if is_highlighted {
             style = style.bg(Color::LightBlue);
         }
-        spans.push(Span::raw(" "));
+        spans.push(Span::raw(format!("{:<width$}", " ", width = depth + 1)));
         spans.push(Span::styled(title, style));
         spans
         //ListItem::from(Line::from(spans))
@@ -345,30 +338,27 @@ impl ListStateWidget {
         let mut items = Vec::new();
 
         for (section_i, section) in sections.iter().enumerate() {
-            if section.is_title_visible {
-                let item = ListItem::from(Line::from(self.add_item(
-                    section.channel_info.color,
-                    &section.channel_info.name,
-                    false,
-                    (self.current_section == section_i) && (self.current_selected == 0) as bool,
-                )));
-                items.push(item);
-            }
+            let item = ListItem::from(Line::from(self.add_item(
+                0,
+                section.channel_info.color,
+                &section.channel_info.name,
+                section.channel_info.highlight,
+                (self.current_section == section_i) && (self.current_selected == 0),
+            )));
+            items.push(item);
 
             for (i, user_name) in section.order_user.iter().enumerate() {
                 if let Some(user) = users.get(user_name) {
-                    if user.has_joined_channel(section.channel_info.id) {
-                        let spans = self.add_item(
-                            user.display_color(),
-                            user.display_title(),
-                            user.is_highlighted(),
-                            (self.current_section == section_i)
-                                && (self.current_selected == (i + 1)) as bool,
-                        );
+                    let spans = self.add_item(
+                        1,
+                        user.display_color(),
+                        user.display_title(),
+                        user.is_highlighted(),
+                        (self.current_section == section_i) && (self.current_selected == (i + 1)),
+                    );
 
-                        let item = ListItem::from(Line::from(spans));
-                        items.push(item);
-                    }
+                    let item = ListItem::from(Line::from(spans));
+                    items.push(item);
                 }
             }
         }
@@ -393,12 +383,16 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::RemoveUser(channel, user) => {
-                self.remove_user(channel.as_ref().and_then(|c| self.get_channel_id(c)), user);
+                self.remove_user(channel.as_ref().and_then(|c| self.get_section_id(c)), user);
                 None
             }
             MessageEvent::HighlightUser(user) => {
                 self.hightlight_user(user);
 
+                None
+            }
+            MessageEvent::JoinChannel(channel) => {
+                self.add_channel(channel.to_string());
                 None
             }
             MessageEvent::JoinUser(channel, user) => {
@@ -419,22 +413,8 @@ impl crate::component::EventHandler for UsersWidget {
         {
             let previous = self.list_state.clone();
             let previous_selected = previous.selected();
-            let number_items = self
-                .list_sections
-                .get(self.list_state.current_section)
-                .map(|v| v.order_user.len() + 1) //The user + current channel
-                .unwrap_or(1);
-
-            let number_sections = self.list_sections.len() - 1
-                + if let Some(section) = self.list_sections.first()
-                    && section.order_user.len() > 0
-                {
-                    self.list_state.start_section = 0;
-                    1
-                } else {
-                    self.list_state.start_section = 1;
-                    0
-                };
+            let number_items = self.nb_items(self.list_state.current_section);
+            let number_sections = self.nb_sections();
 
             if key.modifiers.contains(KeyModifiers::CONTROL) && number_items > 0 {
                 match key.code {
@@ -457,23 +437,18 @@ impl crate::component::EventHandler for UsersWidget {
                     _ => {}
                 }
             }
-            //debug!("Number items {}", number_items);
-            //debug!("Sections {:?}", self.list_sections);
-            debug!("Previous {:?}", previous_selected);
-            debug!("Selected {:?}", self.list_state);
-            let (selected, id) = self.list_state.selected();
-            if ((previous_selected.0 != selected) || (previous_selected.1 != id))
-                && let Some(channel) = self.list_sections.get(selected)
-            {
-                debug!("Section {:?}", channel);
 
+            let (selected, id) = self.list_state.selected();
+            if ((previous_selected.0 != selected) || (previous_selected.1 != id)) {
                 if id > 0
+                    && let Some(channel) = self.list_sections.get(selected)
                     && let Some(user_name) = channel.order_user.get(id - 1)
                     && let Some(user) = self.list_users.get_mut(user_name)
                 {
                     user.need_hightlight = false;
                     return Some(MessageEvent::SelectChannel(user.name.to_string()));
-                } else {
+                } else if let Some(channel) = self.list_sections.get_mut(selected) {
+                    channel.channel_info.highlight = false;
                     return Some(MessageEvent::SelectChannel(
                         channel.channel_info.name.clone(),
                     ));
@@ -493,7 +468,7 @@ mod tests {
         let mut users_widget = UsersWidget::new();
         let user_name = "farine";
         users_widget.add_user_with_channel("#spam", user_name);
-        assert_eq!(users_widget.list_sections.len(), 2);
+        assert_eq!(users_widget.list_sections.len(), 1);
         assert!(users_widget.list_users.get(user_name).is_some());
         let user = users_widget.list_users.get(user_name).unwrap();
         assert_eq!(user.name, user_name.to_string());
@@ -507,10 +482,46 @@ mod tests {
         let user_name = "farine";
         users_widget.add_user_with_channel("#spam", user_name);
         users_widget.add_user_with_channel("#spam_2", user_name);
-        assert_eq!(users_widget.list_sections.len(), 3);
+        assert_eq!(users_widget.list_sections.len(), 2);
         assert_eq!(users_widget.list_users.len(), 1);
+        assert_eq!(
+            users_widget.list_sections.get(0).unwrap().order_user.len(),
+            1
+        );
+        assert_eq!(
+            users_widget.list_sections.get(1).unwrap().order_user.len(),
+            1
+        );
 
         users_widget.add_user_with_channel("#spam_2", "@farine");
         assert_eq!(users_widget.list_users.len(), 1);
+    }
+
+    #[test]
+    fn test_add_gloabl_channel() {
+        let mut users_widget = UsersWidget::new();
+        let user_name = "IRC-Server";
+        users_widget.add_user_with_channel("", user_name);
+        assert_eq!(users_widget.list_sections.len(), 1);
+        assert_eq!(
+            users_widget.list_sections.get(0).unwrap().order_user.len(),
+            1
+        );
+
+        assert_eq!(users_widget.list_users.len(), 1);
+    }
+
+    #[test]
+    fn test_number_sections() {
+        let mut users_widget = UsersWidget::new();
+        let user_name = "IRC-Server";
+        users_widget.add_user_with_channel(user_name, user_name);
+        assert_eq!(users_widget.nb_sections(), 1);
+
+        users_widget.add_user_with_channel("#new-chan", user_name);
+        assert_eq!(users_widget.nb_sections(), 2);
+
+        assert_eq!(users_widget.nb_items(0), 2);
+        assert_eq!(users_widget.nb_items(1), 2);
     }
 }
