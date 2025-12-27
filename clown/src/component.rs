@@ -10,6 +10,7 @@ pub trait Draw {
 pub trait EventHandler {
     fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>;
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent>;
+    fn need_redraw(&self) -> bool;
 
     fn get_area(&self) -> Rect;
 }
@@ -36,6 +37,13 @@ impl<'a, T> Component<'a, T> {
         T: EventHandler,
     {
         self.inner.handle_events(event)
+    }
+
+    pub fn need_redraw(&self) -> bool
+    where
+        T: EventHandler,
+    {
+        self.inner.need_redraw()
     }
 
     pub fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent>
@@ -105,5 +113,9 @@ impl EventHandler for Child<'_> {
 
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         self.deref_mut().handle_actions(event)
+    }
+
+    fn need_redraw(&self) -> bool {
+        self.deref().need_redraw()
     }
 }

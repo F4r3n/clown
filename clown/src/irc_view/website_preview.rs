@@ -14,15 +14,15 @@ use ratatui::{
     widgets::{Block, Borders},
 };
 
-use crate::component::Draw;
+use crate::{component::Draw, irc_view::tooltip_widget::DrawToolTip};
 
 pub struct WebsitePreview {
     url: String,
     handle: Option<JoinHandle<Result<MetaData, String>>>,
     image: Option<StatefulProtocol>,
     picker: Picker,
-
     metadata: Option<MetaData>, //handle: Option<JoinHandle<>,
+    need_redraw: bool,
 }
 
 impl WebsitePreview {
@@ -33,6 +33,7 @@ impl WebsitePreview {
             metadata: None,
             image: None,
             picker,
+            need_redraw: true,
         }
     }
 
@@ -81,9 +82,20 @@ impl WebsitePreview {
 }
 
 #[cfg(feature = "website-preview")]
+impl DrawToolTip for WebsitePreview {
+    fn need_redraw(&self) -> bool {
+        self.need_redraw
+    }
+}
+
+#[cfg(feature = "website-preview")]
 impl Draw for WebsitePreview {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         if let Some(meta) = self.get_metadata(&self.picker.clone()) {
+            if self.need_redraw {
+                self.need_redraw = false;
+            }
+
             frame.render_widget(ratatui::widgets::Clear, area);
             let block = Block::default()
                 .borders(Borders::ALL)

@@ -6,10 +6,15 @@ use crate::component::{Draw, EventHandler};
 
 pub struct TopicWidget {
     topic: String,
+    need_redraw: bool,
 }
 
 impl Draw for TopicWidget {
     fn render(&mut self, frame: &mut ratatui::Frame<'_>, area: ratatui::prelude::Rect) {
+        if self.need_redraw {
+            self.need_redraw = false;
+        }
+
         let text = Text::from(self.topic.clone());
         let paragrapth = Paragraph::new(text);
         frame.render_widget(paragrapth, area);
@@ -20,16 +25,22 @@ impl TopicWidget {
     pub fn new() -> Self {
         Self {
             topic: "".to_string(),
+            need_redraw: true,
         }
     }
 
     fn set_topic(&mut self, content: &str) {
         self.topic = content.to_string();
+        self.need_redraw = true;
     }
 }
 
 use crate::message_event::MessageEvent;
 impl EventHandler for TopicWidget {
+    fn need_redraw(&self) -> bool {
+        self.need_redraw
+    }
+
     fn get_area(&self) -> ratatui::prelude::Rect {
         Rect::default()
     }

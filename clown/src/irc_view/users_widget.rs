@@ -130,6 +130,7 @@ pub struct UsersWidget {
 
     list_state: ListStateWidget,
     area: Rect,
+    need_redraw: bool,
 }
 
 impl UsersWidget {
@@ -139,6 +140,7 @@ impl UsersWidget {
             area: Rect::default(),
             list_sections: Vec::new(),
             list_state: ListStateWidget::new(),
+            need_redraw: true,
         }
     }
 
@@ -257,6 +259,9 @@ impl UsersWidget {
 
 impl Draw for UsersWidget {
     fn render(&mut self, frame: &mut ratatui::Frame<'_>, area: ratatui::prelude::Rect) {
+        if self.need_redraw {
+            self.need_redraw = false;
+        }
         self.area = area;
         self.list_state
             .render(&self.list_sections, &self.list_users, frame, area);
@@ -372,31 +377,45 @@ impl crate::component::EventHandler for UsersWidget {
     fn get_area(&self) -> Rect {
         self.area
     }
+    fn need_redraw(&self) -> bool {
+        self.need_redraw
+    }
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         match event {
             MessageEvent::UpdateUsers(channel, list_users) => {
                 self.set_users(channel, list_users.to_vec());
+                self.need_redraw = true;
+
                 None
             }
             MessageEvent::ReplaceUser(old, new) => {
                 self.replace_user(old, new);
+                self.need_redraw = true;
+
                 None
             }
             MessageEvent::RemoveUser(channel, user) => {
                 self.remove_user(channel.as_ref().and_then(|c| self.get_section_id(c)), user);
+                self.need_redraw = true;
+
                 None
             }
             MessageEvent::HighlightUser(user) => {
                 self.hightlight_user(user);
+                self.need_redraw = true;
 
                 None
             }
             MessageEvent::JoinChannel(channel) => {
                 self.add_channel(channel.to_string());
+                self.need_redraw = true;
+
                 None
             }
             MessageEvent::JoinUser(channel, user) => {
                 self.add_user_with_channel(channel, user);
+                self.need_redraw = true;
+
                 None
             }
             _ => None,
@@ -453,6 +472,7 @@ impl crate::component::EventHandler for UsersWidget {
                         channel.channel_info.name.clone(),
                     ));
                 }
+                self.need_redraw = true;
             }
         }
         None

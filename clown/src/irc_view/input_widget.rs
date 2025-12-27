@@ -18,6 +18,7 @@ pub struct CInput {
     input_history: InputHistory,
     /// Current input mode
     area: Rect,
+    redraw: bool,
 
     spell_checker: Option<SpellChecker>,
     spellchecker_task: Option<crate::async_task::AsyncTask<SpellChecker>>,
@@ -26,6 +27,9 @@ pub struct CInput {
 impl Draw for CInput {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
+        if self.redraw {
+            self.redraw = false;
+        }
         // keep 2 for borders and 1 for cursor
         let width = area.width.max(3) - 3;
         let scroll = self.input.set_visual_scroll(width as usize);
@@ -56,7 +60,9 @@ impl crate::component::EventHandler for CInput {
     fn get_area(&self) -> Rect {
         self.area
     }
-
+    fn need_redraw(&self) -> bool {
+        self.redraw
+    }
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         if let MessageEvent::SpellChecker(language) = event {
             if let Some(language) = language {
@@ -77,6 +83,7 @@ impl crate::component::EventHandler for CInput {
         match event {
             crate::event_handler::Event::Crossterm(event) => {
                 if let Some(key_event) = event.as_key_event() {
+                    self.redraw = true;
                     match key_event.code {
                         KeyCode::Enter => {
                             let m = self.get_current_input().to_string();

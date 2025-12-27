@@ -311,6 +311,14 @@ impl MainView<'_> {
 
 use crate::command;
 impl widget_view::WidgetView for MainView<'_> {
+    fn need_redraw(&mut self, model: &mut Model) -> bool {
+        for child in self.children().iter_mut() {
+            if child.need_redraw() {
+                return true;
+            }
+        }
+        return false;
+    }
     fn view(&mut self, _model: &mut Model, frame: &mut Frame<'_>) {
         // Create layout
         let main_layout = Layout::default()

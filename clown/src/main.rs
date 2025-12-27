@@ -21,7 +21,7 @@ use message_queue::MessageQueue;
 use model::{Model, RunningState, View};
 use ratatui::Frame;
 use shadow_rs::shadow;
-use tracing::error;
+use tracing::{debug, error};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 shadow!(build);
@@ -87,19 +87,15 @@ async fn main() -> color_eyre::Result<()> {
     ));
 
     while model.running_state != RunningState::Done {
-        let event = events.next().await?;
-        terminal.draw(|f| view(&mut model, &mut views, f))?;
-        //debug!("{:?}", &event);
-        handle_event(&mut model, &mut views, event, &mut list_messages)?;
-        let mut limit: i8 = 10;
-        while let Some(current_msg) = list_messages.next() {
-            //debug!("{:?}", &current_msg);
-
-            update(&mut model, &mut views, current_msg, &mut list_messages).await;
-            limit -= 1;
-            if limit <= 0 {
-                error!("Too many messages");
-                break;
+        if let Some(event) = events.next().await {
+            if need_redraw(&mut model, &mut views) {
+                //debug!("Need redraw");
+                terminal.draw(|f| view(&mut model, &mut views, f))?;
+            }
+            //debug!("{:?}", &event);
+            handle_event(&mut model, &mut views, event, &mut list_messages)?;
+            while let Some(current_msg) = list_messages.next() {
+                update(&mut model, &mut views, current_msg, &mut list_messages).await;
             }
         }
     }
@@ -126,6 +122,14 @@ fn handle_event(
     }
 
     Ok(None)
+}
+
+fn need_redraw(model: &mut Model, views: &mut ViewMap) -> bool {
+    if let Some(current_view) = views.get_mut(&model.current_view) {
+        current_view.need_redraw(model)
+    } else {
+        false
+    }
 }
 
 async fn update(

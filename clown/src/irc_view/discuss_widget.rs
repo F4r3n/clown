@@ -84,6 +84,7 @@ pub struct DiscussWidget {
 
     last_hovered: Option<Hovered>,
     color_map: AHashMap<String, ratatui::style::Color>,
+    redraw: bool,
 }
 
 impl DiscussWidget {
@@ -99,6 +100,7 @@ impl DiscussWidget {
             content_width: 0,
             last_hovered: None,
             color_map: AHashMap::new(),
+            redraw: true,
         }
     }
 
@@ -265,11 +267,13 @@ impl DiscussWidget {
             // Show last lines that fit the view
             self.scroll_offset = self.get_max_scroll();
         }
+        self.redraw = true;
     }
 
     fn scroll_up(&mut self) {
         self.scroll_offset = self.scroll_offset.saturating_sub(1);
         self.follow_last = false;
+        self.redraw = true;
     }
 
     fn get_max_scroll(&self) -> usize {
@@ -281,12 +285,16 @@ impl DiscussWidget {
         let max_scroll = self.get_max_scroll();
         self.scroll_offset = self.scroll_offset.saturating_add(1).min(max_scroll);
         self.follow_last = max_scroll.eq(&self.scroll_offset);
+        self.redraw = true;
     }
 }
 
 impl Draw for DiscussWidget {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
+        if self.redraw {
+            self.redraw = false;
+        }
 
         let text_style = Style::default().fg(Color::White);
 
@@ -349,6 +357,9 @@ impl crate::component::EventHandler for DiscussWidget {
     fn get_area(&self) -> Rect {
         self.area
     }
+    fn need_redraw(&self) -> bool {
+        self.redraw
+    }
 
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         match event {
@@ -371,7 +382,10 @@ impl crate::component::EventHandler for DiscussWidget {
     fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
         if let crate::event_handler::Event::Crossterm(cross) = &event {
             match cross {
-                crossterm::event::Event::Resize(_x, _y) => None,
+                crossterm::event::Event::Resize(_x, _y) => {
+                    self.redraw = true;
+                    None
+                }
                 crossterm::event::Event::Mouse(mouse_event) => match mouse_event.kind {
                     crossterm::event::MouseEventKind::ScrollDown => {
                         self.scroll_down();

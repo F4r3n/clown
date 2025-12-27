@@ -76,11 +76,8 @@ impl EventHandler {
         Ok(())
     }
 
-    pub async fn next(&mut self) -> Result<Event> {
-        self.rx
-            .recv()
-            .await
-            .ok_or(color_eyre::eyre::eyre!("Unable to get event"))
+    pub async fn next(&mut self) -> Option<Event> {
+        self.rx.recv().await
     }
 
     pub async fn _join(&mut self) -> color_eyre::Result<()> {
