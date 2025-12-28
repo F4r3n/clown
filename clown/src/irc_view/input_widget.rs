@@ -318,15 +318,23 @@ impl InputWidget {
             return;
         }
 
-        if let Some((idx, _ch)) = self.value[..self.cursor_position]
+        let mut cursor_pos = self.cursor_position;
+        for c in self.value[..self.cursor_position].chars().rev() {
+            if c.is_whitespace() {
+                cursor_pos = cursor_pos.saturating_sub(1);
+            } else {
+                break;
+            }
+        }
+
+        if let Some((idx, _ch)) = self.value[..cursor_pos]
             .char_indices()
-            .rev()
-            .find(|&(_, ch)| ch.is_whitespace())
+            .rfind(|&(_, ch)| ch.is_whitespace())
         {
-            self.value.drain(idx..self.cursor_position);
-            self.cursor_position = idx;
+            self.value.drain((idx + 1)..self.cursor_position);
+            self.cursor_position = idx + 1;
         } else {
-            self.value.clear();
+            self.value.drain(0..self.cursor_position);
             self.cursor_position = 0;
         }
     }
@@ -451,8 +459,24 @@ mod tests {
         w.cursor_position = w.value.len();
 
         w.handle_key_events(&make_ctrl_w());
-        assert_eq!(w.cursor_position, 5); // after "hello"
-        assert_eq!(w.value, "hello");
+        assert_eq!(w.cursor_position, 6); // after "hello"
+        assert_eq!(w.value, "hello ");
+
+        w.value = "hello world   ".to_string();
+        w.cursor_position = w.value.len();
+        w.handle_key_events(&make_ctrl_w());
+        assert_eq!(w.cursor_position, 6); // after "hello"
+        assert_eq!(w.value, "hello ");
+
+        w.handle_key_events(&make_ctrl_w());
+        assert_eq!(w.cursor_position, 0); // after "hello"
+        assert_eq!(w.value, "");
+
+        w.value = "hello world   ".to_string();
+        w.cursor_position = 6;
+        w.handle_key_events(&make_ctrl_w());
+        assert_eq!(w.cursor_position, 0); // after "hello"
+        assert_eq!(w.value, "world   ");
     }
 
     #[test]
