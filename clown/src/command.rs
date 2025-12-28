@@ -36,6 +36,7 @@ pub enum ClientCommand {
         detailed_message = "To quit a channel: {channel} {:reason}"
     )]
     Part(String, Option<String>),
+    Unknown(Option<String>),
 }
 
 pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
@@ -59,10 +60,10 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
                 "me" => args.map(|v| ClientCommand::Action(v.to_string())),
                 "join" => args.map(|v| ClientCommand::Join(v.to_string())),
                 "part" => args.map(|v| part(v.to_string())),
-                _ => None,
+                _ => Some(ClientCommand::Unknown(Some(command.to_string()))),
             }
         } else {
-            None
+            Some(ClientCommand::Unknown(None))
         }
     } else {
         None

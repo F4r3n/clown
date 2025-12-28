@@ -117,6 +117,15 @@ impl MainView<'_> {
                             MessageContent::new_action(Some(nickname), content),
                         ))
                 }
+                command::ClientCommand::Unknown(command_name) => self
+                    .messages_display
+                    .handle_actions(&MessageEvent::AddMessageView(
+                        None,
+                        MessageContent::new_error(format!(
+                            "Unknown command {}",
+                            command_name.unwrap_or_default()
+                        )),
+                    )),
             }
         } else {
             let nickname = model.get_nickname().to_string();
@@ -216,7 +225,7 @@ impl MainView<'_> {
                         source.unwrap_or_default(),
                         new_user,
                     )),
-                    Command::Notice(target, message) => {
+                    Command::Notice(_target, message) => {
                         //Display a notice directly to the user current channel
                         messages.push_message(MessageEvent::AddMessageView(
                             None,
