@@ -191,47 +191,55 @@ impl DiscussWidget {
         None
     }
 
-    fn collect_visible_rows<'a>(&'a mut self) -> impl Iterator<Item = Row<'a>> {
+    fn collect_visible_rows<'a>(&'a mut self) -> Vec<Row<'a>> {
         let mut visible_rows = Vec::new();
-
         if self.content_width == 0 {
-            return visible_rows.into_iter();
+            return visible_rows;
         }
-
-        let mut wrapped_rows_seen = 0;
-        let mut visible_rows_total = 0;
+        let mut wrapped_rows_seen = 0; // counts all rows, even skipped
+        let mut visible_rows_total = 0; // counts only rendered rows
 
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
-            'outer: for line in messages {
+            for line in messages {
                 let total_rows = line.get_message_width().div_ceil(self.content_width);
 
+                // Skip rows above scroll
                 if wrapped_rows_seen + total_rows <= self.scroll_offset {
                     wrapped_rows_seen += total_rows;
                     continue;
                 }
 
-                let skip = self.scroll_offset.saturating_sub(wrapped_rows_seen);
-                let remaining = self.max_visible_height - visible_rows_total;
+                // Create all wrapped rows for this message
+                let mut rows = line
+                    .create_rows(
+                        self.content_width as u16,
+                        line.get_source().and_then(|s| self.color_map.get(s)),
+                    )
+                    .collect::<Vec<Row<'a>>>();
 
-                let rows = line.create_rows(
-                    self.content_width as u16,
-                    line.get_source().and_then(|s| self.color_map.get(s)),
-                );
-
-                for row in rows.skip(skip).take(remaining) {
-                    visible_rows.push(row);
-                    visible_rows_total += 1;
-
-                    if visible_rows_total >= self.max_visible_height {
-                        break 'outer;
-                    }
+                // Skip inside this message if scroll_offset lands inside it
+                if self.scroll_offset > wrapped_rows_seen {
+                    let skip = self.scroll_offset - wrapped_rows_seen;
+                    rows = rows.into_iter().skip(skip).collect();
                 }
 
+                // Truncate if screen full
+                let remaining = self.max_visible_height - visible_rows_total;
+                if rows.len() > remaining {
+                    rows.truncate(remaining);
+                }
+
+                visible_rows_total += rows.len();
                 wrapped_rows_seen += total_rows;
+                visible_rows.extend(rows);
+
+                if visible_rows_total >= self.max_visible_height {
+                    break;
+                }
             }
         }
 
-        visible_rows.into_iter()
+        visible_rows
     }
 
     fn get_total_lines(&self) -> usize {
