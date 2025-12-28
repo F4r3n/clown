@@ -599,34 +599,22 @@ mod tests {
 
         discuss.content_width = 10;
         discuss.scroll_offset = 0;
-        assert_eq!(
-            discuss
-                .collect_visible_rows()
-                .collect::<Vec<Row<'_>>>()
-                .len(),
-            3
-        );
+        assert_eq!(discuss.collect_visible_rows().len(), 3);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
-        assert_eq!(
-            discuss
-                .collect_visible_rows()
-                .collect::<Vec<Row<'_>>>()
-                .len(),
-            6
-        );
+        assert_eq!(discuss.collect_visible_rows().len(), 6);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
         discuss.max_visible_height = 2;
         let rows = discuss.collect_visible_rows();
-        assert_eq!(rows.collect::<Vec<Row<'_>>>().len(), 2);
+        assert_eq!(rows.len(), 2);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 1;
         discuss.max_visible_height = 2;
         let rows = discuss.collect_visible_rows();
-        assert_eq!(rows.collect::<Vec<Row<'_>>>().len(), 2);
+        assert_eq!(rows.len(), 2);
     }
 }
