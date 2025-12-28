@@ -26,7 +26,6 @@ use ratatui::{
 
 use tracing::debug;
 use tracing::error;
-use tracing::info;
 
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
@@ -292,7 +291,7 @@ impl MainView<'_> {
                             MessageContent::new(source, content),
                         ));
                     }
-                    ResponseNumber::NameReply(symbol, channel, list_users) => {
+                    ResponseNumber::NameReply(_symbol, channel, list_users) => {
                         //info!("{} {} {:?}", symbol, channel, list_users);
                         messages.push_message(MessageEvent::UpdateUsers(channel, list_users));
                     }
@@ -315,7 +314,7 @@ impl MainView<'_> {
 
 use crate::command;
 impl widget_view::WidgetView for MainView<'_> {
-    fn need_redraw(&mut self, model: &mut Model) -> bool {
+    fn need_redraw(&mut self, _model: &mut Model) -> bool {
         if self.need_redraw {
             return self.need_redraw;
         }
@@ -325,7 +324,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 return true;
             }
         }
-        return false;
+        false
     }
     fn view(&mut self, _model: &mut Model, frame: &mut Frame<'_>) {
         if self.need_redraw {

@@ -191,53 +191,47 @@ impl DiscussWidget {
         None
     }
 
-    fn collect_visible_rows<'a>(&'a mut self) -> Vec<Row<'a>> {
+    fn collect_visible_rows<'a>(&'a mut self) -> impl Iterator<Item = Row<'a>> {
         let mut visible_rows = Vec::new();
+
         if self.content_width == 0 {
-            return visible_rows;
+            return visible_rows.into_iter();
         }
-        let mut wrapped_rows_seen = 0; // counts all rows, even skipped
-        let mut visible_rows_total = 0; // counts only rendered rows
+
+        let mut wrapped_rows_seen = 0;
+        let mut visible_rows_total = 0;
 
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
-            for line in messages {
+            'outer: for line in messages {
                 let total_rows = line.get_message_width().div_ceil(self.content_width);
 
-                // Skip rows above scroll
                 if wrapped_rows_seen + total_rows <= self.scroll_offset {
                     wrapped_rows_seen += total_rows;
                     continue;
                 }
 
-                // Create all wrapped rows for this message
-                let mut rows = line.create_rows(
+                let skip = self.scroll_offset.saturating_sub(wrapped_rows_seen);
+                let remaining = self.max_visible_height - visible_rows_total;
+
+                let rows = line.create_rows(
                     self.content_width as u16,
                     line.get_source().and_then(|s| self.color_map.get(s)),
                 );
 
-                // Skip inside this message if scroll_offset lands inside it
-                if self.scroll_offset > wrapped_rows_seen {
-                    let skip = self.scroll_offset - wrapped_rows_seen;
-                    rows = rows.into_iter().skip(skip).collect();
+                for row in rows.skip(skip).take(remaining) {
+                    visible_rows.push(row);
+                    visible_rows_total += 1;
+
+                    if visible_rows_total >= self.max_visible_height {
+                        break 'outer;
+                    }
                 }
 
-                // Truncate if screen full
-                let remaining = self.max_visible_height - visible_rows_total;
-                if rows.len() > remaining {
-                    rows.truncate(remaining);
-                }
-
-                visible_rows_total += rows.len();
                 wrapped_rows_seen += total_rows;
-                visible_rows.extend(rows);
-
-                if visible_rows_total >= self.max_visible_height {
-                    break;
-                }
             }
         }
 
-        visible_rows
+        visible_rows.into_iter()
     }
 
     fn get_total_lines(&self) -> usize {
@@ -384,8 +378,6 @@ impl crate::component::EventHandler for DiscussWidget {
         if let crate::event_handler::Event::Crossterm(cross) = &event {
             match cross {
                 crossterm::event::Event::Resize(_x, _y) => {
-                    tracing::debug!("Resize discuss {:?}", &event);
-
                     self.redraw = true;
                     None
                 }
@@ -599,22 +591,34 @@ mod tests {
 
         discuss.content_width = 10;
         discuss.scroll_offset = 0;
-        assert_eq!(discuss.collect_visible_rows().len(), 3);
+        assert_eq!(
+            discuss
+                .collect_visible_rows()
+                .collect::<Vec<Row<'_>>>()
+                .len(),
+            3
+        );
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
-        assert_eq!(discuss.collect_visible_rows().len(), 6);
+        assert_eq!(
+            discuss
+                .collect_visible_rows()
+                .collect::<Vec<Row<'_>>>()
+                .len(),
+            6
+        );
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
         discuss.max_visible_height = 2;
         let rows = discuss.collect_visible_rows();
-        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.collect::<Vec<Row<'_>>>().len(), 2);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 1;
         discuss.max_visible_height = 2;
         let rows = discuss.collect_visible_rows();
-        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.collect::<Vec<Row<'_>>>().len(), 2);
     }
 }

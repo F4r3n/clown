@@ -8,16 +8,8 @@ use ratatui::{
     text::{Line, Span},
     widgets::{List, ListItem},
 };
-use tracing::debug;
-#[derive(Debug, PartialEq)]
-enum ChannelMode {
-    User,
-    Channel,
-}
-
 #[derive(Debug, PartialEq)]
 struct User {
-    pub channel_mode: ChannelMode,
     pub name: String,
     pub need_hightlight: bool,
     pub color: ratatui::style::Color,
@@ -27,7 +19,6 @@ struct User {
 impl User {
     pub fn new(name: String) -> Self {
         Self {
-            channel_mode: ChannelMode::User,
             need_hightlight: false,
             color: nickname_color(&name),
             name,
@@ -184,7 +175,7 @@ impl UsersWidget {
 
         if let Some(channel) = channel_id {
             for user in list_users {
-                self.add_user(channel, &user, ChannelMode::User);
+                self.add_user(channel, &user);
             }
         }
     }
@@ -234,25 +225,23 @@ impl UsersWidget {
 
     fn add_user_with_channel(&mut self, channel: &str, user: &str) {
         if let Some(channel_id) = self.get_section_id(channel) {
-            self.add_user(channel_id, user, ChannelMode::User);
+            self.add_user(channel_id, user);
         } else if let Some(channel_id) = self.add_channel(channel.to_string()) {
-            self.add_user(channel_id, user, ChannelMode::User);
+            self.add_user(channel_id, user);
         }
     }
 
-    fn add_user(&mut self, channel_id: usize, user: &str, mode: ChannelMode) {
+    fn add_user(&mut self, channel_id: usize, user: &str) {
         let user = UsersWidget::sanitize_name(user).to_string();
-        if mode == ChannelMode::User {
-            if let Some(channel) = self.list_sections.get_mut(channel_id) {
-                channel.set_user_position(&user);
-            }
-            if let Some(user) = self.list_users.get_mut(&user) {
-                user.join_channel(channel_id);
-            } else {
-                let mut new_user = User::new(user.to_string());
-                new_user.join_channel(channel_id);
-                self.list_users.insert(user, new_user);
-            }
+        if let Some(channel) = self.list_sections.get_mut(channel_id) {
+            channel.set_user_position(&user);
+        }
+        if let Some(user) = self.list_users.get_mut(&user) {
+            user.join_channel(channel_id);
+        } else {
+            let mut new_user = User::new(user.to_string());
+            new_user.join_channel(channel_id);
+            self.list_users.insert(user, new_user);
         }
     }
 }

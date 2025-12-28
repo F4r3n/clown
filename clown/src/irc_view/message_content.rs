@@ -5,7 +5,7 @@ use crate::irc_view::{
 use chrono::{DateTime, Local, Timelike};
 use ratatui::{
     style::{Color, Style},
-    text::Line,
+    text::{Line, Span},
     widgets::{Cell, Row},
 };
 use std::borrow::Cow;
@@ -156,7 +156,7 @@ impl MessageContent {
         &self,
         content_width: u16,
         color_source: Option<&ratatui::style::Color>,
-    ) -> Vec<Row<'_>> {
+    ) -> impl Iterator<Item = Row<'_>> {
         let mut visible_rows = Vec::new();
         let mut nickname_style = Style::default();
         if let Some(color_source) = color_source {
@@ -206,8 +206,12 @@ impl MessageContent {
 
         //FIXME: colors on multiline is broken
         for (i, w) in wrapped.into_iter().enumerate() {
-            if let Some(row) = visible_rows.get_mut(i) {
-                if let Some(last) = row.last_mut() {
+            if let Some(row) = visible_rows.get_mut(i)
+                && let Some(last) = row.last_mut()
+            {
+                if crate::irc_view::message_parser::is_string_plain(w.as_ref()) {
+                    *last = Cell::from(Span::from(w).style(default_style))
+                } else {
                     *last = Cell::from(Line::from(crate::irc_view::message_parser::to_spans(
                         w,
                         Some(default_style),
@@ -216,7 +220,9 @@ impl MessageContent {
             }
         }
 
-        visible_rows.into_iter().map(Row::new).collect()
+        visible_rows.into_iter().map(Row::new)
+
+        //visible_rows.into_iter().map(Row::new).collect()
     }
 
     pub fn get_message_width(&self) -> usize {

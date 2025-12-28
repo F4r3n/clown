@@ -115,7 +115,7 @@ pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
         if let Some(reciever) = client.message_receiver() {
             let command_sender = client.command_sender();
 
-            let (error_sender, error_receiver) = mpsc::unbounded_channel();
+            let (error_sender, error_receiver) = mpsc::channel(10);
             if model.retry > 0 {
                 model.retry -= 1;
                 model.irc_connection = Some(IRCConnection {
@@ -125,7 +125,7 @@ pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
                     message_reciever: reciever,
                     task: tokio::spawn(async move {
                         if let Err(err) = client.launch(&connection_config).await {
-                            let _ = error_sender.send(format!("Connection error: {err}"));
+                            let _ = error_sender.send(format!("Connection error: {err}")).await;
                         }
                     }),
                 });

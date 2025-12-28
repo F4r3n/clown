@@ -1,4 +1,3 @@
-use color_eyre::eyre::Result;
 use crossterm::ExecutableCommand;
 use futures::{FutureExt, StreamExt, join};
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -21,8 +20,8 @@ impl Event {
 
 #[derive(Debug)]
 pub struct EventHandler {
-    _tx: mpsc::UnboundedSender<Event>,
-    rx: mpsc::UnboundedReceiver<Event>,
+    _tx: mpsc::Sender<Event>,
+    rx: mpsc::Receiver<Event>,
     _task: Option<JoinHandle<()>>,
 }
 
@@ -30,7 +29,7 @@ impl EventHandler {
     pub fn new() -> Self {
         let tick_rate = std::time::Duration::from_millis(60);
 
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::channel(100);
         let _tx = tx.clone();
 
         let task = tokio::spawn(async move {
@@ -43,12 +42,12 @@ impl EventHandler {
                   maybe_event = crossterm_event => {
                     match maybe_event {
                       Some(Ok(evt)) => {
-                        if tx.send(Event::Crossterm(evt)).is_err() {
+                        if tx.send(Event::Crossterm(evt)).await.is_err() {
                             break;
                         }
                       }
                       Some(Err(_)) => {
-                        if tx.send(Event::Error).is_err() {
+                        if tx.send(Event::Error).await.is_err() {
                             break;
                         }
                       }
@@ -56,7 +55,7 @@ impl EventHandler {
                     }
                   },
                   _ = delay => {
-                      if tx.send(Event::Tick).is_err() {
+                      if tx.send(Event::Tick).await.is_err() {
                         break;
                       }
                   },

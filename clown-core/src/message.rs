@@ -6,11 +6,11 @@ use crate::{
     response::{Response, ResponseBuilder},
 };
 pub struct MessageSender {
-    pub inner: mpsc::UnboundedSender<ServerMessage>,
+    pub inner: mpsc::Sender<ServerMessage>,
 }
 
 pub struct MessageReceiver {
-    pub inner: mpsc::UnboundedReceiver<ServerMessage>,
+    pub inner: mpsc::Receiver<ServerMessage>,
 }
 
 #[derive(Debug)]

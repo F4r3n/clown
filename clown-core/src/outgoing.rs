@@ -45,6 +45,7 @@ impl Outgoing {
             sender
                 .inner
                 .send(server_message)
+                .await
                 .map_err(|_| IRCIOError::SendMessage)?;
         }
         Ok(())
@@ -100,7 +101,7 @@ impl Outgoing {
 
     pub fn create_outgoing(&mut self) -> (CommandSender, MessageReceiver) {
         let (command_sender, command_receiver) = mpsc::unbounded_channel::<Command>();
-        let (message_sender, message_receiver) = mpsc::unbounded_channel::<ServerMessage>();
+        let (message_sender, message_receiver) = mpsc::channel::<ServerMessage>(100);
         self.receiver = Some(CommandReceiver {
             inner: command_receiver,
         });
