@@ -121,8 +121,11 @@ impl crate::component::EventHandler for CInput {
                             None
                         }
                     }
+                } else if let crossterm::event::Event::Paste(content) = event {
+                    self.redraw = true;
+                    self.input.handle_paste(content.to_string());
+                    None
                 } else {
-                    self.input.handle_other(event);
                     None
                 }
             }
@@ -336,10 +339,8 @@ impl InputWidget {
         self.cursor_position = 0;
     }
 
-    pub fn handle_other(&mut self, event: &crossterm::event::Event) {
-        if let crossterm::event::Event::Paste(content) = event {
-            self.append_value(content.clone());
-        }
+    pub fn handle_paste(&mut self, content: String) {
+        self.append_value(content);
     }
 
     pub fn handle_key_events(&mut self, key_event: &KeyEvent) {
