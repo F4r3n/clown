@@ -216,6 +216,13 @@ impl MainView<'_> {
                         source.unwrap_or_default(),
                         new_user,
                     )),
+                    Command::Notice(target, message) => {
+                        //Display a notice directly to the user current channel
+                        messages.push_message(MessageEvent::AddMessageView(
+                            None,
+                            MessageContent::new_notice(source, message),
+                        ));
+                    }
                     Command::Topic(channel, topic) => {
                         messages.push_message(MessageEvent::SetTopic(channel, topic))
                     }

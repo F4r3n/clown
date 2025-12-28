@@ -33,6 +33,7 @@ enum MessageKind {
     Normal,
     Highlight,
     Action,
+    Notice,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -105,6 +106,16 @@ impl MessageContent {
         }
     }
 
+    pub fn new_notice(source: Option<String>, content: String) -> Self {
+        Self {
+            time: std::time::SystemTime::now(),
+            source,
+            width_without_format: get_width_without_format(&content),
+            content,
+            kind: MessageKind::Notice,
+        }
+    }
+
     pub fn new_info(content: String) -> Self {
         Self {
             time: std::time::SystemTime::now(),
@@ -169,7 +180,7 @@ impl MessageContent {
         let default_style = match &self.kind {
             MessageKind::Error => Style::default().fg(Color::Red),
             MessageKind::Info => Style::default().fg(Color::LightBlue),
-            MessageKind::Action => Style::default().fg(Color::LightBlue),
+            MessageKind::Action | MessageKind::Notice => Style::default().fg(Color::LightBlue),
             MessageKind::Normal => Style::default(),
             _ => Style::default(),
         };
