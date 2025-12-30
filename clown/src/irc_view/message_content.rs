@@ -10,7 +10,7 @@ use ratatui::{
 };
 use std::borrow::Cow;
 use textwrap::wrap;
-
+use unicode_width::UnicodeWidthStr;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct WordPos {
     character_start: usize,
@@ -242,6 +242,30 @@ impl MessageContent {
 
     pub fn get_wrapped_line(&self, width: usize) -> Vec<Cow<'_, str>> {
         textwrap::wrap(&self.content, width)
+    }
+
+    pub fn wrapped_line_count(&self, width: usize) -> usize {
+        if width == 0 {
+            return 0;
+        }
+
+        let mut lines = 1;
+        let mut line_width = 0;
+
+        for word in self.content.split_whitespace() {
+            let w = UnicodeWidthStr::width(word);
+
+            if line_width == 0 {
+                line_width = w;
+            } else if line_width + 1 + w <= width {
+                line_width += 1 + w;
+            } else {
+                lines += 1;
+                line_width = w;
+            }
+        }
+
+        lines
     }
 }
 
