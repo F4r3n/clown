@@ -10,7 +10,7 @@ use ratatui::{
 };
 use std::borrow::Cow;
 use textwrap::wrap;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::UnicodeWidthChar;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct WordPos {
     character_start: usize,
@@ -250,18 +250,47 @@ impl MessageContent {
         }
 
         let mut lines = 1;
-        let mut line_width = 0;
+        let mut col = 0;
+        let mut word_width = 0;
 
-        for word in self.content.split_whitespace() {
-            let w = UnicodeWidthStr::width(word);
-
-            if line_width == 0 {
-                line_width = w;
-            } else if line_width + 1 + w <= width {
-                line_width += 1 + w;
+        for ch in self.content.chars() {
+            if ch.is_ascii_whitespace() {
+                // end of word
+                if word_width > 0 {
+                    if col == 0 {
+                        // word at start of line
+                        if word_width > width {
+                            lines += (word_width - 1) / width;
+                            col = word_width % width;
+                        } else {
+                            col = word_width;
+                        }
+                    } else if col + 1 + word_width <= width {
+                        col += 1 + word_width;
+                    } else {
+                        lines += 1;
+                        if word_width > width {
+                            lines += (word_width - 1) / width;
+                            col = word_width % width;
+                        } else {
+                            col = word_width;
+                        }
+                    }
+                    word_width = 0;
+                }
             } else {
-                lines += 1;
-                line_width = w;
+                word_width += UnicodeWidthChar::width(ch).unwrap_or(0);
+            }
+        }
+
+        // flush last word
+        if word_width > 0 {
+            if col == 0 {
+                if word_width > width {
+                    lines += (word_width - 1) / width;
+                }
+            } else if col + 1 + word_width > width {
+                lines += 1 + (word_width - 1) / width;
             }
         }
 
@@ -272,6 +301,12 @@ impl MessageContent {
 #[cfg(test)]
 mod test {
     use crate::irc_view::message_content::{MessageContent, WordPos};
+
+    #[test]
+    fn test_wrapped_line_count() {
+        let message = MessageContent::new(None, "aaaaa".to_string());
+        assert_eq!(message.wrapped_line_count(2), 3);
+    }
 
     #[test]
     fn test_word_find() {
