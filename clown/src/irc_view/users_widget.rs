@@ -117,6 +117,7 @@ impl Section {
 // list users contain to which channel a user belong. The ID is based on the index of the list_sections
 pub struct UsersWidget {
     list_sections: Vec<Section>,
+    list_section_pool_id: usize,
     list_users: ahash::AHashMap<String, User>,
 
     list_state: ListStateWidget,
@@ -128,6 +129,7 @@ impl UsersWidget {
     pub fn new() -> Self {
         Self {
             list_users: AHashMap::new(),
+            list_section_pool_id: 0,
             area: Rect::default(),
             list_sections: Vec::new(),
             list_state: ListStateWidget::new(),
@@ -138,7 +140,7 @@ impl UsersWidget {
     fn get_section_id(&self, channel: &str) -> Option<usize> {
         self.list_sections
             .iter()
-            .find(|c| c.channel_info.name == channel)
+            .find(|c| c.channel_info.name.eq_ignore_ascii_case(channel))
             .map(|c| c.channel_info.id)
     }
 
@@ -146,14 +148,15 @@ impl UsersWidget {
         let index = if let Some(i) = self
             .list_sections
             .iter()
-            .position(|c| c.channel_info.name == channel)
+            .position(|c| c.channel_info.name.eq_ignore_ascii_case(&channel))
         {
             i
         } else {
-            let i = self.list_sections.len();
             self.list_sections
-                .push(Section::new(channel.to_string(), i));
-            i
+                .push(Section::new(channel.to_string(), self.list_section_pool_id));
+            self.list_section_pool_id = self.list_section_pool_id.saturating_add(1);
+
+            self.list_sections.len().saturating_sub(1)
         };
         self.list_sections.get(index).map(|c| c.channel_info.id)
     }
@@ -526,6 +529,20 @@ mod tests {
         );
 
         assert_eq!(users_widget.list_users.len(), 1);
+    }
+
+    #[test]
+    fn test_add_channel_uppercase() {
+        let mut users_widget = UsersWidget::new();
+        let section = "#rust";
+        users_widget.add_channel(section.to_string());
+        users_widget.add_channel(section.to_uppercase());
+        assert_eq!(users_widget.list_sections.len(), 1);
+
+        let section = "#rUst2";
+        users_widget.add_channel(section.to_string());
+        users_widget.add_channel(section.to_uppercase());
+        assert_eq!(users_widget.list_sections.len(), 2);
     }
 
     #[test]
