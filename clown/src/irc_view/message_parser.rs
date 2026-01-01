@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use chrono::format::Item;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
@@ -41,6 +42,51 @@ fn toggle_modifier(mut style: Style, current: &mut Modifier, toggled: Modifier) 
         style = style.add_modifier(toggled);
     }
     style
+}
+
+pub fn to_raw<'a>(content: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+    let bytes = content.as_bytes();
+    let mut i = 0;
+    let mut start_i = 0;
+    let mut plain_emitted = false;
+
+    std::iter::from_fn(move || {
+        // fast-path
+        if is_string_plain(content) {
+            if plain_emitted {
+                return None;
+            }
+            plain_emitted = true;
+            return Some(content);
+        }
+
+        while i < bytes.len() {
+            match bytes.get(i) {
+                Some(0x02) | Some(0x1D) | Some(0x1E) | Some(0x1F) | Some(0x0F) => {
+                    let out = &content[start_i..i];
+                    i += 1;
+                    start_i = i;
+                    return Some(out);
+                }
+                Some(0x03) => {
+                    let out = &content[start_i..i];
+                    i += 1;
+                    // color parsing…
+                    start_i = i;
+                    return Some(out);
+                }
+                _ => i += 1,
+            }
+        }
+
+        if start_i < i {
+            let out = &content[start_i..i];
+            start_i = i;
+            Some(out)
+        } else {
+            None
+        }
+    })
 }
 
 pub fn to_spans<'a>(content: impl Into<Cow<'a, str>>, start_style: Option<Style>) -> Vec<Span<'a>> {

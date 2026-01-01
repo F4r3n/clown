@@ -1,6 +1,7 @@
 use crate::irc_view::{
     dimension_discuss::{NICKNAME_LENGTH, TIME_LENGTH},
     message_parser::get_width_without_format,
+    message_parser::to_raw,
 };
 use chrono::{DateTime, Local, Timelike};
 use ratatui::{
@@ -253,7 +254,7 @@ impl MessageContent {
         let mut col = 0;
         let mut word_width = 0;
 
-        for ch in self.content.chars() {
+        for ch in to_raw(&self.content).into_iter().flat_map(|c| c.chars()) {
             if ch.is_ascii_whitespace() {
                 // end of word
                 if word_width > 0 {
