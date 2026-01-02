@@ -96,6 +96,7 @@ impl MessageContent {
                 line_count_cache: count,
                 width_cache: current_width,
             });
+            tracing::debug!("Update cache {:?}", self.cache);
         }
     }
 
