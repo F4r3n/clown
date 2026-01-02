@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use chrono::format::Item;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,

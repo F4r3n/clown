@@ -1,4 +1,3 @@
-use std::ops::SubAssign;
 use std::time::Duration;
 
 use super::color_user::nickname_color;
@@ -38,6 +37,13 @@ impl ChannelMessages {
 
     pub fn get_messages(&self, channel: &str) -> Option<&Vec<MessageContent>> {
         self.messages.get(channel)
+    }
+
+    pub fn update_messages_width(&mut self, channel: &str, width: u16) {
+        self.messages.get_mut(channel).map(|v| {
+            v.iter_mut()
+                .map(|m| m.compute_cached_line_count(width as usize))
+        });
     }
 
     fn get_url_from_range(&self, channel: &str, range: &Range) -> Option<String> {
@@ -153,7 +159,7 @@ impl DiscussWidget {
 
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             for (line_index, line) in messages.iter().enumerate() {
-                let total_rows = line.get_message_width().div_ceil(self.content_width);
+                let total_rows = line.get_cached_line_count(self.content_width).unwrap_or(1);
 
                 if wrapped_rows_seen + total_rows <= self.scroll_offset {
                     wrapped_rows_seen += total_rows;
@@ -203,11 +209,7 @@ impl DiscussWidget {
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             for line in messages {
                 //Approximation of the start, same as total_lines
-                let total_rows = if wrapped_rows_seen < self.scroll_offset.saturating_add(10) {
-                    line.wrapped_line_count(self.content_width)
-                } else {
-                    line.get_message_width().div_ceil(self.content_width)
-                };
+                let total_rows = line.get_cached_line_count(self.content_width).unwrap_or(1);
                 // Skip rows above scroll
                 if wrapped_rows_seen + total_rows <= self.scroll_offset {
                     wrapped_rows_seen += total_rows;
@@ -251,61 +253,15 @@ impl DiscussWidget {
         if self.content_width == 0 {
             return 0;
         }
-        //tracing::debug!("width : {}", self.content_width);
-
-        let mut wrapped_rows_seen = 0; // counts all rows, even skipped
-        let mut visible_rows_total = 0; // counts only rendered rows
-        let mut rows_counter = 0;
-        let mut index_after_visible = 0;
-        if let Some(messages) = self.messages.get_messages(&self.current_channel) {
-            for (i, line) in messages.iter().enumerate() {
-                let total_rows = if wrapped_rows_seen < self.scroll_offset.saturating_add(10) {
-                    line.wrapped_line_count(self.content_width)
-                } else {
-                    line.get_message_width().div_ceil(self.content_width)
-                };
-
-                // Skip rows above scroll, it is an approximation, it avoids counting line on wrapping
-                if wrapped_rows_seen + total_rows <= self.scroll_offset {
-                    wrapped_rows_seen += total_rows;
-                    rows_counter += total_rows;
-                    continue;
-                }
-
-                // Create all wrapped rows for this message
-                let mut rows = line.wrapped_line_count(self.content_width);
-                let total_rows = rows;
-                // Skip inside this message if scroll_offset lands inside it
-                if self.scroll_offset > wrapped_rows_seen {
-                    let skip = self.scroll_offset - wrapped_rows_seen;
-                    rows.sub_assign(skip);
-                }
-
-                // Truncate if screen full
-                let remaining = self.max_visible_height - visible_rows_total;
-                rows = rows.min(remaining);
-
-                visible_rows_total += rows;
-                wrapped_rows_seen += total_rows;
-                rows_counter += rows + (total_rows.saturating_sub(rows));
-                index_after_visible = i;
-                if visible_rows_total >= self.max_visible_height {
-                    break;
-                }
-            }
-        }
-        index_after_visible = index_after_visible.saturating_add(1);
 
         self.messages
             .get_messages(&self.current_channel)
             .map(|msgs| {
                 msgs.iter()
-                    .skip(index_after_visible)
-                    .map(|m| m.get_message_width().div_ceil(self.content_width))
+                    .map(|m| m.get_cached_line_count(self.content_width).unwrap_or(1))
                     .sum()
             })
             .unwrap_or(0)
-            .saturating_add(rows_counter)
     }
 
     pub fn add_line(&mut self, channel: &str, in_message: MessageContent) {
@@ -315,7 +271,11 @@ impl DiscussWidget {
                 .or_insert(nickname_color(source));
         }
         let channel = channel.to_lowercase();
-        self.messages.add_message(&channel, in_message);
+        let mut message = in_message;
+        message.compute_cached_line_count(self.content_width);
+        tracing::debug!("Message {:?}", &message);
+
+        self.messages.add_message(&channel, message);
 
         if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view
@@ -335,15 +295,19 @@ impl DiscussWidget {
             .saturating_sub(self.max_visible_height)
     }
 
+    fn scroll_boundary(&mut self) {
+        let max_scroll = self.get_max_scroll();
+        self.scroll_offset = self.scroll_offset.min(max_scroll);
+        if self.follow_last {
+            self.scroll_offset = max_scroll;
+        }
+    }
+
     fn scroll_down(&mut self) {
         let max_scroll = self.get_max_scroll();
-        tracing::debug!("A total lines {}", self.get_total_lines());
-        tracing::debug!("A scroll offset {}", self.scroll_offset);
+        tracing::debug!("total lines {}", self.get_total_lines());
 
         self.scroll_offset = self.scroll_offset.saturating_add(1).min(max_scroll);
-        tracing::debug!("B total lines {}", self.get_total_lines());
-        tracing::debug!("B scroll offset {}", self.scroll_offset);
-        tracing::debug!("max scroll {}", max_scroll);
 
         self.follow_last = max_scroll.eq(&self.scroll_offset);
         self.redraw = true;
@@ -381,7 +345,12 @@ impl Draw for DiscussWidget {
                     .saturating_sub(4_u16)
             })
             .unwrap_or(0);
+        if (content_width as usize) != self.content_width {
+            self.messages
+                .update_messages_width(&self.current_channel, content_width);
+        }
         self.content_width = content_width as usize;
+        self.scroll_boundary();
         self.vertical_scroll_state = ScrollbarState::new(self.get_total_lines())
             .position(self.scroll_offset + self.max_visible_height);
         let visible_rows = self.collect_visible_rows();
@@ -641,19 +610,20 @@ mod tests {
     #[test]
     fn test_total_lines() {
         let mut discuss = DiscussWidget::new("");
-        discuss.add_line(
-            "",
-            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
-        );
-        discuss.add_line(
-            "",
-            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
-        );
-        discuss.add_line(
-            "",
-            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
-        );
         discuss.content_width = 10;
+
+        discuss.add_line(
+            "",
+            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+        );
+        discuss.add_line(
+            "",
+            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+        );
+        discuss.add_line(
+            "",
+            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+        );
         discuss.scroll_offset = 0;
         assert_eq!(discuss.get_total_lines(), 9);
     }

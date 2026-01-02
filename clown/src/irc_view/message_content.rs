@@ -1,7 +1,7 @@
+use crate::irc_view::textwrapper::{wrap_content, wrapped_line_count};
 use crate::irc_view::{
     dimension_discuss::{NICKNAME_LENGTH, TIME_LENGTH},
     message_parser::get_width_without_format,
-    message_parser::to_raw,
 };
 use chrono::{DateTime, Local, Timelike};
 use ratatui::{
@@ -10,8 +10,7 @@ use ratatui::{
     widgets::{Cell, Row},
 };
 use std::borrow::Cow;
-use textwrap::wrap;
-use unicode_width::UnicodeWidthChar;
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct WordPos {
     character_start: usize,
@@ -38,12 +37,30 @@ enum MessageKind {
 }
 
 #[derive(PartialEq, Debug, Clone)]
+pub struct MessageCache {
+    width_cache: usize,      // The width used for the last calculation
+    line_count_cache: usize, // The calculated line count for that width
+}
+
+impl MessageCache {
+    fn get_cached_line_count(&self, current_width: usize) -> Option<usize> {
+        if self.width_cache == current_width {
+            Some(self.line_count_cache)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub struct MessageContent {
     time: std::time::SystemTime, /*Generated time */
     source: Option<String>,      /*Source*/
     content: String,             /*Content */
     width_without_format: usize,
     kind: MessageKind,
+
+    cache: Option<MessageCache>,
 }
 
 impl MessageContent {
@@ -54,6 +71,31 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Normal,
+            cache: None,
+        }
+    }
+
+    pub fn get_cached_line_count(&self, current_width: usize) -> Option<usize> {
+        if let Some(cache) = self.cache.as_ref()
+            && current_width == cache.width_cache
+            && let Some(size) = cache.get_cached_line_count(current_width)
+        {
+            Some(size)
+        } else {
+            None
+        }
+    }
+
+    pub fn compute_cached_line_count(&mut self, current_width: usize) {
+        if let Some(cache) = self.cache.as_ref()
+            && current_width == cache.width_cache
+        {
+        } else {
+            let count = self.wrapped_line_count(current_width);
+            self.cache = Some(MessageCache {
+                line_count_cache: count,
+                width_cache: current_width,
+            });
         }
     }
 
@@ -82,6 +124,7 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind,
+            cache: None,
         }
     }
 
@@ -92,6 +135,7 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Error,
+            cache: None,
         }
     }
 
@@ -104,6 +148,7 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Action,
+            cache: None,
         }
     }
 
@@ -114,6 +159,7 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Notice,
+            cache: None,
         }
     }
 
@@ -124,6 +170,7 @@ impl MessageContent {
             kind: MessageKind::Info,
             width_without_format: get_width_without_format(&content),
             content,
+            cache: None,
         }
     }
 
@@ -185,7 +232,7 @@ impl MessageContent {
             MessageKind::Normal => Style::default(),
             _ => Style::default(),
         };
-        let wrapped = wrap(&self.content, content_width as usize);
+        let wrapped = self.wrap_content(content_width as usize);
 
         visible_rows.push([
             Cell::from(format!(
@@ -242,60 +289,15 @@ impl MessageContent {
     }
 
     pub fn get_wrapped_line(&self, width: usize) -> Vec<Cow<'_, str>> {
-        textwrap::wrap(&self.content, width)
+        self.wrap_content(width)
     }
 
     pub fn wrapped_line_count(&self, width: usize) -> usize {
-        if width == 0 {
-            return 0;
-        }
+        wrapped_line_count(&self.content, width)
+    }
 
-        let mut lines = 1;
-        let mut col = 0;
-        let mut word_width = 0;
-
-        for ch in to_raw(&self.content).flat_map(|c| c.chars()) {
-            if ch.is_ascii_whitespace() {
-                // end of word
-                if word_width > 0 {
-                    if col == 0 {
-                        // word at start of line
-                        if word_width > width {
-                            lines += (word_width - 1) / width;
-                            col = word_width % width;
-                        } else {
-                            col = word_width;
-                        }
-                    } else if col + 1 + word_width <= width {
-                        col += 1 + word_width;
-                    } else {
-                        lines += 1;
-                        if word_width > width {
-                            lines += (word_width - 1) / width;
-                            col = word_width % width;
-                        } else {
-                            col = word_width;
-                        }
-                    }
-                    word_width = 0;
-                }
-            } else {
-                word_width += UnicodeWidthChar::width(ch).unwrap_or(0);
-            }
-        }
-
-        // flush last word
-        if word_width > 0 {
-            if col == 0 {
-                if word_width > width {
-                    lines += (word_width - 1) / width;
-                }
-            } else if col + 1 + word_width > width {
-                lines += 1 + (word_width - 1) / width;
-            }
-        }
-
-        lines
+    pub fn wrap_content(&self, width: usize) -> Vec<Cow<'_, str>> {
+        wrap_content(&self.content, width)
     }
 }
 
@@ -312,7 +314,7 @@ mod test {
         assert_eq!(message1.wrapped_line_count(12), 3);
 
         let message2 = MessageContent::new(None, "Try to connect to a.aaaaaaaaa.io...".to_string());
-
+        //2026-01-02T11:57:07.587223Z DEBUG clown::irc_view::main_view: ServerMessage { message: Message { internal: IRCMessage { source: Some(Source { source
         assert_eq!(message2.wrapped_line_count(12), 4);
     }
 
