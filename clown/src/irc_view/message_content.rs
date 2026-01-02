@@ -254,7 +254,7 @@ impl MessageContent {
         let mut col = 0;
         let mut word_width = 0;
 
-        for ch in to_raw(&self.content).into_iter().flat_map(|c| c.chars()) {
+        for ch in to_raw(&self.content).flat_map(|c| c.chars()) {
             if ch.is_ascii_whitespace() {
                 // end of word
                 if word_width > 0 {
@@ -307,6 +307,13 @@ mod test {
     fn test_wrapped_line_count() {
         let message = MessageContent::new(None, "aaaaa".to_string());
         assert_eq!(message.wrapped_line_count(2), 3);
+
+        let message1 = MessageContent::new(None, "Use the command /help".to_string());
+        assert_eq!(message1.wrapped_line_count(12), 3);
+
+        let message2 = MessageContent::new(None, "Try to connect to a.aaaaaaaaa.io...".to_string());
+
+        assert_eq!(message2.wrapped_line_count(12), 4);
     }
 
     #[test]

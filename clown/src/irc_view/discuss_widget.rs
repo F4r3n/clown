@@ -202,8 +202,12 @@ impl DiscussWidget {
 
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             for line in messages {
-                let total_rows = line.get_message_width().div_ceil(self.content_width);
-
+                //Approximation of the start, same as total_lines
+                let total_rows = if wrapped_rows_seen < self.scroll_offset.saturating_add(10) {
+                    line.wrapped_line_count(self.content_width)
+                } else {
+                    line.get_message_width().div_ceil(self.content_width)
+                };
                 // Skip rows above scroll
                 if wrapped_rows_seen + total_rows <= self.scroll_offset {
                     wrapped_rows_seen += total_rows;
@@ -217,7 +221,7 @@ impl DiscussWidget {
                         line.get_source().and_then(|s| self.color_map.get(s)),
                     )
                     .collect::<Vec<Row<'a>>>();
-
+                let total_rows = rows.len();
                 // Skip inside this message if scroll_offset lands inside it
                 if self.scroll_offset > wrapped_rows_seen {
                     let skip = self.scroll_offset - wrapped_rows_seen;
@@ -255,9 +259,13 @@ impl DiscussWidget {
         let mut index_after_visible = 0;
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             for (i, line) in messages.iter().enumerate() {
-                let total_rows = line.get_message_width().div_ceil(self.content_width);
+                let total_rows = if wrapped_rows_seen < self.scroll_offset.saturating_add(10) {
+                    line.wrapped_line_count(self.content_width)
+                } else {
+                    line.get_message_width().div_ceil(self.content_width)
+                };
 
-                // Skip rows above scroll
+                // Skip rows above scroll, it is an approximation, it avoids counting line on wrapping
                 if wrapped_rows_seen + total_rows <= self.scroll_offset {
                     wrapped_rows_seen += total_rows;
                     rows_counter += total_rows;
@@ -266,7 +274,7 @@ impl DiscussWidget {
 
                 // Create all wrapped rows for this message
                 let mut rows = line.wrapped_line_count(self.content_width);
-
+                let total_rows = rows;
                 // Skip inside this message if scroll_offset lands inside it
                 if self.scroll_offset > wrapped_rows_seen {
                     let skip = self.scroll_offset - wrapped_rows_seen;
@@ -329,9 +337,13 @@ impl DiscussWidget {
 
     fn scroll_down(&mut self) {
         let max_scroll = self.get_max_scroll();
+        tracing::debug!("A total lines {}", self.get_total_lines());
+        tracing::debug!("A scroll offset {}", self.scroll_offset);
+
         self.scroll_offset = self.scroll_offset.saturating_add(1).min(max_scroll);
-        //tracing::debug!("scroll offset {}", self.scroll_offset);
-        //tracing::debug!("max scroll {}", max_scroll);
+        tracing::debug!("B total lines {}", self.get_total_lines());
+        tracing::debug!("B scroll offset {}", self.scroll_offset);
+        tracing::debug!("max scroll {}", max_scroll);
 
         self.follow_last = max_scroll.eq(&self.scroll_offset);
         self.redraw = true;
@@ -624,6 +636,26 @@ mod tests {
             discuss.get_current_line_index_character(0, (TEXT_START + 100) as u16),
             None
         );
+    }
+
+    #[test]
+    fn test_total_lines() {
+        let mut discuss = DiscussWidget::new("");
+        discuss.add_line(
+            "",
+            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+        );
+        discuss.add_line(
+            "",
+            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+        );
+        discuss.add_line(
+            "",
+            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+        );
+        discuss.content_width = 10;
+        discuss.scroll_offset = 0;
+        assert_eq!(discuss.get_total_lines(), 9);
     }
 
     #[test]
