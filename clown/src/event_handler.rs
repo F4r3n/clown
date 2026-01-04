@@ -6,6 +6,7 @@ use tokio::{sync::mpsc, task::JoinHandle};
 pub enum Event {
     Error,
     Tick,
+    Redraw,
     Crossterm(crossterm::event::Event),
 }
 
@@ -27,18 +28,18 @@ pub struct EventHandler {
 
 impl EventHandler {
     pub fn new() -> Self {
-        let tick_rate = std::time::Duration::from_millis(16);
-
+        let mut tick_interval = tokio::time::interval(std::time::Duration::from_millis(100));
+        let mut redraw_interval = tokio::time::interval(std::time::Duration::from_millis(16));
         let (tx, rx) = mpsc::channel(100);
         let _tx = tx.clone();
 
         let task = tokio::spawn(async move {
             let mut reader = crossterm::event::EventStream::new();
-            let mut interval = tokio::time::interval(tick_rate);
+
             loop {
-                let delay = interval.tick();
                 let crossterm_event = reader.next().fuse();
                 tokio::select! {
+                  //  biased;
                   maybe_event = crossterm_event => {
                     match maybe_event {
                       Some(Ok(evt)) => {
@@ -54,8 +55,14 @@ impl EventHandler {
                       None => {},
                     }
                   },
-                  _ = delay => {
+                  _tick = tick_interval.tick() => {
                       if tx.send(Event::Tick).await.is_err() {
+                        break;
+                      }
+                  },
+
+                  _redraw = redraw_interval.tick() => {
+                      if tx.send(Event::Redraw).await.is_err() {
                         break;
                       }
                   },

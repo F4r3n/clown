@@ -21,6 +21,7 @@ use message_queue::MessageQueue;
 use model::{Model, RunningState, View};
 use ratatui::Frame;
 use shadow_rs::shadow;
+use toml::de::Error;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 shadow!(build);
@@ -87,13 +88,22 @@ async fn main() -> color_eyre::Result<()> {
 
     while model.running_state != RunningState::Done {
         if let Some(event) = events.next().await {
-            if need_redraw(&mut model, &mut views) {
-                //debug!("Need redraw");
-                terminal.draw(|f| view(&mut model, &mut views, f))?;
-            }
-            handle_event(&mut model, &mut views, event, &mut list_messages)?;
-            while let Some(current_msg) = list_messages.next() {
-                update(&mut model, &mut views, current_msg, &mut list_messages).await;
+            match event {
+                Event::Redraw => {
+                    if need_redraw(&mut model, &mut views) {
+                        //debug!("Need redraw");
+                        terminal.draw(|f| view(&mut model, &mut views, f))?;
+                    }
+                }
+                Event::Tick | Event::Crossterm(_) => {
+                    handle_event(&mut model, &mut views, event, &mut list_messages)?;
+                    while let Some(current_msg) = list_messages.next() {
+                        update(&mut model, &mut views, current_msg, &mut list_messages).await;
+                    }
+                }
+                Event::Error => {
+                    tracing::error!("Error in the events");
+                }
             }
         }
     }
