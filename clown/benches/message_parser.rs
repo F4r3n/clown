@@ -18,6 +18,11 @@ fn bench_wrap_line_count(message: &str, width: usize) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn bench_wrap_text(message: &str, width: usize) -> anyhow::Result<()> {
+    wrap_content(message, width);
+    Ok(())
+}
+
 fn bench_get_size_witout_format(message: &str) -> anyhow::Result<()> {
     get_width_without_format(message);
     Ok(())
@@ -65,7 +70,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         });
     });
 
-    c.bench_function("Wrap text", |b| {
+    c.bench_function("Wrap count text", |b| {
         b.iter(|| {
             bench_wrap_line_count(black_box(
                 "Lorem Ipsum is simply \x038,4Hi! text of the printing and \x038,4Hi! industry.
@@ -75,6 +80,22 @@ fn criterion_benchmark(c: &mut Criterion) {
 
         b.iter(|| {
             bench_wrap_line_count(black_box(
+                "Lorem Ipsum is simply \x038,4Hi! text of the printing and \x038,4Hi! industry.
+            Lorem Ipsum has \x038,4Hi! the industry's standard \x038,4Hi! text ever since the 1500s"
+            ), black_box(100))
+        });
+    });
+
+    c.bench_function("Wrap text", |b| {
+        b.iter(|| {
+            bench_wrap_text(black_box(
+                "Lorem Ipsum is simply \x038,4Hi! text of the printing and \x038,4Hi! industry.
+            Lorem Ipsum has \x038,4Hi! the industry's standard \x038,4Hi! text ever since the 1500s"
+            ), black_box(10))
+        });
+
+        b.iter(|| {
+            bench_wrap_text(black_box(
                 "Lorem Ipsum is simply \x038,4Hi! text of the printing and \x038,4Hi! industry.
             Lorem Ipsum has \x038,4Hi! the industry's standard \x038,4Hi! text ever since the 1500s"
             ), black_box(100))

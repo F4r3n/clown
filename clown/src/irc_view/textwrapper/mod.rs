@@ -11,22 +11,18 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
     // Preserve existing paragraphs/newlines first
     let line = content;
 
-    let line_trimmed_start = line.trim_start();
-    let start_offset = line.len() - line_trimmed_start.len();
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next_if(|c| c.is_whitespace()) {}
 
     let mut current_width = 0;
     let mut has_content_on_current_line = false;
 
     // Start the line count if there is any non-whitespace content on this line
-    if total_lines == 0 && !line_trimmed_start.is_empty() {
+    if total_lines == 0 && chars.peek().is_some() {
         total_lines = 1;
     }
 
-    // Start iterator past the leading spaces
-    let mut char_indices = line.char_indices().skip(start_offset).peekable();
-    // ------------------------------------------
-
-    while let Some((_i, c)) = char_indices.next() {
+    while let Some(c) = chars.next() {
         let char_width = c.width().unwrap_or(0);
 
         // 1. Check if we are at a breakable point (space)
@@ -38,17 +34,16 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
             continue;
         }
 
-        // --- We are inside a word ---
         let mut word_width = char_width;
 
         // Look ahead to find the full word width (consuming chars from iterator)
-        while let Some((_, next_c)) = char_indices.peek() {
+        while let Some(next_c) = chars.peek() {
             if next_c.is_whitespace() {
                 break;
             }
             let next_w = next_c.width().unwrap_or(0);
             word_width += next_w;
-            char_indices.next(); // Consume the char
+            chars.next(); // Consume the char
         }
 
         // 2. Logic: Does this word fit on the current line?
@@ -58,7 +53,7 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
             current_width = 0;
         }
 
-        // 3. Handle Long Words (Word is wider than width)
+        // Handle Long Words (Word is wider than width)
         if word_width > width {
             // Calculate how many *additional* lines this word consumes after the current line.
             // The current line is already accounted for (or was just incremented in step 2).
@@ -95,17 +90,18 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
     // Preserve existing paragraphs/newlines first
     let line = content;
 
-    // --- FIX: Skip initial whitespace segment ---
-    let line_trimmed_start = line.trim_start();
-    let start_offset = line.len() - line_trimmed_start.len();
+    let mut char_indices = line.char_indices().peekable();
+    let mut start_offset = 0;
+    while let Some((i, c)) = char_indices.next_if(|(i, c)| c.is_whitespace()) {
+        start_offset += 1;
+    }
 
     let mut line_start = start_offset;
     let mut current_width = 0;
     let mut last_word_end = start_offset;
 
     // Start iterator past the leading spaces
-    let mut char_indices = line.char_indices().skip(start_offset).peekable();
-    // ------------------------------------------
+    //let mut char_indices = line.char_indices().skip(start_offset).peekable();
 
     while let Some((i, c)) = char_indices.next() {
         let char_width = c.width().unwrap_or(0);
@@ -134,7 +130,6 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
             char_indices.next(); // Consume the char
         }
 
-        // 2. Logic: Does this word fit on the current line?
         // Check includes the accumulated space width (current_width)
         if current_width > 0 && current_width + word_width > width {
             // WRAP: The new word overflows.
@@ -149,7 +144,7 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
             current_width = 0;
         }
 
-        // 3. Handle Long Words (Word itself is wider than width)
+        // Handle Long Words (Word itself is wider than width)
         if word_width > width {
             // If the word alone is too big, we must split it by graphemes/chars
 
