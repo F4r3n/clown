@@ -1,95 +1,88 @@
-use crate::irc_view::message_parser::to_raw;
 use std::borrow::Cow;
-use std::mem;
-use unicode_linebreak::linebreaks;
-use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthStr;
-
-#[derive(PartialEq, Debug)]
-enum Separator {
-    SPACE,
-    UNICODE,
-}
+use unicode_width::UnicodeWidthChar;
 
 pub fn wrapped_line_count(content: &str, width: usize) -> usize {
     if width == 0 || content.is_empty() {
         return 0;
     }
 
-    let mut lines = 1;
-    let mut col = 0;
-    // Tracks if the last thing placed was a word (needed to determine if a space is required).
-    let mut last_was_word = false;
+    let mut total_lines = 0;
 
-    for raw_segment in to_raw(content) {
-        let mut start_i = 0;
+    // Preserve existing paragraphs/newlines first
+    let line = content;
 
-        for (break_pos, _) in linebreaks(raw_segment) {
-            let chunk = &raw_segment[start_i..break_pos];
-            //println!("chunk '{}'", chunk);
-            start_i = break_pos;
-            let separator = match chunk.chars().last() {
-                Some(' ') => Separator::SPACE,
-                _ => Separator::UNICODE,
-            };
-            // Separate the word from surrounding whitespace/delimiters
-            let word_part = chunk.trim(); //word break gives spaces too
-            let word_width = UnicodeWidthStr::width(word_part);
+    let line_trimmed_start = line.trim_start();
+    let start_offset = line.len() - line_trimmed_start.len();
 
-            if word_width == 0 {
-                // If it's a zero-width or whitespace-only chunk, skip it.
-                continue;
+    let mut current_width = 0;
+    let mut has_content_on_current_line = false;
+
+    // Start the line count if there is any non-whitespace content on this line
+    if total_lines == 0 && !line_trimmed_start.is_empty() {
+        total_lines = 1;
+    }
+
+    // Start iterator past the leading spaces
+    let mut char_indices = line.char_indices().skip(start_offset).peekable();
+    // ------------------------------------------
+
+    while let Some((_i, c)) = char_indices.next() {
+        let char_width = c.width().unwrap_or(0);
+
+        // 1. Check if we are at a breakable point (space)
+        if c.is_whitespace() {
+            // Accumulate space width only if a word preceded it
+            if has_content_on_current_line {
+                current_width += char_width;
+            }
+            continue;
+        }
+
+        // --- We are inside a word ---
+        let mut word_width = char_width;
+
+        // Look ahead to find the full word width (consuming chars from iterator)
+        while let Some((_, next_c)) = char_indices.peek() {
+            if next_c.is_whitespace() {
+                break;
+            }
+            let next_w = next_c.width().unwrap_or(0);
+            word_width += next_w;
+            char_indices.next(); // Consume the char
+        }
+
+        // 2. Logic: Does this word fit on the current line?
+        if current_width > 0 && current_width + word_width > width {
+            // WRAP: The new word overflows.
+            total_lines += 1;
+            current_width = 0;
+        }
+
+        // 3. Handle Long Words (Word is wider than width)
+        if word_width > width {
+            // Calculate how many *additional* lines this word consumes after the current line.
+            // The current line is already accounted for (or was just incremented in step 2).
+
+            let distinct_lines = word_width.div_ceil(width);
+            if distinct_lines > 0 {
+                total_lines += distinct_lines - 1;
             }
 
-            // Space is needed if we aren't at col 0, the last thing was a word, and it's not CJK.
-            let space_needed = last_was_word && col > 0 && separator == Separator::SPACE;
-            let space_width = if space_needed { 1 } else { 0 };
-
-            if col + space_width + word_width <= width {
-                //Word fits on current line (with separator space).
-
-                if space_needed {
-                    col += 1; // Account for the space injected by wrap_content
-                }
-
-                col += word_width;
-                last_was_word = true;
-            } else {
-                //Word does not fit. Must wrap.
-
-                // 1. Force move to the next line ONLY if we already placed content (col > 0).
-                if col > 0 {
-                    lines += 1;
-                }
-
-                // --- Start New Line with Word ---
-
-                if word_width <= width {
-                    // Case B.1: The word part fits entirely on the new line.
-                    col = word_width;
-                    last_was_word = true;
-                } else {
-                    // Long word breaking.
-
-                    // The first break of a massive word will be handled by the 'col > 0' check above.
-                    // Now, calculate how many *additional* lines this word consumes.
-
-                    // Use ceiling division to find total number of lines required for the word itself.
-                    let distinct_lines = word_width.div_ceil(width);
-                    lines += distinct_lines - 1; // Add only the additional lines
-
-                    // Set the column to the width of the final segment on the last line.
-                    col = word_width % width;
-                    if col == 0 {
-                        col = width;
-                    }
-                    last_was_word = true;
-                }
+            // Set the column to the width of the final segment on the last line.
+            current_width = word_width % width;
+            if current_width == 0 {
+                current_width = width;
             }
+
+            has_content_on_current_line = true;
+        } else {
+            // Word fits (either on the existing line or a newly wrapped line)
+            current_width += word_width;
+            has_content_on_current_line = true;
         }
     }
 
-    lines
+    total_lines
 }
 
 pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
@@ -97,110 +90,110 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
         return vec![];
     }
 
-    // Check if the entire content (without internal linebreaks/wraps) fits.
-    let total_width = UnicodeWidthStr::width(content);
-    if total_width <= width {
-        return vec![Cow::Borrowed(content)];
-    }
+    let mut wrapped_lines = Vec::new();
 
-    let mut wrapped_lines: Vec<Cow<'a, str>> = Vec::new();
-    let mut current_line = String::new();
-    let mut col = 0;
+    // Preserve existing paragraphs/newlines first
+    let line = content;
 
-    // This tracks if the content just appended was a word, not a space.
-    let mut last_was_word = false;
+    // --- FIX: Skip initial whitespace segment ---
+    let line_trimmed_start = line.trim_start();
+    let start_offset = line.len() - line_trimmed_start.len();
 
-    for raw_segment in to_raw(content) {
-        let mut start_i = 0;
-        let mut separator = Separator::UNICODE;
-        for (break_pos, _) in linebreaks(raw_segment) {
-            let chunk = &raw_segment[start_i..break_pos];
-            start_i = break_pos;
-            if !last_was_word {
-                separator = match chunk.chars().last() {
-                    Some(' ') => Separator::SPACE,
-                    _ => Separator::UNICODE,
-                };
+    let mut line_start = start_offset;
+    let mut current_width = 0;
+    let mut last_word_end = start_offset;
+
+    // Start iterator past the leading spaces
+    let mut char_indices = line.char_indices().skip(start_offset).peekable();
+    // ------------------------------------------
+
+    while let Some((i, c)) = char_indices.next() {
+        let char_width = c.width().unwrap_or(0);
+
+        // 1. Check if we are at a breakable point (space)
+        if c.is_whitespace() {
+            // If the word we just finished fits, we update the "safe" split point
+            last_word_end = i;
+            current_width += char_width;
+            continue;
+        }
+
+        // We are inside a word. Let's see how long this word is.
+        let word_start = i;
+        let mut word_width = char_width;
+        let mut word_end = i + c.len_utf8();
+
+        // Look ahead to finish the word (consuming chars from iterator)
+        while let Some((_next_i, next_c)) = char_indices.peek() {
+            if next_c.is_whitespace() {
+                break;
+            }
+            let next_w = next_c.width().unwrap_or(0);
+            word_width += next_w;
+            word_end += next_c.len_utf8();
+            char_indices.next(); // Consume the char
+        }
+
+        // 2. Logic: Does this word fit on the current line?
+        // Check includes the accumulated space width (current_width)
+        if current_width > 0 && current_width + word_width > width {
+            // WRAP: The new word overflows.
+
+            // Push the previous valid content up to the last word end.
+            // We trim existing trailing whitespace from the slice for cleanliness.
+            let line_slice = &line[line_start..last_word_end];
+            wrapped_lines.push(Cow::Borrowed(line_slice.trim_end()));
+
+            // Reset for new line
+            line_start = word_start;
+            current_width = 0;
+        }
+
+        // 3. Handle Long Words (Word itself is wider than width)
+        if word_width > width {
+            // If the word alone is too big, we must split it by graphemes/chars
+
+            // If there was any prior content on the current line, push it before splitting the long word
+            if current_width > 0 {
+                wrapped_lines.push(Cow::Borrowed(line[line_start..word_start].trim_end()));
             }
 
-            // Separate the word from its potential trailing space/delimiter
-            let word_part = chunk.trim_end();
+            // Force split the long word and push segments
+            let mut temp_w = 0;
+            let mut temp_start = word_start;
 
-            let word_width = UnicodeWidthStr::width(word_part);
-
-            if word_width == 0 {
-                if !chunk.trim().is_empty() {
-                    // Skip zero-width chars, but not visible spaces (though they should be handled by linebreaks)
-                    continue;
+            // Re-scan the word char by char to find split points
+            for (ci, cc) in line[word_start..word_end].char_indices() {
+                let cw = cc.width().unwrap_or(0);
+                if temp_w + cw > width {
+                    wrapped_lines.push(Cow::Borrowed(&line[temp_start..word_start + ci]));
+                    temp_start = word_start + ci;
+                    temp_w = 0;
                 }
-                // If it's pure whitespace and col > 0, it means a space chunk forced a wrap. Discard and continue.
-                if col > 0 && chunk.trim().is_empty() {
-                    continue;
-                }
+                temp_w += cw;
             }
 
-            let space_needed = last_was_word && col > 0 && (separator == Separator::SPACE);
-            let space_width = if space_needed { 1 } else { 0 };
-
-            if col + space_width + word_width <= width {
-                // Word fits on current line (with separator space).
-
-                if space_needed {
-                    current_line.push(' ');
-                    col += 1;
-                }
-
-                // Append only the word part, discarding any trailing delimiter
-                current_line.push_str(word_part);
-                col += word_width;
-                last_was_word = true;
-            } else {
-                // Word does not fit. Must wrap.
-
-                // 1. Finalize and push the current line (if it has content)
-                if !current_line.is_empty() {
-                    wrapped_lines.push(Cow::Owned(mem::take(&mut current_line)));
-                    col = 0;
-                }
-
-                // 2. New Line: Discard the word's delimiter and push the word part.
-
-                if word_width <= width {
-                    // The word part fits entirely on the new line.
-                    current_line.push_str(word_part);
-                    col = word_width;
-                    last_was_word = true;
-                } else {
-                    //  Long word breaking.
-
-                    for grapheme in word_part.graphemes(true) {
-                        let grapheme_w = UnicodeWidthStr::width(grapheme);
-
-                        if col + grapheme_w > width {
-                            wrapped_lines.push(Cow::Owned(mem::take(&mut current_line)));
-                            col = 0;
-                        }
-
-                        current_line.push_str(grapheme);
-                        col += grapheme_w;
-                        last_was_word = true;
-                    }
-                }
-            }
+            // Set up for the remainder of the word
+            line_start = temp_start;
+            last_word_end = word_end;
+            current_width = temp_w;
+        } else {
+            // Word fits (either on new line or existing line)
+            current_width += word_width;
+            last_word_end = word_end;
         }
     }
 
-    // Final push (correctly using mem::take)
-    if !current_line.is_empty() {
-        wrapped_lines.push(Cow::Owned(mem::take(&mut current_line)));
+    // Push whatever is left in the buffer (the content of the last line)
+    // Only push if there is non-whitespace content.
+    if line_start < line.len() {
+        let remaining_slice = &line[line_start..];
+        if !remaining_slice.trim().is_empty() {
+            wrapped_lines.push(Cow::Borrowed(remaining_slice.trim_end()));
+        }
     }
 
-    // Final cleanup
-    if wrapped_lines.len() == 1 && wrapped_lines.first().is_some_and(|v| v.is_empty()) {
-        vec![]
-    } else {
-        wrapped_lines
-    }
+    wrapped_lines
 }
 #[cfg(test)]
 mod tests {
@@ -285,7 +278,7 @@ mod tests {
         let wrapped = wrap_content(content, 10);
         assert_eq!(
             lines_as_str(&wrapped),
-            vec!["https://", "github.com", "/F4r3n/", "clown/"]
+            vec!["https://gi", "thub.com/F", "4r3n/clown", "/"]
         );
     }
 
