@@ -117,8 +117,7 @@ impl DiscussWidget {
             .entry(channel.to_string())
             .or_insert(nickname_color(channel));
         self.current_channel = channel.to_lowercase();
-        let max_scroll = self.get_max_scroll();
-        self.scroll_offset = max_scroll;
+        self.scroll_offset = 0;
         self.follow_last = true;
     }
 
@@ -155,44 +154,74 @@ impl DiscussWidget {
             return None;
         }
 
-        let mut wrapped_rows_seen = 0;
         let mut visible_rows_total = 0;
 
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
-            for (line_index, line) in messages.iter().enumerate() {
-                let total_rows = line.get_cached_line_count(self.content_width).unwrap_or(1);
+            let message_count = messages.len();
 
-                if wrapped_rows_seen + total_rows <= self.scroll_offset {
-                    wrapped_rows_seen += total_rows;
-                    continue;
+            let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
+
+            let mut start_message_index = 0;
+            let mut rows_from_bottom = 0;
+            let mut rows_to_skip_in_message = 0;
+
+            for (i, line) in messages.iter().rev().enumerate() {
+                let total_rows = line.wrapped_line_count(self.content_width);
+
+                if rows_from_bottom + total_rows >= target_visual_top {
+                    start_message_index = message_count.saturating_sub(1).saturating_sub(i);
+
+                    rows_to_skip_in_message =
+                        (rows_from_bottom + total_rows).saturating_sub(target_visual_top);
+                    break;
                 }
 
-                let mut rows = line.get_wrapped_line(self.content_width);
-                let mut char_skipped: usize = 0;
-                if self.scroll_offset > wrapped_rows_seen {
-                    let skip = self.scroll_offset - wrapped_rows_seen;
-                    if let Some(rows) = rows.get(..skip) {
+                rows_from_bottom += total_rows;
+            }
+
+            if let Some(slice) = messages.get(start_message_index..) {
+                for (line_index, line) in slice.iter().enumerate() {
+                    let total_line_rows = line.wrapped_line_count(self.content_width);
+
+                    // Calculate available rows after skipping the top part (if any)
+                    let rows_available = total_line_rows.saturating_sub(rows_to_skip_in_message);
+
+                    // Cap strictly to the remaining height
+                    let rows_remaining = self.max_visible_height.saturating_sub(visible_rows_total);
+                    let rows_to_take = rows_remaining.min(rows_available);
+
+                    if rows_to_take == 0 && rows_remaining == 0 {
+                        break;
+                    }
+
+                    let mut rows = line.get_wrapped_line(self.content_width);
+                    let mut char_skipped: usize = 0;
+                    if let Some(rows) = rows.get(..rows_to_skip_in_message) {
                         char_skipped = rows.iter().map(|v| v.chars().count()).sum();
                     }
-                    rows = rows.into_iter().skip(skip).collect();
-                }
+                    rows = rows.into_iter().skip(rows_to_skip_in_message).collect();
+                    let rows_len = rows.len();
 
-                if index_y < visible_rows_total + rows.len() {
-                    let pointed_row = (index_y - visible_rows_total).min(rows.len() - 1);
-                    //it will be an approximation, because wrapping can remove spaces,
-                    //  but sometimes does not remove characters
-                    let char_position: usize = rows
-                        .get(..pointed_row)
-                        .map(|slice| slice.iter().map(|v| v.chars().count()).sum())
-                        .unwrap_or(0);
-                    if char_skipped + char_position + pos_x > line.get_message_width() {
-                        return None;
+                    if index_y < visible_rows_total + rows_len {
+                        let pointed_row = (index_y - visible_rows_total).min(rows_len - 1);
+                        //it will be an approximation, because wrapping can remove spaces,
+                        //  but sometimes does not remove characters
+                        let char_position: usize = rows
+                            .get(..pointed_row)
+                            .map(|slice| slice.iter().map(|v| v.chars().count()).sum())
+                            .unwrap_or(0);
+                        if char_skipped + char_position + pos_x > line.get_message_width() {
+                            return None;
+                        }
+                        return Some((
+                            line_index + start_message_index,
+                            char_skipped + char_position + pos_x,
+                        ));
                     }
-                    return Some((line_index, char_skipped + char_position + pos_x));
-                }
+                    rows_to_skip_in_message = 0; // Reset for subsequent messages
 
-                visible_rows_total += rows.len();
-                wrapped_rows_seen += total_rows;
+                    visible_rows_total += rows_len;
+                }
             }
         }
 
@@ -204,45 +233,63 @@ impl DiscussWidget {
         if self.content_width == 0 {
             return visible_rows;
         }
-        let mut wrapped_rows_seen = 0; // counts all rows, even skipped
-        let mut visible_rows_total = 0; // counts only rendered rows
 
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
-            for line in messages {
-                //Approximation of the start, same as total_lines
-                let total_rows = line.get_cached_line_count(self.content_width).unwrap_or(1);
-                // Skip rows above scroll
-                if wrapped_rows_seen + total_rows <= self.scroll_offset {
-                    wrapped_rows_seen += total_rows;
-                    continue;
-                }
+            let message_count = messages.len();
 
-                // Create all wrapped rows for this message
-                let mut rows = line
-                    .create_rows(
-                        self.content_width as u16,
-                        line.get_source().and_then(|s| self.color_map.get(s)),
-                    )
-                    .collect::<Vec<Row<'a>>>();
-                let total_rows = rows.len();
-                // Skip inside this message if scroll_offset lands inside it
-                if self.scroll_offset > wrapped_rows_seen {
-                    let skip = self.scroll_offset - wrapped_rows_seen;
-                    rows = rows.into_iter().skip(skip).collect();
-                }
+            let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
 
-                // Truncate if screen full
-                let remaining = self.max_visible_height - visible_rows_total;
-                if rows.len() > remaining {
-                    rows.truncate(remaining);
-                }
+            let mut start_message_index = 0;
+            let mut rows_from_bottom = 0;
+            let mut rows_to_skip_in_message = 0;
 
-                visible_rows_total += rows.len();
-                wrapped_rows_seen += total_rows;
-                visible_rows.extend(rows);
+            for (i, line) in messages.iter().rev().enumerate() {
+                let total_rows = line.wrapped_line_count(self.content_width);
 
-                if visible_rows_total >= self.max_visible_height {
+                if rows_from_bottom + total_rows >= target_visual_top {
+                    start_message_index = message_count.saturating_sub(1).saturating_sub(i);
+
+                    rows_to_skip_in_message =
+                        (rows_from_bottom + total_rows).saturating_sub(target_visual_top);
                     break;
+                }
+
+                rows_from_bottom += total_rows;
+            }
+
+            let mut visible_rows_total = 0;
+
+            if let Some(slice) = messages.get(start_message_index..) {
+                for line in slice {
+                    let total_line_rows = line.wrapped_line_count(self.content_width);
+
+                    // Calculate available rows after skipping the top part (if any)
+                    let rows_available = total_line_rows.saturating_sub(rows_to_skip_in_message);
+
+                    // Cap strictly to the remaining height
+                    let rows_remaining = self.max_visible_height.saturating_sub(visible_rows_total);
+                    let rows_to_take = rows_remaining.min(rows_available);
+
+                    if rows_to_take == 0 && rows_remaining == 0 {
+                        break;
+                    }
+
+                    let rows = line
+                        .create_rows(
+                            self.content_width as u16,
+                            line.get_source().and_then(|s| self.color_map.get(s)),
+                        )
+                        .skip(rows_to_skip_in_message)
+                        .take(rows_to_take);
+
+                    visible_rows_total += rows_to_take;
+                    visible_rows.extend(rows);
+
+                    rows_to_skip_in_message = 0; // Reset for subsequent messages
+
+                    if visible_rows_total >= self.max_visible_height {
+                        break;
+                    }
                 }
             }
         }
@@ -259,7 +306,22 @@ impl DiscussWidget {
             .get_messages(&self.current_channel)
             .map(|msgs| {
                 msgs.iter()
-                    .map(|m| m.get_cached_line_count(self.content_width).unwrap_or(1))
+                    .map(|m| m.wrapped_line_count(self.content_width))
+                    .sum()
+            })
+            .unwrap_or(0)
+    }
+
+    fn get_fake_total_lines(&self) -> usize {
+        if self.content_width == 0 {
+            return 0;
+        }
+
+        self.messages
+            .get_messages(&self.current_channel)
+            .map(|msgs| {
+                msgs.iter()
+                    .map(|m| m.get_message_width().div_ceil(self.content_width))
                     .sum()
             })
             .unwrap_or(0)
@@ -274,44 +336,63 @@ impl DiscussWidget {
         let channel = channel.to_lowercase();
         let mut message = in_message;
         message.compute_cached_line_count(self.content_width);
+
         //tracing::debug!("Message {:?}", &message);
 
         self.messages.add_message(&channel, message);
 
         if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view
-            self.scroll_offset = self.get_max_scroll();
+            self.scroll_offset = 0;
         }
+
         self.redraw = true;
+    }
+
+    fn can_scroll_up(&mut self) -> bool {
+        if let Some(messages) = self.messages.get_messages(&self.current_channel) {
+            let mut total_rows = 0;
+            for line in messages.iter().rev() {
+                total_rows += line.wrapped_line_count(self.content_width);
+                if total_rows
+                    >= self
+                        .scroll_offset
+                        .saturating_add(1)
+                        .saturating_add(self.max_visible_height)
+                {
+                    return true;
+                }
+            }
+            false
+        } else {
+            false
+        }
     }
 
     fn scroll_up(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(1);
-        self.follow_last = false;
-        self.redraw = true;
-    }
-
-    fn get_max_scroll(&self) -> usize {
-        self.get_total_lines()
-            .saturating_sub(self.max_visible_height)
+        if self.can_scroll_up() {
+            self.scroll_offset = self.scroll_offset.saturating_add(1);
+            self.follow_last = false;
+            self.redraw = true;
+        }
     }
 
     fn scroll_boundary(&mut self) {
-        let max_scroll = self.get_max_scroll();
-        self.scroll_offset = self.scroll_offset.min(max_scroll);
+        let max_scroll = 0;
+        self.scroll_offset = self.scroll_offset.max(max_scroll);
         if self.follow_last {
             self.scroll_offset = max_scroll;
         }
     }
 
     fn scroll_down(&mut self) {
-        let max_scroll = self.get_max_scroll();
-        tracing::debug!("total lines {}", self.get_total_lines());
+        //let max_scroll = self.nb_lines_to_fit();
+        //tracing::debug!("total lines {}", self.get_total_lines());
 
-        self.scroll_offset = self.scroll_offset.saturating_add(1).min(max_scroll);
+        self.scroll_offset = self.scroll_offset.saturating_sub(1);
 
-        self.follow_last = max_scroll.eq(&self.scroll_offset);
-        tracing::debug!("Scroll offset {}", self.scroll_offset);
+        self.follow_last = self.scroll_offset == 0;
+        //tracing::debug!("Scroll offset {}", self.scroll_offset);
 
         self.redraw = true;
     }
@@ -348,14 +429,16 @@ impl Draw for DiscussWidget {
                     .saturating_sub(4_u16)
             })
             .unwrap_or(0);
-        if (content_width as usize) != self.content_width {
+        /*if (content_width as usize) != self.content_width {
             self.messages
                 .update_messages_width(&self.current_channel, content_width);
-        }
+        }*/
         self.content_width = content_width as usize;
         self.scroll_boundary();
-        self.vertical_scroll_state = ScrollbarState::new(self.get_total_lines())
-            .position(self.scroll_offset + self.max_visible_height);
+        self.vertical_scroll_state = ScrollbarState::new(self.get_fake_total_lines()).position(
+            self.get_fake_total_lines()
+                .saturating_sub(self.scroll_offset),
+        );
         let visible_rows = self.collect_visible_rows();
         let table = Table::new(
             visible_rows,
@@ -543,6 +626,7 @@ mod tests {
 
         let mut discuss = DiscussWidget::new("test");
         discuss.content_width = 4;
+        discuss.max_visible_height = 4;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;
         discuss.add_line(
             "test",
@@ -556,30 +640,28 @@ mod tests {
             "test",
             MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
         );
+        discuss.scroll_offset = 0;
 
         assert_eq!(discuss.scroll_offset, 0);
         let mouse_x = TEXT_START as u16;
         assert_eq!(
             discuss.get_current_line_index_character(0, mouse_x),
-            Some((0, 0))
-        );
-        assert_eq!(
-            discuss.get_current_line_index_character(2, mouse_x),
             Some((1, 0))
         );
         assert_eq!(
+            discuss.get_current_line_index_character(2, mouse_x),
+            Some((2, 0))
+        );
+        assert_eq!(
             discuss.get_current_line_index_character(1, mouse_x),
-            Some((0, 4))
+            Some((1, 4))
         );
 
         assert_eq!(
             discuss.get_current_line_index_character(3, mouse_x),
-            Some((1, 4))
+            Some((2, 4))
         );
-        assert_eq!(
-            discuss.get_current_line_index_character(4, mouse_x),
-            Some((2, 0))
-        );
+        assert_eq!(discuss.get_current_line_index_character(4, mouse_x), None);
 
         discuss.scroll_offset = 1;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;

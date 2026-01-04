@@ -27,7 +27,7 @@ pub struct EventHandler {
 
 impl EventHandler {
     pub fn new() -> Self {
-        let tick_rate = std::time::Duration::from_millis(60);
+        let tick_rate = std::time::Duration::from_millis(16);
 
         let (tx, rx) = mpsc::channel(100);
         let _tx = tx.clone();

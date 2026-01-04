@@ -3,8 +3,14 @@ use std::borrow::Cow;
 use std::mem;
 use unicode_linebreak::linebreaks;
 use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
+
+#[derive(PartialEq, Debug)]
+enum Separator {
+    SPACE,
+    UNICODE,
+}
+
 pub fn wrapped_line_count(content: &str, width: usize) -> usize {
     if width == 0 || content.is_empty() {
         return 0;
@@ -20,8 +26,12 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
 
         for (break_pos, _) in linebreaks(raw_segment) {
             let chunk = &raw_segment[start_i..break_pos];
+            //println!("chunk '{}'", chunk);
             start_i = break_pos;
-
+            let separator = match chunk.chars().last() {
+                Some(' ') => Separator::SPACE,
+                _ => Separator::UNICODE,
+            };
             // Separate the word from surrounding whitespace/delimiters
             let word_part = chunk.trim(); //word break gives spaces too
             let word_width = UnicodeWidthStr::width(word_part);
@@ -31,19 +41,12 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
                 continue;
             }
 
-            // Determine if a separator space (width 1) is needed before this word.
-            // Get the next char from word boundary
-            let is_cjk_char = word_part
-                .chars()
-                .next()
-                .map_or(false, |c| UnicodeWidthChar::width(c).unwrap_or(0) > 1);
-
             // Space is needed if we aren't at col 0, the last thing was a word, and it's not CJK.
-            let space_needed = last_was_word && col > 0 && !is_cjk_char;
+            let space_needed = last_was_word && col > 0 && separator == Separator::SPACE;
             let space_width = if space_needed { 1 } else { 0 };
 
             if col + space_width + word_width <= width {
-                // Case A: Word fits on current line (with separator space).
+                //Word fits on current line (with separator space).
 
                 if space_needed {
                     col += 1; // Account for the space injected by wrap_content
@@ -52,7 +55,7 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
                 col += word_width;
                 last_was_word = true;
             } else {
-                // Case B: Word does not fit. Must wrap.
+                //Word does not fit. Must wrap.
 
                 // 1. Force move to the next line ONLY if we already placed content (col > 0).
                 if col > 0 {
@@ -66,7 +69,7 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
                     col = word_width;
                     last_was_word = true;
                 } else {
-                    // Case B.2: Long word breaking.
+                    // Long word breaking.
 
                     // The first break of a massive word will be handled by the 'col > 0' check above.
                     // Now, calculate how many *additional* lines this word consumes.
@@ -109,13 +112,20 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
 
     for raw_segment in to_raw(content) {
         let mut start_i = 0;
-
+        let mut separator = Separator::UNICODE;
         for (break_pos, _) in linebreaks(raw_segment) {
             let chunk = &raw_segment[start_i..break_pos];
             start_i = break_pos;
+            if !last_was_word {
+                separator = match chunk.chars().last() {
+                    Some(' ') => Separator::SPACE,
+                    _ => Separator::UNICODE,
+                };
+            }
 
             // Separate the word from its potential trailing space/delimiter
             let word_part = chunk.trim_end();
+
             let word_width = UnicodeWidthStr::width(word_part);
 
             if word_width == 0 {
@@ -129,22 +139,11 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
                 }
             }
 
-            // Determine if a standard ASCII space separator is needed (width 1)
-            // A space is needed if:
-            // 1. We are not at the start of a line (col > 0).
-            // 2. The previous append was a word (last_was_word is true).
-            // 3. The current chunk doesn't start with a CJK character (which acts as its own separator).
-
-            let space_needed = last_was_word
-                && col > 0
-                && !word_part
-                    .chars()
-                    .next()
-                    .is_none_or(|c| UnicodeWidthChar::width(c).unwrap_or(0) > 1);
+            let space_needed = last_was_word && col > 0 && (separator == Separator::SPACE);
             let space_width = if space_needed { 1 } else { 0 };
 
             if col + space_width + word_width <= width {
-                // Case A: Word fits on current line (with separator space).
+                // Word fits on current line (with separator space).
 
                 if space_needed {
                     current_line.push(' ');
@@ -156,7 +155,7 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
                 col += word_width;
                 last_was_word = true;
             } else {
-                // Case B: Word does not fit. Must wrap.
+                // Word does not fit. Must wrap.
 
                 // 1. Finalize and push the current line (if it has content)
                 if !current_line.is_empty() {
@@ -167,12 +166,12 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
                 // 2. New Line: Discard the word's delimiter and push the word part.
 
                 if word_width <= width {
-                    // Case B.1: The word part fits entirely on the new line.
+                    // The word part fits entirely on the new line.
                     current_line.push_str(word_part);
                     col = word_width;
                     last_was_word = true;
                 } else {
-                    // Case B.2: Long word breaking.
+                    //  Long word breaking.
 
                     for grapheme in word_part.graphemes(true) {
                         let grapheme_w = UnicodeWidthStr::width(grapheme);
@@ -276,6 +275,18 @@ mod tests {
 
         let wrapped = wrap_content(content, 4);
         assert_eq!(lines_as_str(&wrapped), vec!["abcd", "efgh", "ij"]);
+    }
+
+    #[test]
+    fn long_url_is_broken() {
+        let content = "https://github.com/F4r3n/clown/"; // len = 10
+        assert_eq!(wrapped_line_count(content, 10), 4);
+
+        let wrapped = wrap_content(content, 10);
+        assert_eq!(
+            lines_as_str(&wrapped),
+            vec!["https://", "github.com", "/F4r3n/", "clown/"]
+        );
     }
 
     #[test]
