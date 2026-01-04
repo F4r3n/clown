@@ -39,14 +39,6 @@ impl ChannelMessages {
         self.messages.get(channel)
     }
 
-    pub fn update_messages_width(&mut self, channel: &str, width: u16) {
-        if let Some(v) = self.messages.get_mut(channel) {
-            for m in v.iter_mut() {
-                m.compute_cached_line_count(width as usize);
-            }
-        }
-    }
-
     fn get_url_from_range(&self, channel: &str, range: &Range) -> Option<String> {
         self.messages
             .get(channel)
@@ -334,12 +326,8 @@ impl DiscussWidget {
                 .or_insert(nickname_color(source));
         }
         let channel = channel.to_lowercase();
-        let mut message = in_message;
-        message.compute_cached_line_count(self.content_width);
 
-        //tracing::debug!("Message {:?}", &message);
-
-        self.messages.add_message(&channel, message);
+        self.messages.add_message(&channel, in_message);
 
         if self.follow_last && channel.eq(&self.current_channel) {
             // Show last lines that fit the view
@@ -731,31 +719,21 @@ mod tests {
         );
 
         discuss.content_width = 10;
-        discuss.messages.update_messages_width("test", 10);
         assert_eq!(discuss.collect_visible_rows().len(), 3);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
-        discuss
-            .messages
-            .update_messages_width("test", discuss.content_width as u16);
         assert_eq!(discuss.collect_visible_rows().len(), 6);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
         discuss.max_visible_height = 2;
-        discuss
-            .messages
-            .update_messages_width("test", discuss.content_width as u16);
         let rows = discuss.collect_visible_rows();
         assert_eq!(rows.len(), 2);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 1;
         discuss.max_visible_height = 2;
-        discuss
-            .messages
-            .update_messages_width("test", discuss.content_width as u16);
         let rows = discuss.collect_visible_rows();
         assert_eq!(rows.len(), 2);
     }

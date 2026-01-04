@@ -37,30 +37,12 @@ enum MessageKind {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct MessageCache {
-    width_cache: usize,      // The width used for the last calculation
-    line_count_cache: usize, // The calculated line count for that width
-}
-
-impl MessageCache {
-    fn get_cached_line_count(&self, current_width: usize) -> Option<usize> {
-        if self.width_cache == current_width {
-            Some(self.line_count_cache)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(PartialEq, Debug, Clone)]
 pub struct MessageContent {
     time: std::time::SystemTime, /*Generated time */
     source: Option<String>,      /*Source*/
     content: String,             /*Content */
     width_without_format: usize,
     kind: MessageKind,
-
-    cache: Option<MessageCache>,
 }
 
 impl MessageContent {
@@ -71,32 +53,6 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Normal,
-            cache: None,
-        }
-    }
-
-    pub fn get_cached_line_count(&self, current_width: usize) -> Option<usize> {
-        if let Some(cache) = self.cache.as_ref()
-            && current_width == cache.width_cache
-            && let Some(size) = cache.get_cached_line_count(current_width)
-        {
-            Some(size)
-        } else {
-            None
-        }
-    }
-
-    pub fn compute_cached_line_count(&mut self, current_width: usize) {
-        if let Some(cache) = self.cache.as_ref()
-            && current_width == cache.width_cache
-        {
-        } else {
-            let count = self.wrapped_line_count(current_width);
-            self.cache = Some(MessageCache {
-                line_count_cache: count,
-                width_cache: current_width,
-            });
-            tracing::debug!("Update cache {:?}", self.cache);
         }
     }
 
@@ -125,7 +81,6 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind,
-            cache: None,
         }
     }
 
@@ -136,7 +91,6 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Error,
-            cache: None,
         }
     }
 
@@ -149,7 +103,6 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Action,
-            cache: None,
         }
     }
 
@@ -160,7 +113,6 @@ impl MessageContent {
             width_without_format: get_width_without_format(&content),
             content,
             kind: MessageKind::Notice,
-            cache: None,
         }
     }
 
@@ -171,7 +123,6 @@ impl MessageContent {
             kind: MessageKind::Info,
             width_without_format: get_width_without_format(&content),
             content,
-            cache: None,
         }
     }
 
