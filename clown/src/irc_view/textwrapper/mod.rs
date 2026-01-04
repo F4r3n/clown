@@ -12,7 +12,7 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
     let line = content;
 
     let mut chars = line.chars().peekable();
-    while let Some(c) = chars.next_if(|c| c.is_whitespace()) {}
+    while let Some(_c) = chars.next_if(|c| c.is_whitespace()) {}
 
     let mut current_width = 0;
     let mut has_content_on_current_line = false;
@@ -92,7 +92,7 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
 
     let mut char_indices = line.char_indices().peekable();
     let mut start_offset = 0;
-    while let Some((i, c)) = char_indices.next_if(|(i, c)| c.is_whitespace()) {
+    while let Some((_i, _c)) = char_indices.next_if(|(_, c)| c.is_whitespace()) {
         start_offset += 1;
     }
 
