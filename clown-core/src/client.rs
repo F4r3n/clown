@@ -41,7 +41,9 @@ impl Client {
         let mut command_sender = self.command_sender();
 
         //command_sender.send(crate::command::Command::CAP("LS 302".to_string()))?;
-        if let Some(password) = &self.login_config.password {
+        if let Some(password) = &self.login_config.password
+            && !password.is_empty()
+        {
             command_sender.send(crate::command::Command::Pass(password.clone()))?;
         }
         command_sender.send(crate::command::Command::Nick(
@@ -51,11 +53,11 @@ impl Client {
             self.login_config
                 .username
                 .clone()
-                .unwrap_or(self.login_config.nickname.clone()),
+                .unwrap_or_else(|| self.login_config.nickname.clone()),
             self.login_config
                 .real_name
                 .clone()
-                .unwrap_or(self.login_config.nickname.clone())
+                .unwrap_or_else(|| self.login_config.nickname.clone())
                 .clone(),
         ))?;
 
