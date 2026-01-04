@@ -99,7 +99,7 @@ fn user(buf: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 fn host(buf: &[u8]) -> IResult<&[u8], &[u8]> {
-    let is_valid_host_char = |c: u8| c.is_ascii_alphanumeric();
+    let is_valid_host_char = |c: u8| !c.is_ascii_whitespace();
 
     let (buf, user) = take_while1(is_valid_host_char)(buf)?;
     Ok((buf, user))
