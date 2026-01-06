@@ -1,13 +1,11 @@
 mod color_user;
-mod dimension_discuss;
-mod discuss_widget;
+mod command;
+mod discuss;
 mod history;
 mod input_widget;
 pub mod main_view;
-pub mod message_content;
-pub mod message_parser;
+
 mod spell_checker;
-pub mod textwrapper;
 mod tooltip_widget;
 mod topic_widget;
 mod users_widget;

@@ -1,16 +1,18 @@
-use crate::command::connect_irc;
-use crate::command::help;
+use self::command::connect_irc;
+use self::command::help;
+use crate::irc_view::command;
+
 use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
-use crate::irc_view::discuss_widget;
+use crate::irc_view::discuss::discuss_widget;
 use crate::irc_view::input_widget;
 use crate::irc_view::input_widget::CInput;
-use crate::irc_view::message_content::MessageContent;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
 use crate::message_event::MessageEvent;
+use crate::message_irc::message_content::MessageContent;
 use crate::message_queue::MessageQueue;
 use crate::model::Model;
 use crate::model::RunningState;
@@ -328,7 +330,6 @@ impl MainView<'_> {
     }
 }
 
-use crate::command;
 impl widget_view::WidgetView for MainView<'_> {
     fn need_redraw(&mut self, _model: &mut Model) -> bool {
         if self.need_redraw {

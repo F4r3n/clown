@@ -1,5 +1,5 @@
-use clown::irc_view::message_parser::{get_width_without_format, is_string_plain, to_spans};
-use clown::irc_view::textwrapper::{wrap_content, wrapped_line_count};
+use clown::message_irc::message_parser::{get_width_without_format, is_string_plain, to_spans};
+use clown::message_irc::textwrapper::{wrap_content, wrapped_line_count};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

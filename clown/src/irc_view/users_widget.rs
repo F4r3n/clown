@@ -10,10 +10,10 @@ use ratatui::{
 };
 #[derive(Debug, PartialEq)]
 struct User {
-    pub name: String,
-    pub need_hightlight: bool,
-    pub color: ratatui::style::Color,
-    pub connected_channels: BitVec,
+    name: String,
+    need_hightlight: bool,
+    color: ratatui::style::Color,
+    connected_channels: BitVec,
 }
 
 impl User {
@@ -213,12 +213,33 @@ impl UsersWidget {
     }
 
     fn hightlight_user(&mut self, user: &str) {
+        //Already selected
+        if let Some(selected_name) = self.get_selected_name()
+            && selected_name.eq_ignore_ascii_case(user)
+        {
+            return;
+        }
+
         if let Some(user) = self.list_users.get_mut(user) {
             user.need_hightlight = true;
         } else if let Some(id) = self.get_section_id(user)
             && let Some(section) = self.list_sections.get_mut(id)
         {
             section.channel_info.highlight = true;
+        }
+    }
+
+    pub fn get_selected_name(&self) -> Option<&str> {
+        let (selected, id) = self.list_state.selected();
+
+        if let Some(channel) = self.list_sections.get(selected)
+            && let Some(user_name) = channel.order_user.get(id - 1)
+        {
+            Some(user_name)
+        } else if let Some(channel) = self.list_sections.get(selected) {
+            Some(&channel.channel_info.name)
+        } else {
+            None
         }
     }
 

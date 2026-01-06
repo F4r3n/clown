@@ -1,7 +1,7 @@
 use super::history::InputHistory;
 use super::spell_checker::SpellChecker;
 use crate::message_event::MessageEvent;
-use crate::{component::Draw, irc_view::message_content::MessageContent};
+use crate::{component::Draw, message_irc::message_content::MessageContent};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,

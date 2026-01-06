@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use super::color_user::nickname_color;
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
-use super::message_content::WordPos;
 use crate::component::Draw;
-use crate::{irc_view::message_content::MessageContent, message_event::MessageEvent};
+use crate::irc_view::color_user::nickname_color;
+use crate::message_irc::message_content::WordPos;
+use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use ahash::AHashMap;
 use crossterm::event::KeyCode;
 use crossterm::event::MouseButton;
@@ -270,6 +270,8 @@ impl DiscussWidget {
                         .create_rows(
                             self.content_width as u16,
                             line.get_source().and_then(|s| self.color_map.get(s)),
+                            TIME_LENGTH,
+                            NICKNAME_LENGTH,
                         )
                         .skip(rows_to_skip_in_message)
                         .take(rows_to_take);

@@ -85,7 +85,7 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
         return vec![];
     }
 
-    let mut wrapped_lines = Vec::new();
+    let mut wrapped_lines = Vec::with_capacity(content.len().div_ceil(width));
 
     // Preserve existing paragraphs/newlines first
     let line = content;

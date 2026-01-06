@@ -1,11 +1,10 @@
-use clown_core::client::Client;
-use tokio::sync::mpsc;
-
+use crate::message_irc::message_content::MessageContent;
 use crate::{
-    irc_view::message_content::MessageContent,
     message_event::MessageEvent,
     model::{IRCConnection, Model},
 };
+use clown_core::client::Client;
+use tokio::sync::mpsc;
 
 use strum::{EnumIter, EnumMessage, IntoEnumIterator, IntoStaticStr};
 

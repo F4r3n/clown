@@ -1,8 +1,5 @@
-use crate::irc_view::textwrapper::{wrap_content, wrapped_line_count};
-use crate::irc_view::{
-    dimension_discuss::{NICKNAME_LENGTH, TIME_LENGTH},
-    message_parser::get_width_without_format,
-};
+use crate::message_irc::message_parser::get_width_without_format;
+use crate::message_irc::textwrapper::{wrap_content, wrapped_line_count};
 use chrono::{DateTime, Local, Timelike};
 use ratatui::{
     style::{Color, Style},
@@ -167,6 +164,8 @@ impl MessageContent {
         &self,
         content_width: u16,
         color_source: Option<&ratatui::style::Color>,
+        time_length: usize,
+        nickname_length: usize,
     ) -> impl Iterator<Item = Row<'_>> {
         let mut visible_rows = Vec::new();
         let mut nickname_style = Style::default();
@@ -190,12 +189,12 @@ impl MessageContent {
             Cell::from(format!(
                 "{:>width$}",
                 self.time_format(),
-                width = TIME_LENGTH
+                width = time_length
             )),
             Cell::from(format!(
                 "{:<width$}",
                 self.source.as_deref().unwrap_or_default(),
-                width = NICKNAME_LENGTH
+                width = nickname_length
             ))
             .style(nickname_style),
             Cell::from("┃ "),
@@ -205,8 +204,8 @@ impl MessageContent {
         if wrapped.len() > 1 {
             visible_rows.extend(vec![
                 [
-                    Cell::from(format!("{:<width$}", " ", width = TIME_LENGTH)),
-                    Cell::from(format!("{:<width$}", " ", width = NICKNAME_LENGTH))
+                    Cell::from(format!("{:<width$}", " ", width = time_length)),
+                    Cell::from(format!("{:<width$}", " ", width = nickname_length))
                         .style(nickname_style),
                     Cell::from("┃ "),
                     Cell::from(""),
@@ -220,10 +219,10 @@ impl MessageContent {
             if let Some(row) = visible_rows.get_mut(i)
                 && let Some(last) = row.last_mut()
             {
-                if crate::irc_view::message_parser::is_string_plain(w.as_ref()) {
+                if crate::message_irc::message_parser::is_string_plain(w.as_ref()) {
                     *last = Cell::from(Span::from(w).style(default_style))
                 } else {
-                    *last = Cell::from(Line::from(crate::irc_view::message_parser::to_spans(
+                    *last = Cell::from(Line::from(crate::message_irc::message_parser::to_spans(
                         w,
                         Some(default_style),
                     )));
@@ -255,7 +254,7 @@ impl MessageContent {
 
 #[cfg(test)]
 mod test {
-    use crate::irc_view::message_content::{MessageContent, WordPos};
+    use crate::message_irc::message_content::{MessageContent, WordPos};
 
     #[test]
     fn test_wrapped_line_count() {
