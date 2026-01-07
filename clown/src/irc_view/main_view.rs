@@ -120,6 +120,17 @@ impl MainView<'_> {
                             MessageContent::new_action(Some(nickname), content),
                         ))
                 }
+                command::ClientCommand::PrivMSG(channel, content) => {
+                    model.send_command(clown_core::command::Command::PrivMsg(
+                        channel.clone(),
+                        content.clone(),
+                    ));
+                    self.messages_display
+                        .handle_actions(&MessageEvent::AddMessageView(
+                            None,
+                            MessageContent::new_privmsg(channel, content),
+                        ))
+                }
                 command::ClientCommand::Unknown(command_name) => self
                     .messages_display
                     .handle_actions(&MessageEvent::AddMessageView(
@@ -264,15 +275,16 @@ impl MainView<'_> {
                         let source = source.unwrap_or_default();
                         //Create a new 'user' as IRC-Server
                         messages.push_message(MessageEvent::JoinChannel(channel.clone()));
-                        messages.push_message(MessageEvent::SelectChannel(channel.clone()));
 
-                        messages.push_message(MessageEvent::JoinUser(channel, source.clone()));
+                        messages
+                            .push_message(MessageEvent::JoinUser(channel.clone(), source.clone()));
                         if !source.eq(model.get_nickname()) {
                             messages.push_message(MessageEvent::AddMessageView(
                                 None,
-                                MessageContent::new_info(format!("{} has joined", source.clone())),
+                                MessageContent::new_info(format!("{} has joined", source)),
                             ));
                         } else {
+                            messages.push_message(MessageEvent::SelectChannel(channel));
                             messages.push_message(MessageEvent::AddMessageView(
                                 None,
                                 MessageContent::new_info("You joined the channel".to_string()),

@@ -103,6 +103,17 @@ impl MessageContent {
         }
     }
 
+    pub fn new_privmsg(target: String, content: String) -> Self {
+        let source = Some(format!(">{}<", target));
+        Self {
+            time: std::time::SystemTime::now(),
+            source,
+            width_without_format: get_width_without_format(&content),
+            content,
+            kind: MessageKind::Normal,
+        }
+    }
+
     pub fn new_notice(source: Option<String>, content: String) -> Self {
         Self {
             time: std::time::SystemTime::now(),

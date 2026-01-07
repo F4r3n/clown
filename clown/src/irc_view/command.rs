@@ -35,6 +35,11 @@ pub enum ClientCommand {
         detailed_message = "To quit a channel: {channel} {reason}"
     )]
     Part(Option<String>, Option<String>),
+    #[strum(
+        message = "msg",
+        detailed_message = "To send a message to a user or channel"
+    )]
+    PrivMSG(String, String),
     Unknown(Option<String>),
 }
 
@@ -59,10 +64,35 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
                 "me" => args.map(|v| ClientCommand::Action(v.to_string())),
                 "join" => args.map(|v| ClientCommand::Join(v.to_string())),
                 "part" => Some(part(args)),
+                "msg" => args.and_then(|v| privmsg(v).or(Some(ClientCommand::Unknown(None)))),
                 _ => Some(ClientCommand::Unknown(Some(command.to_string()))),
             }
         } else {
             Some(ClientCommand::Unknown(None))
+        }
+    } else {
+        None
+    }
+}
+
+fn privmsg(message: &str) -> Option<ClientCommand> {
+    if let Some((channel, content)) = message
+        .find(' ')
+        .map(|v| {
+            Some((
+                &message[..v],
+                message.get(v.saturating_add(1).min(message.len() - 1)..),
+            ))
+        })
+        .unwrap_or(Some((message, None)))
+    {
+        if let Some(content) = content {
+            Some(ClientCommand::PrivMSG(
+                channel.to_string(),
+                content.to_string(),
+            ))
+        } else {
+            None
         }
     } else {
         None

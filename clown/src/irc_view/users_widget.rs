@@ -271,6 +271,12 @@ impl UsersWidget {
             self.list_users.insert(user, new_user);
         }
     }
+
+    fn add_user_global_channel(&mut self, user: &str) {
+        if !user.starts_with("#") {
+            self.add_user(0, user);
+        }
+    }
 }
 
 impl Draw for UsersWidget {
@@ -417,6 +423,7 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::HighlightUser(user) => {
+                self.add_user_global_channel(user);
                 self.hightlight_user(user);
                 self.need_redraw = true;
 
