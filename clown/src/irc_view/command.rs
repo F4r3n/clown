@@ -32,9 +32,9 @@ pub enum ClientCommand {
     Join(String),
     #[strum(
         message = "part",
-        detailed_message = "To quit a channel: {channel} {:reason}"
+        detailed_message = "To quit a channel: {channel} {reason}"
     )]
-    Part(String, Option<String>),
+    Part(Option<String>, Option<String>),
     Unknown(Option<String>),
 }
 
@@ -58,7 +58,7 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
                 "spell" => Some(ClientCommand::Spell(args.map(|v| v.to_string()))),
                 "me" => args.map(|v| ClientCommand::Action(v.to_string())),
                 "join" => args.map(|v| ClientCommand::Join(v.to_string())),
-                "part" => args.map(|v| part(v.to_string())),
+                "part" => Some(part(args)),
                 _ => Some(ClientCommand::Unknown(Some(command.to_string()))),
             }
         } else {
@@ -69,20 +69,24 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
     }
 }
 
-fn part(message: String) -> ClientCommand {
-    if let Some((channel, reason)) = message
-        .find(' ')
-        .map(|v| {
-            Some((
-                &message[..v],
-                Some(&message[v.saturating_add(1).min(message.len() - 1)..]),
-            ))
-        })
-        .unwrap_or(Some((&message, None)))
-    {
-        ClientCommand::Part(channel.to_string(), reason.map(|v| v.to_string()))
+fn part(message: Option<&str>) -> ClientCommand {
+    if let Some(message) = message {
+        if let Some((channel, reason)) = message
+            .find(' ')
+            .map(|v| {
+                Some((
+                    &message[..v],
+                    Some(&message[v.saturating_add(1).min(message.len() - 1)..]),
+                ))
+            })
+            .unwrap_or(Some((message, None)))
+        {
+            ClientCommand::Part(Some(channel.to_string()), reason.map(|v| v.to_string()))
+        } else {
+            ClientCommand::Part(Some(message.to_string()), None)
+        }
     } else {
-        ClientCommand::Part(message, None)
+        ClientCommand::Part(None, None)
     }
 }
 

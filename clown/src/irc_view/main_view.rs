@@ -104,6 +104,8 @@ impl MainView<'_> {
                 }
                 command::ClientCommand::Part(channel, reason) => {
                     model.send_command(Command::Part(channel.clone(), reason)); //the server will check
+                    let chanel = channel.unwrap_or(model.current_channel.clone());
+                    model.send_command(Command::Part(chanel, reason)); //the server will check
                     None
                 }
                 command::ClientCommand::Action(content) => {
