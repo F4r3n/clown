@@ -339,7 +339,7 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
-    fn can_scroll_up(&mut self) -> bool {
+    fn possible_scroll_up(&mut self, offset: usize) -> usize {
         if let Some(messages) = self.messages.get_messages(&self.current_channel) {
             let mut total_rows = 0;
             for line in messages.iter().rev() {
@@ -347,24 +347,39 @@ impl DiscussWidget {
                 if total_rows
                     >= self
                         .scroll_offset
-                        .saturating_add(1)
+                        .saturating_add(offset)
                         .saturating_add(self.max_visible_height)
                 {
-                    return true;
+                    return offset;
                 }
             }
-            false
+            total_rows.saturating_sub(self.scroll_offset.saturating_add(self.max_visible_height))
         } else {
-            false
+            0
         }
     }
 
     fn scroll_up(&mut self) {
-        if self.can_scroll_up() {
+        if self.possible_scroll_up(1) > 0 {
             self.scroll_offset = self.scroll_offset.saturating_add(1);
             self.follow_last = false;
             self.redraw = true;
         }
+    }
+
+    fn scroll_page_up(&mut self) {
+        let offset = self.possible_scroll_up(self.max_visible_height);
+        if offset > 0 {
+            self.scroll_offset = self.scroll_offset.saturating_add(offset);
+            self.follow_last = false;
+            self.redraw = true;
+        }
+    }
+
+    fn scroll_page_down(&mut self) {
+        self.scroll_offset = self.scroll_offset.saturating_sub(self.max_visible_height);
+        self.follow_last = false;
+        self.redraw = true;
     }
 
     fn scroll_boundary(&mut self) {
@@ -560,15 +575,11 @@ impl crate::component::EventHandler for DiscussWidget {
                 },
                 crossterm::event::Event::Key(key_event) => match key_event.code {
                     KeyCode::PageUp => {
-                        for _ in 0..5 {
-                            self.scroll_up();
-                        }
+                        self.scroll_page_up();
                         None
                     }
                     KeyCode::PageDown => {
-                        for _ in 0..5 {
-                            self.scroll_down();
-                        }
+                        self.scroll_page_down();
                         None
                     }
                     KeyCode::Home => {
@@ -701,6 +712,29 @@ mod tests {
         );
         discuss.scroll_offset = 0;
         assert_eq!(discuss.get_total_lines(), 9);
+    }
+
+    #[test]
+    fn test_can_scroll_up() {
+        let mut discuss = DiscussWidget::new("");
+        discuss.content_width = 5;
+        discuss.max_visible_height = 3;
+
+        discuss.add_line(
+            "",
+            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+        );
+        discuss.add_line(
+            "",
+            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+        );
+        discuss.add_line(
+            "",
+            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+        );
+        discuss.scroll_offset = 0;
+        assert_eq!(discuss.possible_scroll_up(10), 10);
+        assert_eq!(discuss.possible_scroll_up(100), 12);
     }
 
     #[test]
