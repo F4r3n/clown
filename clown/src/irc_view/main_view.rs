@@ -103,7 +103,6 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Part(channel, reason) => {
-                    model.send_command(Command::Part(channel.clone(), reason)); //the server will check
                     let chanel = channel.unwrap_or(model.current_channel.clone());
                     model.send_command(Command::Part(chanel, reason)); //the server will check
                     None
@@ -272,6 +271,11 @@ impl MainView<'_> {
                             messages.push_message(MessageEvent::AddMessageView(
                                 None,
                                 MessageContent::new_info(format!("{} has joined", source.clone())),
+                            ));
+                        } else {
+                            messages.push_message(MessageEvent::AddMessageView(
+                                None,
+                                MessageContent::new_info("You joined the channel".to_string()),
                             ));
                         }
                     }
