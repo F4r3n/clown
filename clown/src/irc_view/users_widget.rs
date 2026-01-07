@@ -15,6 +15,7 @@ struct User {
     color: ratatui::style::Color,
     connected_channels: BitVec,
 }
+const NB_CHANNELS: usize = 32;
 
 impl User {
     pub fn new(name: String) -> Self {
@@ -22,7 +23,7 @@ impl User {
             need_hightlight: false,
             color: nickname_color(&name),
             name,
-            connected_channels: BitVec::from_elem(32, false),
+            connected_channels: BitVec::from_elem(NB_CHANNELS, false),
         }
     }
 
@@ -41,6 +42,16 @@ impl User {
         if let Some(mut channel) = self.connected_channels.get_mut(id) {
             *channel = false;
         }
+    }
+
+    pub fn quit_all_except_global(&mut self) {
+        let mut mask = BitVec::from_elem(NB_CHANNELS, false);
+        mask.set(0, true);
+        self.connected_channels.and(&mask);
+    }
+
+    pub fn has_joined_any_channel(&mut self) -> bool {
+        self.connected_channels.any()
     }
 }
 
@@ -207,8 +218,11 @@ impl UsersWidget {
 
                 u.quit_channel(id);
             }
-        } else {
-            self.list_users.remove(user);
+        } else if let Some(u) = self.list_users.get_mut(user) {
+            u.quit_all_except_global();
+            if !u.has_joined_any_channel() {
+                self.list_users.remove(user);
+            }
         }
     }
 
@@ -272,9 +286,13 @@ impl UsersWidget {
         }
     }
 
+    fn get_global_channel_id(&self) -> usize {
+        0
+    }
+
     fn add_user_global_channel(&mut self, user: &str) {
         if !user.starts_with("#") {
-            self.add_user(0, user);
+            self.add_user(self.get_global_channel_id(), user);
         }
     }
 }
@@ -563,12 +581,33 @@ mod tests {
     }
 
     #[test]
+    fn test_add_gloabl_user_channel() {
+        let mut users_widget = UsersWidget::new();
+        let user_name = "user1";
+        users_widget.add_user_with_channel("IRC-Server", user_name);
+        assert_eq!(users_widget.list_sections.len(), 1);
+        assert_eq!(
+            users_widget.list_sections.get(0).unwrap().order_user.len(),
+            1
+        );
+
+        assert_eq!(users_widget.list_users.len(), 1);
+
+        users_widget.add_user_global_channel("TEST"); //When a user is added in the global it cannot be removed
+        assert_eq!(users_widget.list_users.len(), 2);
+
+        users_widget.remove_user(None, "TEST");
+        assert_eq!(users_widget.list_users.len(), 2);
+    }
+
+    #[test]
     fn test_add_channel_uppercase() {
         let mut users_widget = UsersWidget::new();
         let section = "#rust";
         users_widget.add_channel(section.to_string());
         users_widget.add_channel(section.to_uppercase());
         assert_eq!(users_widget.list_sections.len(), 1);
+        assert_eq!(users_widget.list_sections[0].channel_info.name, "#rust");
 
         let section = "#rUst2";
         users_widget.add_channel(section.to_string());
