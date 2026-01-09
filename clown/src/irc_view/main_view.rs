@@ -88,7 +88,11 @@ impl MainView<'_> {
         if let Some(parsed_message) = command::parse_command(&content) {
             match parsed_message {
                 command::ClientCommand::Connect => Some(MessageEvent::Connect),
-                command::ClientCommand::Quit(message) => Some(MessageEvent::Quit(message)),
+                command::ClientCommand::Quit(message) => {
+                    model.send_command(Command::Quit(message));
+                    model.running_state = RunningState::Done;
+                    None
+                }
                 command::ClientCommand::Help => Some(help()),
                 command::ClientCommand::Nick(new_nick) => {
                     let _ = model.set_nickname(new_nick.clone());
@@ -103,8 +107,8 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Part(channel, reason) => {
-                    let chanel = channel.unwrap_or(model.current_channel.clone());
-                    model.send_command(Command::Part(chanel, reason)); //the server will check
+                    let chanel = channel.unwrap_or_else(|| model.current_channel.clone());
+                    model.send_command(Command::Part(chanel.clone(), reason.clone())); //the server will check
                     None
                 }
                 command::ClientCommand::Action(content) => {
@@ -249,35 +253,27 @@ impl MainView<'_> {
                     Command::Topic(channel, topic) => {
                         messages.push_message(MessageEvent::SetTopic(channel, topic))
                     }
-                    Command::Quit(_) => {
+                    Command::Quit(reason) => {
                         let source = source.unwrap_or_default();
-                        messages.push_message(MessageEvent::RemoveUser(None, source.clone()));
-                        messages.push_message(MessageEvent::AddMessageView(
-                            None,
-                            MessageContent::new_info(format!("{} has quit", source.clone())),
-                        ));
+                        messages.push_message(MessageEvent::Quit(source, reason));
                     }
                     Command::Part(channel, _reason) => {
                         let source = source.unwrap_or_default();
-                        messages.push_message(MessageEvent::RemoveUser(
-                            Some(channel.clone()),
-                            source.clone(),
-                        ));
-                        messages.push_message(MessageEvent::AddMessageView(
-                            Some(channel),
-                            MessageContent::new_info(format!(
-                                "{} has quit the channel",
-                                source.clone()
-                            )),
+                        let is_main_user = model.get_nickname().eq_ignore_ascii_case(&source);
+                        messages.push_message(MessageEvent::Part(
+                            channel.to_string(),
+                            source,
+                            is_main_user,
                         ));
                     }
                     Command::Join(channel) => {
                         let source = source.unwrap_or_default();
                         //Create a new 'user' as IRC-Server
-                        messages.push_message(MessageEvent::JoinChannel(channel.clone()));
+                        messages.push_message(MessageEvent::Join(
+                            channel.clone(),
+                            Some(source.clone()),
+                        ));
 
-                        messages
-                            .push_message(MessageEvent::JoinUser(channel.clone(), source.clone()));
                         if !source.eq(model.get_nickname()) {
                             messages.push_message(MessageEvent::AddMessageView(
                                 None,
@@ -301,8 +297,9 @@ impl MainView<'_> {
                             model.get_login_channel().to_string(),
                         ));
                         //Create a new 'user' as IRC-Server
-                        messages.push_message(MessageEvent::JoinChannel(
+                        messages.push_message(MessageEvent::Join(
                             source.clone().unwrap_or_default(),
+                            None,
                         ));
                         messages.push_message(MessageEvent::AddMessageView(
                             source.clone(),
@@ -450,9 +447,6 @@ impl widget_view::WidgetView for MainView<'_> {
                 if let Err(e) = open::that(&url) {
                     error!("Try to open {}, {}", url.clone(), e);
                 }
-            }
-            MessageEvent::Quit(message) => {
-                model.send_command(clown_core::command::Command::Quit(message));
             }
             MessageEvent::Connect => {
                 messages.push_message(MessageEvent::AddMessageView(

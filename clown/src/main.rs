@@ -145,12 +145,7 @@ async fn update(
     out_messages: &mut MessageQueue,
 ) {
     if let Some(current_view) = views.get_mut(&model.current_view) {
-        match msg {
-            MessageEvent::Quit(_) => {
-                model.running_state = RunningState::Done;
-            }
-            _ => current_view.update(model, msg, out_messages),
-        }
+        current_view.update(model, msg, out_messages)
     }
 }
 

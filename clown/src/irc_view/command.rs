@@ -86,14 +86,7 @@ fn privmsg(message: &str) -> Option<ClientCommand> {
         })
         .unwrap_or(Some((message, None)))
     {
-        if let Some(content) = content {
-            Some(ClientCommand::PrivMSG(
-                channel.to_string(),
-                content.to_string(),
-            ))
-        } else {
-            None
-        }
+        content.map(|v| ClientCommand::PrivMSG(channel.to_string(), v.to_string()))
     } else {
         None
     }

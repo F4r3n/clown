@@ -68,7 +68,7 @@ impl EventHandler for TopicWidget {
                 self.need_redraw = true;
                 None
             }
-            MessageEvent::JoinChannel(channel) => {
+            MessageEvent::Join(channel, _user) => {
                 self.set_channel(channel.to_string());
                 self.need_redraw = true;
 

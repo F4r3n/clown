@@ -207,22 +207,37 @@ impl UsersWidget {
         }
     }
 
-    fn remove_user(&mut self, channel_id: Option<usize>, user: &str) {
-        let user = UsersWidget::sanitize_name(user);
-
-        if let Some(id) = channel_id {
-            if let Some(u) = self.list_users.get_mut(user) {
-                if let Some(channel) = self.list_sections.get_mut(id) {
-                    channel.remove_user(user);
+    fn remove_all_users_section(&mut self, channel_id: Option<usize>) {
+        if let Some(id) = channel_id
+            && let Some(channel) = self.list_sections.get_mut(id)
+        {
+            for user_name in channel.order_user.iter() {
+                if let Some(user) = self.list_users.get_mut(user_name) {
+                    user.quit_channel(id);
                 }
-
-                u.quit_channel(id);
             }
-        } else if let Some(u) = self.list_users.get_mut(user) {
+            channel.order_user.clear();
+        }
+    }
+
+    fn remove_user_from_all(&mut self, user: &str) {
+        if let Some(u) = self.list_users.get_mut(user) {
             u.quit_all_except_global();
             if !u.has_joined_any_channel() {
                 self.list_users.remove(user);
             }
+        }
+    }
+
+    fn remove_user(&mut self, channel_id: usize, user: &str) {
+        let user = UsersWidget::sanitize_name(user);
+
+        if let Some(u) = self.list_users.get_mut(user) {
+            if let Some(channel) = self.list_sections.get_mut(channel_id) {
+                channel.remove_user(user);
+            }
+
+            u.quit_channel(channel_id);
         }
     }
 
@@ -434,8 +449,18 @@ impl crate::component::EventHandler for UsersWidget {
 
                 None
             }
-            MessageEvent::RemoveUser(channel, user) => {
-                self.remove_user(channel.as_ref().and_then(|c| self.get_section_id(c)), user);
+            MessageEvent::Quit(user, _) => {
+                self.remove_user_from_all(user);
+                self.need_redraw = true;
+
+                None
+            }
+            MessageEvent::Part(channel, user, is_main) => {
+                if *is_main {
+                    self.remove_all_users_section(self.get_section_id(channel));
+                } else if let Some(channel_id) = self.get_section_id(channel) {
+                    self.remove_user(channel_id, user);
+                }
                 self.need_redraw = true;
 
                 None
@@ -447,14 +472,11 @@ impl crate::component::EventHandler for UsersWidget {
 
                 None
             }
-            MessageEvent::JoinChannel(channel) => {
+            MessageEvent::Join(channel, user) => {
                 self.add_channel(channel.to_string());
-                self.need_redraw = true;
-
-                None
-            }
-            MessageEvent::JoinUser(channel, user) => {
-                self.add_user_with_channel(channel, user);
+                if let Some(user) = user {
+                    self.add_user_with_channel(channel, user);
+                }
                 self.need_redraw = true;
 
                 None
@@ -596,7 +618,7 @@ mod tests {
         users_widget.add_user_global_channel("TEST"); //When a user is added in the global it cannot be removed
         assert_eq!(users_widget.list_users.len(), 2);
 
-        users_widget.remove_user(None, "TEST");
+        users_widget.remove_all_users_section(users_widget.get_section_id("TEST"));
         assert_eq!(users_widget.list_users.len(), 2);
     }
 

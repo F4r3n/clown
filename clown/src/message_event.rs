@@ -8,9 +8,7 @@ pub enum MessageEvent {
     SelectChannel(String),
     UpdateUsers(String /*channel*/, Vec<String> /*list users */),
     ReplaceUser(String /*old */, String /*new */),
-    JoinUser(String /*channel*/, String /*nickname*/),
-    JoinChannel(String /*channel*/),
-    RemoveUser(Option<String> /*channel*/, String /*user */),
+    Join(String /*channel*/, Option<String> /*user */),
     SetTopic(String /*channel */, String /*topic */),
     #[cfg(feature = "website-preview")]
     HoverURL(String /* URL */),
@@ -20,5 +18,10 @@ pub enum MessageEvent {
     DisConnect,
     OpenWeb(String),
     SpellChecker(Option<String>),
-    Quit(Option<String>),
+    Part(
+        String, /*channel */
+        String, /*user */
+        bool,   /*main user*/
+    ),
+    Quit(String /*user*/, Option<String> /*reason*/),
 }

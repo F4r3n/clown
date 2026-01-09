@@ -492,6 +492,28 @@ impl crate::component::EventHandler for DiscussWidget {
                 }
                 None
             }
+            MessageEvent::Quit(user, reason) => {
+                self.add_line(
+                    &self.current_channel.clone(),
+                    MessageContent::new_info(
+                        reason
+                            .as_ref()
+                            .map(|v| format!("{} has quit: {}", user, v))
+                            .unwrap_or_else(|| format!("{} has quit", user)),
+                    ),
+                );
+
+                None
+            }
+
+            MessageEvent::Part(channel, user, _main) => {
+                self.add_line(
+                    channel,
+                    MessageContent::new_info(format!("{} has quit", user)),
+                );
+
+                None
+            }
             MessageEvent::SelectChannel(channel) => {
                 self.set_current_channel(channel);
                 None
