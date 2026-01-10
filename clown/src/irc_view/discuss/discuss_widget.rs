@@ -15,7 +15,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-use tracing::info;
+
 #[derive(PartialEq, Eq, Clone)]
 struct Range {
     line: usize,
@@ -543,12 +543,6 @@ impl crate::component::EventHandler for DiscussWidget {
                             if let Some(range) =
                                 self.get_range_from_mouse(mouse_event.row, mouse_event.column)
                             {
-                                info!(
-                                    "Try open url {:?}",
-                                    self.messages
-                                        .get_url_from_range(&self.current_channel, &range)
-                                );
-
                                 self.messages
                                     .get_url_from_range(&self.current_channel, &range)
                                     .map(MessageEvent::OpenWeb)
@@ -564,30 +558,36 @@ impl crate::component::EventHandler for DiscussWidget {
                         if let Some(range) =
                             self.get_range_from_mouse(mouse_event.row, mouse_event.column)
                         {
-                            if let Some(last_hovered) = &self.last_hovered
+                            let mut should_clear = false;
+                            let result = if let Some(last_hovered) = &mut self.last_hovered
                                 && range.eq(&last_hovered.range)
                             {
                                 if std::time::Instant::now().duration_since(last_hovered.time)
                                     > Duration::from_secs(2)
                                 {
-                                    info!(
-                                        "Hovering url {:?}",
-                                        self.messages
-                                            .get_url_from_range(&self.current_channel, &range)
-                                    );
-                                    self.messages
-                                        .get_url_from_range(
-                                            &self.current_channel,
-                                            &last_hovered.range,
-                                        )
-                                        .map(MessageEvent::HoverURL)
+                                    if let Some(url) = self.messages.get_url_from_range(
+                                        &self.current_channel,
+                                        &last_hovered.range,
+                                    ) {
+                                        Some(MessageEvent::HoverURL(url))
+                                    } else {
+                                        //Not an url, no need to wait for next round
+                                        should_clear = true;
+                                        None
+                                    }
                                 } else {
                                     None
                                 }
                             } else {
                                 self.last_hovered = Some(Hovered::new(range));
                                 None
+                            };
+
+                            if should_clear {
+                                self.last_hovered = None;
                             }
+
+                            result
                         } else {
                             self.last_hovered = None;
                             None
@@ -619,19 +619,33 @@ impl crate::component::EventHandler for DiscussWidget {
         } else {
             match event {
                 crate::event_handler::Event::Tick => {
-                    if let Some(last_hovered) = &self.last_hovered {
+                    let mut should_clear = false;
+                    let result = if let Some(last_hovered) = &mut self.last_hovered {
                         if std::time::Instant::now().duration_since(last_hovered.time)
                             > Duration::from_secs(2)
                         {
-                            self.messages
+                            if let Some(url) = self
+                                .messages
                                 .get_url_from_range(&self.current_channel, &last_hovered.range)
-                                .map(MessageEvent::HoverURL)
+                            {
+                                Some(MessageEvent::HoverURL(url))
+                            } else {
+                                //Not an url, no need to wait for next round
+                                should_clear = true;
+                                None
+                            }
                         } else {
                             None
                         }
                     } else {
                         None
+                    };
+
+                    if should_clear {
+                        self.last_hovered = None;
                     }
+
+                    result
                 }
                 _ => None,
             }

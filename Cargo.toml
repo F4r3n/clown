@@ -35,7 +35,7 @@ new_without_default = "allow"
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
-lto = "thin"
+lto = "fat"
 debug = false
 
 [profile.bloaty]

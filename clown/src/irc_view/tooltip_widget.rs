@@ -1,7 +1,7 @@
 #[cfg(feature = "website-preview")]
 use crate::irc_view::website_preview::WebsitePreview;
 use crate::{component::Draw, message_event::MessageEvent};
-use chrono::Local;
+
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -74,8 +74,7 @@ impl DrawToolTip for MessagePreview {
 pub struct ToolTipDiscussWidget {
     area: ratatui::prelude::Rect,
     preview: Option<Box<dyn DrawToolTip>>,
-    start_time: Option<chrono::DateTime<Local>>,
-    end_time: Option<chrono::DateTime<Local>>,
+    start_time: Option<std::time::Instant>,
     picker: Option<Picker>,
     need_redraw: bool,
     is_opened: bool,
@@ -85,7 +84,6 @@ impl ToolTipDiscussWidget {
     pub fn new() -> Self {
         Self {
             area: ratatui::prelude::Rect::default(),
-            end_time: None,
             start_time: None,
             preview: None,
             picker: Picker::from_query_stdio().ok(),
@@ -95,21 +93,15 @@ impl ToolTipDiscussWidget {
     }
 
     fn is_open(&self) -> bool {
-        if let Some(start_time) = self.start_time
-            && let Some(end_time) = self.end_time
-        {
-            let current_time = chrono::Local::now();
-            current_time >= start_time && current_time <= end_time
+        if let Some(start_time) = self.start_time {
+            start_time.elapsed() < std::time::Duration::from_secs(5)
         } else {
             false
         }
     }
 
     pub fn start_timer(&mut self) {
-        self.start_time = Some(Local::now());
-        self.end_time = self
-            .start_time
-            .map(|time| time + chrono::Duration::seconds(5));
+        self.start_time = Some(std::time::Instant::now());
     }
 
     pub fn set_message(&mut self, preview: Box<dyn DrawToolTip>) {
@@ -183,6 +175,7 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
     ) -> Option<crate::message_event::MessageEvent> {
         if self.is_opened && !self.is_open() {
             self.need_redraw = true;
+            self.is_opened = false;
         }
         None
     }
