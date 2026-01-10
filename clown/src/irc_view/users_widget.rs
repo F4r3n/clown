@@ -260,16 +260,14 @@ impl UsersWidget {
 
     pub fn get_selected_name(&self) -> Option<&str> {
         let (selected, id) = self.list_state.selected();
-        if id > 0 {
-            if let Some(channel) = self.list_sections.get(selected)
-                && let Some(user_name) = channel.order_user.get(id.saturating_sub(1))
-            {
-                Some(user_name)
-            } else if let Some(channel) = self.list_sections.get(selected) {
-                Some(&channel.channel_info.name)
-            } else {
-                None
-            }
+
+        if let Some(channel) = self.list_sections.get(selected)
+            && id > 0
+            && let Some(user_name) = channel.order_user.get(id.saturating_sub(1))
+        {
+            Some(user_name)
+        } else if let Some(channel) = self.list_sections.get(selected) {
+            Some(&channel.channel_info.name)
         } else {
             None
         }
