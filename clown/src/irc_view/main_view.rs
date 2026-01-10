@@ -203,7 +203,7 @@ impl MainView<'_> {
     }
 
     fn update_pull_irc(&mut self, model: &mut Model, messages: &mut MessageQueue) {
-        if let Some(recieved) = model.pull_server_message() {
+        while let Some(recieved) = model.pull_server_message() {
             let reply = recieved.reply();
             let source = recieved.source().map(|v| v.to_string());
 

@@ -4,12 +4,6 @@ use clown_core::{
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 
-#[derive(Default, Debug, PartialEq, Eq, Hash)]
-pub enum View {
-    #[default]
-    MainView,
-}
-
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum RunningState {
     #[default]
@@ -43,7 +37,6 @@ impl StoredConfig {
 
 pub struct Model {
     pub running_state: RunningState,
-    pub current_view: View,
     stored_config: StoredConfig,
     pub current_channel: String,
     pub irc_connection: Option<IRCConnection>,
@@ -56,7 +49,6 @@ impl Model {
         let channel = config.login_config.channel.to_string();
         Self {
             running_state: RunningState::Start,
-            current_view: View::MainView,
             current_channel: channel.to_lowercase(),
             stored_config: StoredConfig {
                 config,

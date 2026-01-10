@@ -4,7 +4,7 @@ use bit_vec::BitVec;
 use crossterm::event::KeyModifiers;
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{List, ListItem},
 };

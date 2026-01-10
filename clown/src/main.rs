@@ -10,21 +10,26 @@ mod model;
 mod project_path;
 mod tui;
 mod widget_view;
-use ahash::AHashMap;
+use crate::irc_view::main_view;
 use clown::project_path::ProjectPath;
 use event_handler::Event;
 use event_handler::EventHandler;
 use message_event::MessageEvent;
 use message_irc::message_content::MessageContent;
 use message_queue::MessageQueue;
-use model::{Model, RunningState, View};
+use model::{Model, RunningState};
 use ratatui::Frame;
 use shadow_rs::shadow;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+pub enum Views<'a> {
+    Main(main_view::MainView<'a>),
+}
 shadow!(build);
 
 use clap::Parser;
+
+use crate::widget_view::WidgetView;
 
 #[derive(Parser, Debug)]
 #[command(version = build::PKG_VERSION, long_version = build::VERSION)]
@@ -59,7 +64,6 @@ fn prepare_logs(is_debug: bool) -> color_eyre::Result<WorkerGuard> {
     Ok(guard)
 }
 
-type ViewMap = AHashMap<View, Box<dyn widget_view::WidgetView>>;
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     let args = Args::parse();
@@ -68,11 +72,7 @@ async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let mut model = model::Model::new(args.config_name);
-    let mut views: ViewMap = AHashMap::new();
-    views.insert(
-        View::MainView,
-        Box::new(irc_view::main_view::MainView::new(&model.current_channel)),
-    );
+    let mut current_view = Views::Main(main_view::MainView::new(model.get_login_channel()));
 
     let mut events = EventHandler::new();
     EventHandler::enable_mouse_event()?;
@@ -87,21 +87,24 @@ async fn main() -> color_eyre::Result<()> {
     while model.running_state != RunningState::Done {
         if let Some(event) = events.next().await {
             match event {
-                Event::Redraw => {
-                    if need_redraw(&mut model, &mut views) {
-                        //debug!("Need redraw");
-                        terminal.draw(|f| view(&mut model, &mut views, f))?;
-                    }
-                }
                 Event::Tick | Event::Crossterm(_) => {
-                    handle_event(&mut model, &mut views, event, &mut list_messages)?;
+                    handle_event(&mut model, &mut current_view, event, &mut list_messages)?;
                     while let Some(current_msg) = list_messages.next() {
-                        update(&mut model, &mut views, current_msg, &mut list_messages).await;
+                        update(
+                            &mut model,
+                            &mut current_view,
+                            current_msg,
+                            &mut list_messages,
+                        )
+                        .await;
                     }
                 }
                 Event::Error => {
                     tracing::error!("Error in the events");
                 }
+            }
+            if need_redraw(&mut model, &mut current_view) {
+                terminal.draw(|f| view(&mut model, &mut current_view, f))?;
             }
         }
     }
@@ -111,41 +114,42 @@ async fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-fn view(model: &mut Model, views: &mut ViewMap, frame: &mut Frame<'_>) {
-    if let Some(current_view) = views.get_mut(&model.current_view) {
-        current_view.view(model, frame);
+fn view(model: &mut Model, views: &mut Views<'_>, frame: &mut Frame<'_>) {
+    match views {
+        Views::Main(view) => {
+            view.view(model, frame);
+        }
     }
 }
 
 fn handle_event(
     model: &mut Model,
-    views: &mut ViewMap,
+    views: &mut Views<'_>,
     event: Event,
     out_messages: &mut MessageQueue,
 ) -> color_eyre::Result<Option<MessageEvent>> {
-    if let Some(current_view) = views.get_mut(&model.current_view) {
-        current_view.handle_event(model, &event, out_messages);
+    match views {
+        Views::Main(view) => {
+            view.handle_event(model, &event, out_messages);
+        }
     }
-
     Ok(None)
 }
 
-fn need_redraw(model: &mut Model, views: &mut ViewMap) -> bool {
-    if let Some(current_view) = views.get_mut(&model.current_view) {
-        current_view.need_redraw(model)
-    } else {
-        false
+fn need_redraw(model: &mut Model, views: &mut Views<'_>) -> bool {
+    match views {
+        Views::Main(view) => view.need_redraw(model),
     }
 }
 
 async fn update(
     model: &mut Model,
-    views: &mut ViewMap,
+    views: &mut Views<'_>,
     msg: MessageEvent,
     out_messages: &mut MessageQueue,
 ) {
-    if let Some(current_view) = views.get_mut(&model.current_view) {
-        current_view.update(model, msg, out_messages)
+    match views {
+        Views::Main(view) => view.update(model, msg, out_messages),
     }
 }
 

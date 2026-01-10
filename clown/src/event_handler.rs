@@ -6,7 +6,6 @@ use tokio::{sync::mpsc, task::JoinHandle};
 pub enum Event {
     Error,
     Tick,
-    Redraw,
     Crossterm(crossterm::event::Event),
 }
 
@@ -29,7 +28,7 @@ pub struct EventHandler {
 impl EventHandler {
     pub fn new() -> Self {
         let mut tick_interval = tokio::time::interval(std::time::Duration::from_millis(100));
-        let mut redraw_interval = tokio::time::interval(std::time::Duration::from_millis(16));
+
         let (tx, rx) = mpsc::channel(100);
         let _tx = tx.clone();
 
@@ -57,12 +56,6 @@ impl EventHandler {
                   },
                   _tick = tick_interval.tick() => {
                       if tx.send(Event::Tick).await.is_err() {
-                        break;
-                      }
-                  },
-
-                  _redraw = redraw_interval.tick() => {
-                      if tx.send(Event::Redraw).await.is_err() {
                         break;
                       }
                   },
