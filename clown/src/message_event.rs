@@ -12,7 +12,8 @@ pub enum MessageEvent {
     SetTopic(String /*channel */, String /*topic */),
     #[cfg(feature = "website-preview")]
     HoverURL(String /* URL */),
-    Hover(String),
+    #[allow(dead_code)]
+    Hover(String), //currently not used, but the skeleton can be used anywhere
     PullIRC,
     Connect,
     DisConnect,
