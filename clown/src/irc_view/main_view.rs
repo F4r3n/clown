@@ -6,8 +6,8 @@ use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
 use crate::irc_view::discuss::discuss_widget;
-use crate::irc_view::input_widget;
-use crate::irc_view::input_widget::CInput;
+use crate::irc_view::input::input_widget;
+use crate::irc_view::input::input_widget::CInput;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
@@ -280,6 +280,7 @@ impl MainView<'_> {
                                 MessageContent::new_info(format!("{} has joined", source)),
                             ));
                         } else {
+                            tracing::debug!("Event Joined {}", channel);
                             messages.push_message(MessageEvent::SelectChannel(channel));
                             messages.push_message(MessageEvent::AddMessageView(
                                 None,
@@ -462,9 +463,9 @@ impl widget_view::WidgetView for MainView<'_> {
             }
             MessageEvent::SelectChannel(ref channel) => {
                 model.current_channel = channel.to_string();
-                self.messages_display.handle_actions(&msg);
-                self.topic_view.handle_actions(&msg);
-                self.list_users_view.handle_actions(&msg);
+                for mut child in self.children() {
+                    child.handle_actions(&msg);
+                }
             }
             MessageEvent::DisConnect => {
                 if !model.is_irc_finished() {

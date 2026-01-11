@@ -1,3 +1,4 @@
+use super::completion::{Completion, InputCompletion};
 use super::history::InputHistory;
 use super::spell_checker::SpellChecker;
 use crate::message_event::MessageEvent;
@@ -16,6 +17,7 @@ use unicode_width::UnicodeWidthStr;
 pub struct CInput {
     input: InputWidget,
     input_history: InputHistory,
+    completion: Completion,
     /// Current input mode
     area: Rect,
     redraw: bool,
@@ -64,19 +66,42 @@ impl crate::component::EventHandler for CInput {
         self.redraw
     }
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
-        if let MessageEvent::SpellChecker(language) = event {
-            if let Some(language) = language {
-                self.spellchecker_task = Some(crate::async_task::AsyncTask {
-                    handle: Some(SpellChecker::async_build(language)),
-                    result: None,
-                });
-            } else {
-                self.spell_checker = None;
-                self.spellchecker_task = None;
+        match event {
+            MessageEvent::SpellChecker(language) => {
+                if let Some(language) = language {
+                    self.spellchecker_task = Some(crate::async_task::AsyncTask {
+                        handle: Some(SpellChecker::async_build(language)),
+                        result: None,
+                    });
+                } else {
+                    self.spell_checker = None;
+                    self.spellchecker_task = None;
+                }
+                None
             }
-        }
+            MessageEvent::UpdateUsers(channel, users) => {
+                tracing::debug!("Update users {} {:?}", &channel, &users);
+                self.completion
+                    .input_completion
+                    .add_users(channel.to_string(), users);
+                None
+            }
+            MessageEvent::SelectChannel(channel) => {
+                tracing::debug!("Select channel {:?}", &channel);
 
-        None
+                self.completion.current_channel = channel.to_string();
+                None
+            }
+            MessageEvent::Part(channel, user, main) => {
+                if *main {
+                    self.completion.input_completion.remove_channel(channel);
+                } else {
+                    self.completion.input_completion.disable_user(channel, user);
+                }
+                None
+            }
+            _ => None,
+        }
     }
 
     fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
@@ -116,7 +141,18 @@ impl crate::component::EventHandler for CInput {
                             }
                             None
                         }
+                        KeyCode::Tab => {
+                            self.set_completion();
+                            if let Some((index, value)) = self.completion.get_next_completion() {
+                                tracing::debug!("KeyCode::Tab {} '{}'", index, &value);
+
+                                self.input.insert_completion(index, value);
+                            }
+                            None
+                        }
                         _ => {
+                            tracing::debug!("RESET");
+                            self.completion.reset();
                             self.input.handle_key_events(&key_event);
                             None
                         }
@@ -136,6 +172,18 @@ impl crate::component::EventHandler for CInput {
 }
 
 impl CInput {
+    fn set_completion(&mut self) {
+        tracing::debug!("Set completion... ");
+
+        if let Some(start) = self.input.find_previous_break().or(Some(0))
+            && let Some(slice) = self.input.get_slice_till_cursor(start)
+        {
+            tracing::debug!("Set completion {} '{}'", start, slice);
+
+            self.completion.set_completion(start, slice);
+        }
+    }
+
     pub fn spans_with_spellcheck<'a>(&self, input: &'a str) -> Vec<Span<'a>> {
         let mut spans = Vec::new();
         let mut start = 0;
@@ -145,11 +193,7 @@ impl CInput {
                 if ch.is_ascii_whitespace() {
                     if in_word {
                         let word = &input[start..i];
-                        /*info!(
-                            "Word to be checked: '{}' {}",
-                            &word,
-                            spell_checker.check_word(word)
-                        );*/
+
                         let color = if !spell_checker.check_word(word) {
                             ratatui::style::Color::LightBlue
                         } else {
@@ -313,11 +357,24 @@ impl InputWidget {
         }
     }
 
-    fn delete_previous_word(&mut self) {
-        if self.cursor_position == 0 || self.cursor_position > self.value.len() {
-            return;
-        }
+    fn insert_completion(&mut self, start: usize, word: String) {
+        let count = self.value[start..]
+            .chars()
+            .zip(word.chars())
+            .enumerate()
+            .count();
+        self.value.insert_str(start + count, &word[count..]);
+        self.cursor_position = self.value[..start + word.len()].width();
+    }
 
+    fn get_slice_till_cursor(&self, start: usize) -> Option<&str> {
+        self.value.get(start..self.cursor_position)
+    }
+
+    fn find_previous_break(&self) -> Option<usize> {
+        if self.cursor_position == 0 || self.cursor_position > self.value.len() {
+            return None;
+        }
         let mut cursor_pos = self.cursor_position;
         for c in self.value[..self.cursor_position].chars().rev() {
             if c.is_whitespace() {
@@ -326,13 +383,16 @@ impl InputWidget {
                 break;
             }
         }
-
-        if let Some((idx, _ch)) = self.value[..cursor_pos]
+        self.value[..cursor_pos]
             .char_indices()
             .rfind(|&(_, ch)| ch.is_whitespace())
-        {
-            self.value.drain((idx + 1)..self.cursor_position);
-            self.cursor_position = idx + 1;
+            .map(|v| v.0)
+    }
+
+    fn delete_previous_word(&mut self) {
+        if let Some(cursor_pos) = self.find_previous_break() {
+            self.value.drain((cursor_pos + 1)..self.cursor_position);
+            self.cursor_position = cursor_pos + 1;
         } else {
             self.value.drain(0..self.cursor_position);
             self.cursor_position = 0;
@@ -450,6 +510,17 @@ mod tests {
         w.handle_key_events(&make_key(KeyCode::Delete));
         assert_eq!(w.get_value(), "");
         assert_eq!(w.cursor_position, 0);
+    }
+
+    #[test]
+    fn test_insert_completion() {
+        let mut w = InputWidget::default();
+        w.value = "Hello my na".to_string();
+        w.cursor_position = 10;
+
+        w.insert_completion(9, "name".to_string());
+        assert_eq!(w.value, "Hello my name".to_string());
+        assert_eq!(w.cursor_position, 13);
     }
 
     #[test]
