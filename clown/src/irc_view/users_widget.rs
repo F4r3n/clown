@@ -15,7 +15,7 @@ struct User {
     color: ratatui::style::Color,
     connected_sections: BitVec,
 }
-const NB_CHANNELS: usize = 32;
+const NB_SECTIONS: usize = 32;
 
 impl User {
     pub fn new(name: String) -> Self {
@@ -23,7 +23,7 @@ impl User {
             need_hightlight: false,
             color: nickname_color(&name),
             name,
-            connected_sections: BitVec::from_elem(NB_CHANNELS, false),
+            connected_sections: BitVec::from_elem(NB_SECTIONS, false),
         }
     }
 
@@ -49,7 +49,7 @@ impl User {
     }
 
     pub fn quit_all_except_global(&mut self) {
-        let mut mask = BitVec::from_elem(NB_CHANNELS, false);
+        let mut mask = BitVec::from_elem(NB_SECTIONS, false);
         mask.set(0, true);
         self.connected_sections.and(&mask);
     }
@@ -74,14 +74,14 @@ impl DrawableItem for User {
 }
 
 #[derive(Debug)]
-struct RegisteredChannel {
+struct RegisteredSection {
     name: String,
     id: usize,
     color: ratatui::style::Color,
     highlight: bool,
 }
 
-impl RegisteredChannel {
+impl RegisteredSection {
     pub fn new(name: String, id: usize) -> Self {
         Self {
             color: nickname_color(&name),
@@ -100,14 +100,14 @@ trait DrawableItem {
 
 #[derive(Debug)]
 struct Section {
-    pub channel_info: RegisteredChannel,
+    pub section_info: RegisteredSection,
     pub order_user: Vec<String>,
 }
 
 impl Section {
     fn new(channel_name: String, id: usize) -> Self {
         Self {
-            channel_info: RegisteredChannel::new(channel_name, id),
+            section_info: RegisteredSection::new(channel_name, id),
             order_user: Vec::new(),
         }
     }
@@ -152,28 +152,28 @@ impl UsersWidget {
         }
     }
 
-    fn get_section_id(&self, channel: &str) -> Option<usize> {
+    fn get_section_id(&self, section: &str) -> Option<usize> {
         self.list_sections
             .iter()
-            .find(|c| c.channel_info.name.eq_ignore_ascii_case(channel))
-            .map(|c| c.channel_info.id)
+            .find(|c| c.section_info.name.eq_ignore_ascii_case(section))
+            .map(|c| c.section_info.id)
     }
 
-    fn add_channel(&mut self, channel: String) -> Option<usize> {
+    fn add_section(&mut self, section: String) -> Option<usize> {
         let index = if let Some(i) = self
             .list_sections
             .iter()
-            .position(|c| c.channel_info.name.eq_ignore_ascii_case(&channel))
+            .position(|c| c.section_info.name.eq_ignore_ascii_case(&section))
         {
             i
         } else {
             self.list_sections
-                .push(Section::new(channel.to_string(), self.list_section_pool_id));
+                .push(Section::new(section.to_string(), self.list_section_pool_id));
             self.list_section_pool_id = self.list_section_pool_id.saturating_add(1);
 
             self.list_sections.len().saturating_sub(1)
         };
-        self.list_sections.get(index).map(|c| c.channel_info.id)
+        self.list_sections.get(index).map(|c| c.section_info.id)
     }
 
     fn nb_sections(&self) -> usize {
@@ -188,12 +188,12 @@ impl UsersWidget {
         }
     }
 
-    fn set_users(&mut self, channel: &str, list_users: Vec<String>) {
-        let channel_id = self.add_channel(channel.to_string());
+    fn set_users(&mut self, section: &str, list_users: Vec<String>) {
+        let section_id = self.add_section(section.to_string());
 
-        if let Some(channel) = channel_id {
+        if let Some(section) = section_id {
             for user in list_users {
-                self.add_user(channel, &user);
+                self.add_user(section, &user);
             }
         }
     }
@@ -210,7 +210,7 @@ impl UsersWidget {
 
             //not really performant, but not expecting a lot of changes
             for section in self.list_sections.iter_mut() {
-                if v.has_joined_section(section.channel_info.id) {
+                if v.has_joined_section(section.section_info.id) {
                     for user in section.order_user.iter_mut() {
                         if user.eq_ignore_ascii_case(old) {
                             *user = new.to_string();
@@ -223,16 +223,16 @@ impl UsersWidget {
         }
     }
 
-    fn remove_all_users_section(&mut self, channel_id: Option<usize>) {
-        if let Some(id) = channel_id
-            && let Some(channel) = self.list_sections.get_mut(id)
+    fn remove_all_users_section(&mut self, section_id: Option<usize>) {
+        if let Some(id) = section_id
+            && let Some(section) = self.list_sections.get_mut(id)
         {
-            for user_name in channel.order_user.iter() {
+            for user_name in section.order_user.iter() {
                 if let Some(user) = self.list_users.get_mut(user_name) {
                     user.quit_section(id);
                 }
             }
-            channel.order_user.clear();
+            section.order_user.clear();
         }
     }
 
@@ -245,15 +245,15 @@ impl UsersWidget {
         }
     }
 
-    fn remove_user(&mut self, channel_id: usize, user: &str) {
+    fn remove_user(&mut self, section_id: usize, user: &str) {
         let user = UsersWidget::sanitize_name(user);
 
         if let Some(u) = self.list_users.get_mut(user) {
-            if let Some(channel) = self.list_sections.get_mut(channel_id) {
-                channel.remove_user(user);
+            if let Some(section) = self.list_sections.get_mut(section_id) {
+                section.remove_user(user);
             }
 
-            u.quit_section(channel_id);
+            u.quit_section(section_id);
         }
     }
 
@@ -270,20 +270,20 @@ impl UsersWidget {
         } else if let Some(id) = self.get_section_id(user)
             && let Some(section) = self.list_sections.get_mut(id)
         {
-            section.channel_info.highlight = true;
+            section.section_info.highlight = true;
         }
     }
 
     pub fn get_selected_name(&self) -> Option<&str> {
         let (selected, id) = self.list_state.selected();
 
-        if let Some(channel) = self.list_sections.get(selected)
+        if let Some(section) = self.list_sections.get(selected)
             && id > 0
-            && let Some(user_name) = channel.order_user.get(id.saturating_sub(1))
+            && let Some(user_name) = section.order_user.get(id.saturating_sub(1))
         {
             Some(user_name)
-        } else if let Some(channel) = self.list_sections.get(selected) {
-            Some(&channel.channel_info.name)
+        } else if let Some(section) = self.list_sections.get(selected) {
+            Some(&section.section_info.name)
         } else {
             None
         }
@@ -293,35 +293,35 @@ impl UsersWidget {
         user.strip_prefix('@').unwrap_or(user)
     }
 
-    fn add_user_with_channel(&mut self, channel: &str, user: &str) {
-        if let Some(channel_id) = self.get_section_id(channel) {
-            self.add_user(channel_id, user);
-        } else if let Some(channel_id) = self.add_channel(channel.to_string()) {
-            self.add_user(channel_id, user);
+    fn add_user_with_section(&mut self, section: &str, user: &str) {
+        if let Some(section_id) = self.get_section_id(section) {
+            self.add_user(section_id, user);
+        } else if let Some(section_id) = self.add_section(section.to_string()) {
+            self.add_user(section_id, user);
         }
     }
 
-    fn add_user(&mut self, channel_id: usize, user: &str) {
+    fn add_user(&mut self, section_id: usize, user: &str) {
         let user = UsersWidget::sanitize_name(user).to_string();
-        if let Some(channel) = self.list_sections.get_mut(channel_id) {
-            channel.set_user_position(&user);
+        if let Some(section) = self.list_sections.get_mut(section_id) {
+            section.set_user_position(&user);
         }
         if let Some(user) = self.list_users.get_mut(&user) {
-            user.join_section(channel_id);
+            user.join_section(section_id);
         } else {
             let mut new_user = User::new(user.to_string());
-            new_user.join_section(channel_id);
+            new_user.join_section(section_id);
             self.list_users.insert(user, new_user);
         }
     }
 
-    fn get_global_channel_id(&self) -> usize {
+    fn get_global_section_id(&self) -> usize {
         0
     }
 
-    fn add_user_global_channel(&mut self, user: &str) {
+    fn add_user_global_section(&mut self, user: &str) {
         if !user.starts_with("#") {
-            self.add_user(self.get_global_channel_id(), user);
+            self.add_user(self.get_global_section_id(), user);
         }
     }
 }
@@ -414,9 +414,9 @@ impl ListStateWidget {
         for (section_i, section) in sections.iter().enumerate() {
             let item = ListItem::from(Line::from(self.add_item(
                 0,
-                section.channel_info.color,
-                &section.channel_info.name,
-                section.channel_info.highlight,
+                section.section_info.color,
+                &section.section_info.name,
+                section.section_info.highlight,
                 (self.current_section == section_i) && (self.current_selected == 0),
             )));
             items.push(item);
@@ -480,16 +480,16 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::HighlightUser(user) => {
-                self.add_user_global_channel(user);
+                self.add_user_global_section(user);
                 self.hightlight_user(user);
                 self.need_redraw = true;
 
                 None
             }
             MessageEvent::Join(channel, user) => {
-                self.add_channel(channel.to_string());
+                self.add_section(channel.to_string());
                 if let Some(user) = user {
-                    self.add_user_with_channel(channel, user);
+                    self.add_user_with_section(channel, user);
                 }
                 self.need_redraw = true;
 
@@ -552,10 +552,10 @@ impl crate::component::EventHandler for UsersWidget {
                     self.need_redraw = true;
                     return Some(MessageEvent::SelectChannel(user.name.to_string()));
                 } else if let Some(channel) = self.list_sections.get_mut(selected) {
-                    channel.channel_info.highlight = false;
+                    channel.section_info.highlight = false;
                     self.need_redraw = true;
                     return Some(MessageEvent::SelectChannel(
-                        channel.channel_info.name.clone(),
+                        channel.section_info.name.clone(),
                     ));
                 }
             }
@@ -572,7 +572,7 @@ mod tests {
     fn test_add_user() {
         let mut users_widget = UsersWidget::new();
         let user_name = "farine";
-        users_widget.add_user_with_channel("#spam", user_name);
+        users_widget.add_user_with_section("#spam", user_name);
         assert_eq!(users_widget.list_sections.len(), 1);
         assert!(users_widget.list_users.get(user_name).is_some());
         let user = users_widget.list_users.get(user_name).unwrap();
@@ -582,11 +582,11 @@ mod tests {
     }
 
     #[test]
-    fn test_add_user_multiple_channel() {
+    fn test_add_user_multiple_section() {
         let mut users_widget = UsersWidget::new();
         let user_name = "farine";
-        users_widget.add_user_with_channel("#spam", user_name);
-        users_widget.add_user_with_channel("#spam_2", user_name);
+        users_widget.add_user_with_section("#spam", user_name);
+        users_widget.add_user_with_section("#spam_2", user_name);
         assert_eq!(users_widget.list_sections.len(), 2);
         assert_eq!(users_widget.list_users.len(), 1);
         assert_eq!(
@@ -598,16 +598,16 @@ mod tests {
             1
         );
 
-        users_widget.add_user_with_channel("#spam_2", "@farine");
+        users_widget.add_user_with_section("#spam_2", "@farine");
         assert_eq!(users_widget.list_users.len(), 1);
     }
 
     #[test]
-    fn test_replace_user_multiple_channel() {
+    fn test_replace_user_multiple_section() {
         let mut users_widget = UsersWidget::new();
         let user_name = "farine";
-        users_widget.add_user_with_channel("#spam", user_name);
-        users_widget.add_user_with_channel("#spam_2", user_name);
+        users_widget.add_user_with_section("#spam", user_name);
+        users_widget.add_user_with_section("#spam_2", user_name);
 
         users_widget.replace_user("farine", "chuck");
         assert_eq!(
@@ -625,10 +625,10 @@ mod tests {
     }
 
     #[test]
-    fn test_add_gloabl_channel() {
+    fn test_add_gloabl_section() {
         let mut users_widget = UsersWidget::new();
         let user_name = "IRC-Server";
-        users_widget.add_user_with_channel("", user_name);
+        users_widget.add_user_with_section("", user_name);
         assert_eq!(users_widget.list_sections.len(), 1);
         assert_eq!(
             users_widget.list_sections.get(0).unwrap().order_user.len(),
@@ -639,10 +639,10 @@ mod tests {
     }
 
     #[test]
-    fn test_add_gloabl_user_channel() {
+    fn test_add_gloabl_user_section() {
         let mut users_widget = UsersWidget::new();
         let user_name = "user1";
-        users_widget.add_user_with_channel("IRC-Server", user_name);
+        users_widget.add_user_with_section("IRC-Server", user_name);
         assert_eq!(users_widget.list_sections.len(), 1);
         assert_eq!(
             users_widget.list_sections.get(0).unwrap().order_user.len(),
@@ -651,7 +651,7 @@ mod tests {
 
         assert_eq!(users_widget.list_users.len(), 1);
 
-        users_widget.add_user_global_channel("TEST"); //When a user is added in the global it cannot be removed
+        users_widget.add_user_global_section("TEST"); //When a user is added in the global it cannot be removed
         assert_eq!(users_widget.list_users.len(), 2);
 
         users_widget.remove_all_users_section(users_widget.get_section_id("TEST"));
@@ -659,17 +659,17 @@ mod tests {
     }
 
     #[test]
-    fn test_add_channel_uppercase() {
+    fn test_add_section_uppercase() {
         let mut users_widget = UsersWidget::new();
         let section = "#rust";
-        users_widget.add_channel(section.to_string());
-        users_widget.add_channel(section.to_uppercase());
+        users_widget.add_section(section.to_string());
+        users_widget.add_section(section.to_uppercase());
         assert_eq!(users_widget.list_sections.len(), 1);
-        assert_eq!(users_widget.list_sections[0].channel_info.name, "#rust");
+        assert_eq!(users_widget.list_sections[0].section_info.name, "#rust");
 
         let section = "#rUst2";
-        users_widget.add_channel(section.to_string());
-        users_widget.add_channel(section.to_uppercase());
+        users_widget.add_section(section.to_string());
+        users_widget.add_section(section.to_uppercase());
         assert_eq!(users_widget.list_sections.len(), 2);
     }
 
@@ -677,10 +677,10 @@ mod tests {
     fn test_number_sections() {
         let mut users_widget = UsersWidget::new();
         let user_name = "IRC-Server";
-        users_widget.add_user_with_channel(user_name, user_name);
+        users_widget.add_user_with_section(user_name, user_name);
         assert_eq!(users_widget.nb_sections(), 1);
 
-        users_widget.add_user_with_channel("#new-chan", user_name);
+        users_widget.add_user_with_section("#new-chan", user_name);
         assert_eq!(users_widget.nb_sections(), 2);
 
         assert_eq!(users_widget.nb_items(0), 2);
