@@ -20,7 +20,9 @@ impl Default for InputCompletion {
 }
 
 impl InputCompletion {
-    pub fn add_users(&mut self, channel: String, users: &Vec<String>) {
+    pub fn add_users(&mut self, channel: &str, users: &Vec<String>) {
+        let channel = Self::sanitize_key(channel);
+
         let channel = self.channels.entry(channel).or_insert(Trie::new());
         for user in users {
             channel.add_word(InputCompletion::sanitize_name(user));
@@ -31,8 +33,14 @@ impl InputCompletion {
         user.strip_prefix('@').unwrap_or(user)
     }
 
+    fn sanitize_key(key: &str) -> String {
+        key.to_ascii_lowercase()
+    }
+
     pub fn disable_users(&mut self, channel: &str, users: &Vec<String>) {
-        if let Some(channel) = self.channels.get_mut(channel) {
+        let channel = Self::sanitize_key(channel);
+
+        if let Some(channel) = self.channels.get_mut(&channel) {
             for user in users {
                 channel.disable_word(InputCompletion::sanitize_name(user));
             }
@@ -47,17 +55,30 @@ impl InputCompletion {
     }
 
     pub fn remove_channel(&mut self, channel: &str) {
-        self.channels.remove(channel);
+        let channel = Self::sanitize_key(channel);
+
+        self.channels.remove(&channel);
     }
 
     pub fn disable_user(&mut self, channel: &str, user: &str) {
-        if let Some(channel) = self.channels.get_mut(channel) {
+        let channel = Self::sanitize_key(channel);
+
+        if let Some(channel) = self.channels.get_mut(&channel) {
             channel.disable_word(user);
         }
     }
 
+    pub fn add_user(&mut self, channel: &str, user: &str) {
+        let channel = Self::sanitize_key(channel);
+        if let Some(channel) = self.channels.get_mut(&channel) {
+            channel.add_word(user);
+        }
+    }
+
     pub fn list(&self, channel: &str, start_word: &str) -> Option<Vec<String>> {
-        if let Some(channel) = self.channels.get(channel) {
+        let channel = Self::sanitize_key(channel);
+
+        if let Some(channel) = self.channels.get(&channel) {
             channel.list(start_word)
         } else {
             None

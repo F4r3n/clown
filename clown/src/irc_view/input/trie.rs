@@ -34,22 +34,6 @@ impl TrieNode {
         }
     }
 
-    pub fn find_node(&self, c: char) -> Option<&TrieNode> {
-        if let Ok(index) = self.nodes.binary_search_by_key(&c, |v| v.character) {
-            self.nodes.get(index)
-        } else {
-            None
-        }
-    }
-
-    pub fn find_node_mut(&mut self, c: char) -> Option<&mut TrieNode> {
-        if let Ok(index) = self.nodes.binary_search_by_key(&c, |v| v.character) {
-            self.nodes.get_mut(index)
-        } else {
-            None
-        }
-    }
-
     pub fn find_node_index(&self, c: char) -> Option<usize> {
         self.nodes.binary_search_by_key(&c, |v| v.character).ok()
     }
