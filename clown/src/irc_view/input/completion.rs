@@ -83,8 +83,6 @@ impl Completion {
         self.current_index = Some(0);
         self.completion_start = Some(start);
         self.current_completion = self.input_completion.list(&self.current_channel, slice);
-        tracing::debug!("self.current_channel {:?}", &self.current_channel);
-        tracing::debug!("self.current_completion {:?}", &self.current_completion);
     }
 
     pub fn get_next_completion(&mut self) -> Option<(usize, String)> {

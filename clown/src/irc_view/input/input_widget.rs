@@ -1,4 +1,4 @@
-use super::completion::{Completion, InputCompletion};
+use super::completion::Completion;
 use super::history::InputHistory;
 use super::spell_checker::SpellChecker;
 use crate::message_event::MessageEvent;
@@ -80,15 +80,16 @@ impl crate::component::EventHandler for CInput {
                 None
             }
             MessageEvent::UpdateUsers(channel, users) => {
-                tracing::debug!("Update users {} {:?}", &channel, &users);
                 self.completion
                     .input_completion
                     .add_users(channel.to_string(), users);
                 None
             }
+            MessageEvent::ReplaceUser(old, new) => {
+                self.completion.input_completion.replace_user(old, new);
+                None
+            }
             MessageEvent::SelectChannel(channel) => {
-                tracing::debug!("Select channel {:?}", &channel);
-
                 self.completion.current_channel = channel.to_string();
                 None
             }
@@ -144,14 +145,11 @@ impl crate::component::EventHandler for CInput {
                         KeyCode::Tab => {
                             self.set_completion();
                             if let Some((index, value)) = self.completion.get_next_completion() {
-                                tracing::debug!("KeyCode::Tab {} '{}'", index, &value);
-
                                 self.input.insert_completion(index, value);
                             }
                             None
                         }
                         _ => {
-                            tracing::debug!("RESET");
                             self.completion.reset();
                             self.input.handle_key_events(&key_event);
                             None
@@ -173,13 +171,9 @@ impl crate::component::EventHandler for CInput {
 
 impl CInput {
     fn set_completion(&mut self) {
-        tracing::debug!("Set completion... ");
-
         if let Some(start) = self.input.find_previous_break(false).or(Some(0))
             && let Some(slice) = self.input.get_slice_till_cursor(start)
         {
-            tracing::debug!("Set completion {} '{}'", start, slice);
-
             self.completion.set_completion(start, slice);
         }
     }
@@ -365,6 +359,9 @@ impl InputWidget {
             .map(|v| v.0.len_utf8())
             .sum();
 
+        if start + count < self.cursor_position {
+            self.value.drain(start + count..self.cursor_position);
+        }
         self.value.insert_str(start + count, &word[count..]);
         self.cursor_position = self.value[..start + word.len()].width();
     }
@@ -532,6 +529,12 @@ mod tests {
         w.insert_completion(6, "myyo".to_string());
         assert_eq!(w.value, "Hello myyo na".to_string());
         assert_eq!(w.cursor_position, 10);
+
+        w.value = "Hello myyo na".to_string();
+        w.cursor_position = 10;
+        w.insert_completion(6, "my".to_string());
+        assert_eq!(w.value, "Hello my na".to_string());
+        assert_eq!(w.cursor_position, 8);
     }
 
     #[test]

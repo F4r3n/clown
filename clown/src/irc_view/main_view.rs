@@ -280,7 +280,6 @@ impl MainView<'_> {
                                 MessageContent::new_info(format!("{} has joined", source)),
                             ));
                         } else {
-                            tracing::debug!("Event Joined {}", channel);
                             messages.push_message(MessageEvent::SelectChannel(channel));
                             messages.push_message(MessageEvent::AddMessageView(
                                 None,

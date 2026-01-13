@@ -392,12 +392,10 @@ impl DiscussWidget {
 
     fn scroll_down(&mut self) {
         //let max_scroll = self.nb_lines_to_fit();
-        //tracing::debug!("total lines {}", self.get_total_lines());
 
         self.scroll_offset = self.scroll_offset.saturating_sub(1);
 
         self.follow_last = self.scroll_offset == 0;
-        //tracing::debug!("Scroll offset {}", self.scroll_offset);
 
         self.redraw = true;
     }
