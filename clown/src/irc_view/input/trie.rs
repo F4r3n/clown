@@ -204,6 +204,11 @@ mod tests {
         let result = vec!["caravane".to_string(), "cat".to_string()];
 
         assert_eq!(trie.list("c"), Some(result));
+
+        trie.disable_word("caravane");
+        let result = vec!["cat".to_string()];
+
+        assert_eq!(trie.list("c"), Some(result));
     }
 
     #[test]

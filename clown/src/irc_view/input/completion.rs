@@ -39,6 +39,13 @@ impl InputCompletion {
         }
     }
 
+    pub fn replace_user(&mut self, old: &str, new: &str) {
+        for (_, trie) in self.channels.iter_mut() {
+            trie.disable_word(old);
+            trie.add_word(new);
+        }
+    }
+
     pub fn remove_channel(&mut self, channel: &str) {
         self.channels.remove(channel);
     }

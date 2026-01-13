@@ -175,7 +175,7 @@ impl CInput {
     fn set_completion(&mut self) {
         tracing::debug!("Set completion... ");
 
-        if let Some(start) = self.input.find_previous_break().or(Some(0))
+        if let Some(start) = self.input.find_previous_break(false).or(Some(0))
             && let Some(slice) = self.input.get_slice_till_cursor(start)
         {
             tracing::debug!("Set completion {} '{}'", start, slice);
@@ -361,8 +361,10 @@ impl InputWidget {
         let count = self.value[start..]
             .chars()
             .zip(word.chars())
-            .enumerate()
-            .count();
+            .take_while(|(a, b)| a == b)
+            .map(|v| v.0.len_utf8())
+            .sum();
+
         self.value.insert_str(start + count, &word[count..]);
         self.cursor_position = self.value[..start + word.len()].width();
     }
@@ -371,28 +373,31 @@ impl InputWidget {
         self.value.get(start..self.cursor_position)
     }
 
-    fn find_previous_break(&self) -> Option<usize> {
+    fn find_previous_break(&self, skip_spaces: bool) -> Option<usize> {
         if self.cursor_position == 0 || self.cursor_position > self.value.len() {
             return None;
         }
         let mut cursor_pos = self.cursor_position;
-        for c in self.value[..self.cursor_position].chars().rev() {
-            if c.is_whitespace() {
-                cursor_pos = cursor_pos.saturating_sub(1);
-            } else {
-                break;
+        if skip_spaces {
+            for c in self.value[..self.cursor_position].chars().rev() {
+                if c.is_whitespace() {
+                    cursor_pos = cursor_pos.saturating_sub(1);
+                } else {
+                    break;
+                }
             }
         }
+
         self.value[..cursor_pos]
             .char_indices()
             .rfind(|&(_, ch)| ch.is_whitespace())
-            .map(|v| v.0)
+            .map(|v| v.0.saturating_add(1))
     }
 
     fn delete_previous_word(&mut self) {
-        if let Some(cursor_pos) = self.find_previous_break() {
-            self.value.drain((cursor_pos + 1)..self.cursor_position);
-            self.cursor_position = cursor_pos + 1;
+        if let Some(cursor_pos) = self.find_previous_break(true) {
+            self.value.drain((cursor_pos)..self.cursor_position);
+            self.cursor_position = cursor_pos;
         } else {
             self.value.drain(0..self.cursor_position);
             self.cursor_position = 0;
@@ -521,6 +526,38 @@ mod tests {
         w.insert_completion(9, "name".to_string());
         assert_eq!(w.value, "Hello my name".to_string());
         assert_eq!(w.cursor_position, 13);
+
+        w.value = "Hello my na".to_string();
+        w.cursor_position = 6;
+        w.insert_completion(6, "myyo".to_string());
+        assert_eq!(w.value, "Hello myyo na".to_string());
+        assert_eq!(w.cursor_position, 10);
+    }
+
+    #[test]
+    fn test_find_previous_break() {
+        let mut w = InputWidget {
+            value: "Hello my na".to_string(),
+            cursor_position: 10,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            w.find_previous_break(true).and_then(|v| w.value.get(..v)),
+            Some("Hello my ")
+        );
+
+        w.value = "Hello my na ".to_string();
+        w.cursor_position = 12;
+        assert_eq!(
+            w.find_previous_break(true).and_then(|v| w.value.get(..v)),
+            Some("Hello my ")
+        );
+
+        assert_eq!(
+            w.find_previous_break(false).and_then(|v| w.value.get(..v)),
+            Some("Hello my na ")
+        );
     }
 
     #[test]
