@@ -13,7 +13,7 @@ struct User {
     name: String,
     need_hightlight: bool,
     color: ratatui::style::Color,
-    connected_channels: BitVec,
+    connected_sections: BitVec,
 }
 const NB_CHANNELS: usize = 32;
 
@@ -23,7 +23,7 @@ impl User {
             need_hightlight: false,
             color: nickname_color(&name),
             name,
-            connected_channels: BitVec::from_elem(NB_CHANNELS, false),
+            connected_sections: BitVec::from_elem(NB_CHANNELS, false),
         }
     }
 
@@ -32,14 +32,18 @@ impl User {
         self.color = nickname_color(&self.name);
     }
 
-    pub fn join_channel(&mut self, id: usize) {
-        if let Some(mut channel) = self.connected_channels.get_mut(id) {
+    pub fn join_section(&mut self, id: usize) {
+        if let Some(mut channel) = self.connected_sections.get_mut(id) {
             *channel = true;
         }
     }
 
-    pub fn quit_channel(&mut self, id: usize) {
-        if let Some(mut channel) = self.connected_channels.get_mut(id) {
+    pub fn has_joined_section(&mut self, id: usize) -> bool {
+        self.connected_sections.get(id).unwrap_or(false)
+    }
+
+    pub fn quit_section(&mut self, id: usize) {
+        if let Some(mut channel) = self.connected_sections.get_mut(id) {
             *channel = false;
         }
     }
@@ -47,11 +51,11 @@ impl User {
     pub fn quit_all_except_global(&mut self) {
         let mut mask = BitVec::from_elem(NB_CHANNELS, false);
         mask.set(0, true);
-        self.connected_channels.and(&mask);
+        self.connected_sections.and(&mask);
     }
 
-    pub fn has_joined_any_channel(&mut self) -> bool {
-        self.connected_channels.any()
+    pub fn has_joined_any_section(&mut self) -> bool {
+        self.connected_sections.any()
     }
 }
 
@@ -203,6 +207,18 @@ impl UsersWidget {
         if let Some(mut v) = v {
             let n = new;
             v.set_name(n.to_string());
+
+            //not really performant, but not expecting a lot of changes
+            for section in self.list_sections.iter_mut() {
+                if v.has_joined_section(section.channel_info.id) {
+                    for user in section.order_user.iter_mut() {
+                        if user.eq_ignore_ascii_case(old) {
+                            *user = new.to_string();
+                            break;
+                        }
+                    }
+                }
+            }
             self.list_users.insert(n.to_string(), v);
         }
     }
@@ -213,7 +229,7 @@ impl UsersWidget {
         {
             for user_name in channel.order_user.iter() {
                 if let Some(user) = self.list_users.get_mut(user_name) {
-                    user.quit_channel(id);
+                    user.quit_section(id);
                 }
             }
             channel.order_user.clear();
@@ -223,7 +239,7 @@ impl UsersWidget {
     fn remove_user_from_all(&mut self, user: &str) {
         if let Some(u) = self.list_users.get_mut(user) {
             u.quit_all_except_global();
-            if !u.has_joined_any_channel() {
+            if !u.has_joined_any_section() {
                 self.list_users.remove(user);
             }
         }
@@ -237,7 +253,7 @@ impl UsersWidget {
                 channel.remove_user(user);
             }
 
-            u.quit_channel(channel_id);
+            u.quit_section(channel_id);
         }
     }
 
@@ -291,10 +307,10 @@ impl UsersWidget {
             channel.set_user_position(&user);
         }
         if let Some(user) = self.list_users.get_mut(&user) {
-            user.join_channel(channel_id);
+            user.join_section(channel_id);
         } else {
             let mut new_user = User::new(user.to_string());
-            new_user.join_channel(channel_id);
+            new_user.join_section(channel_id);
             self.list_users.insert(user, new_user);
         }
     }
@@ -584,6 +600,28 @@ mod tests {
 
         users_widget.add_user_with_channel("#spam_2", "@farine");
         assert_eq!(users_widget.list_users.len(), 1);
+    }
+
+    #[test]
+    fn test_replace_user_multiple_channel() {
+        let mut users_widget = UsersWidget::new();
+        let user_name = "farine";
+        users_widget.add_user_with_channel("#spam", user_name);
+        users_widget.add_user_with_channel("#spam_2", user_name);
+
+        users_widget.replace_user("farine", "chuck");
+        assert_eq!(
+            users_widget
+                .list_users
+                .get("chuck")
+                .map(|v| v.name.to_string()),
+            Some("chuck".to_string())
+        );
+
+        assert_eq!(
+            users_widget.list_sections[0].order_user.first(),
+            Some(&"chuck".to_string())
+        );
     }
 
     #[test]
