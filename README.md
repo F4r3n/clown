@@ -6,10 +6,10 @@ An IRC client written in Rust, with the goal to be memory and cpu light.
 
 * run in Terminal
 * multiple channel
+* completion
 * preview when hovering message
 * scroll with mouse/keyboard
 * auto reconnect
-* Can connect to only one channel (for now)
 
 ## Build
 
