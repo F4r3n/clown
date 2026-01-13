@@ -141,10 +141,8 @@ mod test {
     #[test]
     fn test_insert() {
         let mut comp = Completion::default();
-        comp.input_completion.add_users(
-            "#test".to_string(),
-            &vec!["tata".to_string(), "titi".to_string()],
-        );
+        comp.input_completion
+            .add_users("#test", &vec!["tata".to_string(), "titi".to_string()]);
         comp.current_channel = "#test".to_string();
         comp.set_completion(0, "t");
         assert_eq!(comp.get_next_completion(), Some((0, "titi".to_string())));
