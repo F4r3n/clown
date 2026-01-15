@@ -371,7 +371,7 @@ impl InputWidget {
             self.value.drain(start + count..self.cursor_position);
         }
         self.value.insert_str(start + count, &word[count..]);
-        self.cursor_position = self.value[..start + word.len()].width();
+        self.cursor_position = self.value[..start + count + word[count..].len()].len();
     }
 
     fn get_slice_till_cursor(&self, start: usize) -> Option<&str> {
@@ -543,6 +543,13 @@ mod tests {
         w.insert_completion(6, "my".to_string());
         assert_eq!(w.value, "Hello my na".to_string());
         assert_eq!(w.cursor_position, 8);
+
+        w.value = "à n".to_string();
+        let start = w.value.len();
+        w.cursor_position = start;
+        w.insert_completion(start - 1, "name".to_string());
+        assert_eq!(w.value, "à name".to_string());
+        assert_eq!(w.cursor_position, start + 3);
     }
 
     #[test]
