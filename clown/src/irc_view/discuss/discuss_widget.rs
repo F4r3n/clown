@@ -331,7 +331,7 @@ impl DiscussWidget {
 
         self.messages.add_message(&channel, in_message);
 
-        if self.follow_last && channel.eq(&self.current_channel) {
+        if self.follow_last && channel.eq_ignore_ascii_case(&self.current_channel) {
             // Show last lines that fit the view
             self.scroll_offset = 0;
         }

@@ -212,12 +212,12 @@ impl MainView<'_> {
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {
-                        let from = if target.eq(&model.get_nickname()) {
+                        let from = if target.eq_ignore_ascii_case(&model.get_nickname()) {
                             source.clone().unwrap_or_default()
                         } else {
                             target
                         };
-                        if !from.eq(&model.current_channel) {
+                        if !from.eq_ignore_ascii_case(&model.current_channel) {
                             messages.push_message(MessageEvent::HighlightUser(from.clone()));
                         }
 
@@ -274,7 +274,7 @@ impl MainView<'_> {
                             Some(source.clone()),
                         ));
 
-                        if !source.eq(model.get_nickname()) {
+                        if !source.eq_ignore_ascii_case(model.get_nickname()) {
                             messages.push_message(MessageEvent::AddMessageView(
                                 None,
                                 MessageContent::new_info(format!("{} has joined", source)),

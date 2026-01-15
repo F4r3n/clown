@@ -113,14 +113,22 @@ impl Section {
     }
 
     fn set_user_position(&mut self, user: &str) {
-        if let Some(id) = self.order_user.iter().position(|v| v.eq(&user)) {
+        if let Some(id) = self
+            .order_user
+            .iter()
+            .position(|v| v.eq_ignore_ascii_case(&user))
+        {
             self.order_user.remove(id);
         }
         self.order_user.push(user.to_string());
     }
 
     fn remove_user(&mut self, user: &str) {
-        if let Some(id) = self.order_user.iter().position(|v| v.eq(&user)) {
+        if let Some(id) = self
+            .order_user
+            .iter()
+            .position(|v| v.eq_ignore_ascii_case(&user))
+        {
             self.order_user.remove(id);
         }
     }
