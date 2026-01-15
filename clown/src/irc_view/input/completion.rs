@@ -37,16 +37,6 @@ impl InputCompletion {
         key.to_ascii_lowercase()
     }
 
-    pub fn disable_users(&mut self, channel: &str, users: &Vec<String>) {
-        let channel = Self::sanitize_key(channel);
-
-        if let Some(channel) = self.channels.get_mut(&channel) {
-            for user in users {
-                channel.disable_word(InputCompletion::sanitize_name(user));
-            }
-        }
-    }
-
     pub fn replace_user(&mut self, old: &str, new: &str) {
         for (_, trie) in self.channels.iter_mut() {
             trie.disable_word(old);

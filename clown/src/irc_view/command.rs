@@ -11,18 +11,18 @@ use strum::{EnumIter, EnumMessage, IntoEnumIterator, IntoStaticStr};
 #[derive(IntoStaticStr, Debug, EnumIter, EnumMessage)]
 pub enum ClientCommand {
     #[strum(
-        message = "Connect",
+        message = "connect",
         detailed_message = "To connect to the server, if already connected does nothing"
     )]
     Connect,
-    #[strum(message = "Quit", detailed_message = "To quit the server and the app")]
+    #[strum(message = "quit", detailed_message = "To quit the server and the app")]
     Quit(Option<String>),
-    #[strum(message = "Nick", detailed_message = "To change your nickname")]
+    #[strum(message = "nick", detailed_message = "To change your nickname")]
     Nick(String),
-    #[strum(message = "Help", detailed_message = "To display the list of commands")]
+    #[strum(message = "help", detailed_message = "To display the list of commands")]
     Help,
     #[strum(
-        message = "Spell",
+        message = "spell",
         detailed_message = "To prepare the spellchecker for a specific language: fr, en"
     )]
     Spell(Option<String>),
