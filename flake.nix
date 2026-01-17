@@ -27,7 +27,8 @@
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
         clown = craneLib.buildPackage (commonArgs // {
-          pname = "clown";
+	  CARGO_PROFILE = "dist";
+	  inherit (crate) pname version;
           cargoLock = ./Cargo.lock;
           cargoExtraArgs = "-p clown";
         });
