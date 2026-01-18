@@ -5,6 +5,7 @@ use crate::irc_view::command;
 use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
+use crate::irc_view::command::ClientCommand;
 use crate::irc_view::discuss::discuss_widget;
 use crate::irc_view::input::input_widget;
 use crate::irc_view::input::input_widget::CInput;
@@ -25,6 +26,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
 };
+use strum::{EnumMessage, IntoEnumIterator};
 
 use tracing::debug;
 use tracing::error;
@@ -41,7 +43,12 @@ pub struct MainView<'a> {
 
 impl MainView<'_> {
     pub fn new(current_channel: &str) -> Self {
-        let input = Component::new("input", input_widget::CInput::default());
+        let mut cinput = input_widget::CInput::default();
+        cinput.add_completion_command_list(
+            ClientCommand::iter().map(|v| v.get_message().unwrap_or("")),
+        );
+
+        let input = Component::new("input", cinput);
         let list_users_view: Component<'_, users_widget::UsersWidget> =
             Component::new("users_view", users_widget::UsersWidget::new());
         let topic_view: Component<'_, topic_widget::TopicWidget> =

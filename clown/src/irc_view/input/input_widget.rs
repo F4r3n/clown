@@ -265,6 +265,12 @@ impl CInput {
             None
         }
     }
+
+    pub fn add_completion_command_list(&mut self, values: impl Iterator<Item = &'static str>) {
+        for c in values {
+            self.completion.input_completion.add_command(c);
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -526,6 +532,7 @@ mod tests {
     #[test]
     fn test_insert_completion() {
         let mut w = InputWidget::default();
+
         w.value = "Hello my na".to_string();
         w.cursor_position = 10;
 

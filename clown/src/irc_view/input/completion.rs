@@ -20,6 +20,10 @@ impl Default for InputCompletion {
 }
 
 impl InputCompletion {
+    pub fn add_command(&mut self, item: &str) {
+        self.commands.add_word(item);
+    }
+
     pub fn add_users(&mut self, channel: &str, users: &Vec<String>) {
         let channel = Self::sanitize_key(channel);
 
@@ -74,6 +78,10 @@ impl InputCompletion {
             None
         }
     }
+
+    pub fn list_command(&self, start_word: &str) -> Option<Vec<String>> {
+        self.commands.list(start_word)
+    }
 }
 
 #[derive(Default)]
@@ -92,8 +100,13 @@ impl Completion {
         }
 
         self.current_index = Some(0);
-        self.completion_start = Some(start);
-        self.current_completion = self.input_completion.list(&self.current_channel, slice);
+        if let Some(end) = slice.strip_prefix("/") {
+            self.completion_start = Some(start.saturating_add(1));
+            self.current_completion = self.input_completion.list_command(end);
+        } else {
+            self.completion_start = Some(start);
+            self.current_completion = self.input_completion.list(&self.current_channel, slice);
+        }
     }
 
     pub fn get_next_completion(&mut self) -> Option<(usize, String)> {
@@ -131,6 +144,9 @@ mod test {
     #[test]
     fn test_insert() {
         let mut comp = Completion::default();
+        comp.input_completion.add_command("quit");
+        comp.input_completion.add_command("help");
+
         comp.input_completion
             .add_users("#test", &vec!["tata".to_string(), "titi".to_string()]);
         comp.current_channel = "#test".to_string();
@@ -143,5 +159,14 @@ mod test {
         comp.reset();
         comp.set_completion(0, "t");
         assert_eq!(comp.get_next_completion(), None);
+
+        comp.reset();
+        comp.set_completion(0, "/");
+        assert_eq!(comp.get_next_completion(), Some((1, "quit".to_string())));
+        assert_eq!(comp.get_next_completion(), Some((1, "help".to_string())));
+
+        comp.reset();
+        comp.set_completion(0, "/h");
+        assert_eq!(comp.get_next_completion(), Some((1, "help".to_string())));
     }
 }
