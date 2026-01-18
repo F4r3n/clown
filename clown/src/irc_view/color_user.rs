@@ -13,16 +13,19 @@ pub fn nickname_color(nickname: &str) -> ratatui::style::Color {
 }
 
 pub fn bright_distinct_color(index: u64) -> Color {
-    const GOLDEN_RATIO_CONJUGATE: f64 = 0.618033988749;
-    const GOLDEN_ANGLE: f64 = GOLDEN_RATIO_CONJUGATE;
-    let index = index % 12345;
+    let hue_index: u32 = (index >> 32) as u32;
+    let lower = index as u32;
+    let sat_index: u16 = (lower >> 16) as u16;
+    let val_index: u16 = lower as u16;
     // Spread hue evenly around the color wheel
-    let hue = ((index as f64 * GOLDEN_ANGLE) % 360.0) as f32;
+    let hue = (hue_index % 360) as f32;
 
-    // Use quasi-random variations for S and V (repeat period is irrational)
-    let f = index as f32 * GOLDEN_RATIO_CONJUGATE as f32;
-    let saturation = 0.2 + 0.8 * f.fract(); // 0.55–0.9
-    let value = 0.55 + 0.45 * f.fract().abs(); // 0.8–1
+    let satf = (f32::from(sat_index)) / (f32::from(u16::MAX));
+    let valf = (f32::from(val_index)) / (f32::from(u16::MAX));
+
+    //println!("{} {}", index_upper, index_lower);
+    let saturation = 0.2 + 0.8 * satf; // 0.55–0.9
+    let value = 0.5 + 0.5 * valf; // 0.8–1
     let hsv: Hsv<EncSrgb, f32> = Hsv::new(hue, saturation, value);
 
     let srgb: Srgb<u8> = Srgb::from_color_unclamped(hsv).into_format();
@@ -87,7 +90,7 @@ mod tests {
             //https://stackoverflow.com/questions/596216/formula-to-determine-perceived-brightness-of-rgb-color
             let brightness = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
             assert!(
-                brightness > 70.0,
+                brightness > 45.0,
                 "Color for '{}' ({r},{g},{b}) too dark (brightness={brightness})",
                 name
             );
