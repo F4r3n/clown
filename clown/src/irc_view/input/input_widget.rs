@@ -80,7 +80,7 @@ impl crate::component::EventHandler for CInput {
                 None
             }
             MessageEvent::UpdateUsers(channel, users) => {
-                self.completion.input_completion.add_users(&channel, users);
+                self.completion.input_completion.add_users(channel, users);
                 None
             }
             MessageEvent::ReplaceUser(old, new) => {
@@ -151,6 +151,7 @@ impl crate::component::EventHandler for CInput {
                             None
                         }
                         KeyCode::Tab => {
+                            tracing::debug!("TAB");
                             self.set_completion();
                             if let Some((index, value)) = self.completion.get_next_completion() {
                                 self.input.insert_completion(index, value);
