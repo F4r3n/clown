@@ -466,7 +466,6 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::ReplaceUser(old, new) => {
-                tracing::debug!("Replace user {} {}", old, new);
                 self.replace_user(old, new);
                 self.need_redraw = true;
 

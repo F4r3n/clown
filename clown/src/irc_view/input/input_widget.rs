@@ -92,7 +92,6 @@ impl crate::component::EventHandler for CInput {
                 None
             }
             MessageEvent::Join(channel, user) => {
-                tracing::debug!("JOIN {} {:?}", channel, user);
                 if let Some(user) = user {
                     self.completion.input_completion.add_user(channel, user);
                 }
@@ -100,8 +99,6 @@ impl crate::component::EventHandler for CInput {
                 None
             }
             MessageEvent::Part(channel, user, main) => {
-                tracing::debug!("Part {} {}", channel, user);
-
                 if *main {
                     self.completion.input_completion.remove_channel(channel);
                 } else {
@@ -151,7 +148,6 @@ impl crate::component::EventHandler for CInput {
                             None
                         }
                         KeyCode::Tab => {
-                            tracing::debug!("TAB");
                             self.set_completion();
                             if let Some((index, value)) = self.completion.get_next_completion() {
                                 self.input.insert_completion(index, value);

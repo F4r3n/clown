@@ -91,8 +91,8 @@ impl MainView<'_> {
         ]
     }
 
-    fn update_input(&mut self, model: &mut Model, content: String) -> Option<MessageEvent> {
-        if let Some(parsed_message) = command::parse_command(&content) {
+    fn update_input(&mut self, model: &mut Model, content: &str) -> Option<MessageEvent> {
+        if let Some(parsed_message) = command::parse_command(content) {
             match parsed_message {
                 command::ClientCommand::Connect => Some(MessageEvent::Connect),
                 command::ClientCommand::Quit(message) => {
@@ -156,12 +156,12 @@ impl MainView<'_> {
             let nickname = model.get_nickname().to_string();
             model.send_command(clown_core::command::Command::PrivMsg(
                 model.current_channel.to_string(),
-                content.clone(),
+                content.to_string(),
             ));
             self.messages_display
                 .handle_actions(&MessageEvent::AddMessageView(
                     None,
-                    MessageContent::new(Some(nickname), content),
+                    MessageContent::new(Some(nickname), content.to_string()),
                 ))
         }
     }
@@ -219,7 +219,7 @@ impl MainView<'_> {
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {
-                        let from = if target.eq_ignore_ascii_case(&model.get_nickname()) {
+                        let from = if target.eq_ignore_ascii_case(model.get_nickname()) {
                             source.clone().unwrap_or_default()
                         } else {
                             target
@@ -446,8 +446,14 @@ impl widget_view::WidgetView for MainView<'_> {
     fn update(&mut self, model: &mut Model, msg: MessageEvent, messages: &mut MessageQueue) {
         match msg {
             MessageEvent::MessageInput(content) => {
-                if let Some(v) = self.update_input(model, content) {
-                    messages.push_message(v)
+                //crossterm sends with only \r, lines() wont work
+                for m in content.split(['\r', '\n']) {
+                    if m.is_empty() {
+                        continue;
+                    }
+                    if let Some(v) = self.update_input(model, m) {
+                        messages.push_message(v)
+                    }
                 }
             }
             MessageEvent::OpenWeb(url) => {
