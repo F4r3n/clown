@@ -92,7 +92,7 @@ fn server_opt(input: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
 }
 
 fn user(buf: &[u8]) -> IResult<&[u8], &[u8]> {
-    let is_valid_user_char = |c: u8| c.is_ascii_alphanumeric();
+    let is_valid_user_char = |c: u8| !c.is_ascii_whitespace() && c != b'@';
 
     let (buf, user) = take_while1(is_valid_user_char)(buf)?;
     Ok((buf, user))
@@ -188,13 +188,13 @@ mod tests {
 
     #[test]
     fn test_parse_source_nick_user_host() {
-        let input = b":nick!user@host ";
+        let input = b":nick!user_debug@host ";
         let (rest, source) = parse_source(input);
         assert_eq!(
             source,
             Some(Source {
                 source: Some(SourceKind::Nick(&b"nick"[..])),
-                user: Some(&b"user"[..]),
+                user: Some(&b"user_debug"[..]),
                 host: Some(&b"host"[..]),
             })
         );

@@ -116,7 +116,7 @@ impl Section {
         if let Some(id) = self
             .order_user
             .iter()
-            .position(|v| v.eq_ignore_ascii_case(&user))
+            .position(|v| v.eq_ignore_ascii_case(user))
         {
             self.order_user.remove(id);
         }
@@ -127,7 +127,7 @@ impl Section {
         if let Some(id) = self
             .order_user
             .iter()
-            .position(|v| v.eq_ignore_ascii_case(&user))
+            .position(|v| v.eq_ignore_ascii_case(user))
         {
             self.order_user.remove(id);
         }
@@ -466,6 +466,7 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::ReplaceUser(old, new) => {
+                tracing::debug!("Replace user {} {}", old, new);
                 self.replace_user(old, new);
                 self.need_redraw = true;
 
