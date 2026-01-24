@@ -4,11 +4,26 @@ use crate::message_irc::message_content::MessageContent;
 pub enum MessageEvent {
     MessageInput(String),
     AddMessageView(Option<String>, MessageContent),
+    PrivMsg(
+        Option<String>, /*source */
+        String,         /*target*/
+        String,         /*content*/
+    ),
+    ActionMsg(
+        String, /*source */
+        String, /*target*/
+        String, /*content*/
+    ),
+
     HighlightUser(String),
     SelectChannel(String),
     UpdateUsers(String /*channel*/, Vec<String> /*list users */),
     ReplaceUser(String /*old */, String /*new */),
-    Join(String /*channel*/, Option<String> /*user */),
+    Join(
+        String,         /*channel*/
+        Option<String>, /*user */
+        bool,           /*main user */
+    ),
     SetTopic(String /*channel */, String /*topic */),
     #[cfg(feature = "website-preview")]
     HoverURL(String /* URL */),

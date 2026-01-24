@@ -81,6 +81,7 @@ pub struct DiscussWidget {
     content_width: usize,
     messages: ChannelMessages,
     current_channel: String,
+    current_nickname: String,
 
     last_hovered: Option<Hovered>,
     color_map: AHashMap<String, ratatui::style::Color>,
@@ -88,9 +89,10 @@ pub struct DiscussWidget {
 }
 
 impl DiscussWidget {
-    pub fn new(current_channel: &str) -> Self {
+    pub fn new(current_channel: &str, current_nickname: String) -> Self {
         Self {
             current_channel: current_channel.to_lowercase(),
+            current_nickname,
             messages: ChannelMessages::default(),
             scroll_offset: 0,
             max_visible_height: 10,
@@ -512,6 +514,57 @@ impl crate::component::EventHandler for DiscussWidget {
 
                 None
             }
+            MessageEvent::PrivMsg(source, target, content) => {
+                if source
+                    .clone()
+                    .unwrap_or("".to_string())
+                    .eq_ignore_ascii_case(&self.current_nickname)
+                    && !target.eq_ignore_ascii_case(&self.current_channel)
+                {
+                    self.add_line(
+                        &self.current_channel.clone(),
+                        MessageContent::new_privmsg(target.clone(), content.clone()),
+                    );
+                }
+                self.add_line(
+                    target,
+                    MessageContent::new_message(
+                        source.clone(),
+                        content.clone(),
+                        &self.current_nickname,
+                    ),
+                );
+
+                None
+            }
+
+            MessageEvent::ActionMsg(source, target, content) => {
+                self.add_line(
+                    target,
+                    MessageContent::new_action(source.clone(), content.clone()),
+                );
+
+                None
+            }
+            MessageEvent::Join(channel, source, main) => {
+                self.add_line(
+                    channel,
+                    if *main {
+                        MessageContent::new_info("You joined the channel".to_string())
+                    } else if let Some(source) = source {
+                        MessageContent::new_info(format!("{} has joined", source))
+                    } else {
+                        MessageContent::new_error("Hum should not happen".to_string())
+                    },
+                );
+                None
+            }
+            MessageEvent::ReplaceUser(old, new) => {
+                if self.current_nickname.eq_ignore_ascii_case(old) {
+                    self.current_nickname = new.to_string();
+                }
+                None
+            }
             MessageEvent::SelectChannel(channel) => {
                 self.set_current_channel(channel);
                 None
@@ -659,21 +712,22 @@ mod tests {
     fn test_find_index() {
         pub const TEXT_START: usize = TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH;
 
-        let mut discuss = DiscussWidget::new("test");
+        let current_nick = "nickname".to_string();
+        let mut discuss = DiscussWidget::new("test", current_nick.clone());
         discuss.content_width = 4;
         discuss.max_visible_height = 4;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
         );
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
         );
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
         );
         discuss.scroll_offset = 0;
 
@@ -729,7 +783,7 @@ mod tests {
 
     #[test]
     fn test_total_lines() {
-        let mut discuss = DiscussWidget::new("");
+        let mut discuss = DiscussWidget::new("", "".to_string());
         discuss.content_width = 10;
 
         discuss.add_line(
@@ -750,7 +804,7 @@ mod tests {
 
     #[test]
     fn test_can_scroll_up() {
-        let mut discuss = DiscussWidget::new("");
+        let mut discuss = DiscussWidget::new("", "".to_string());
         discuss.content_width = 5;
         discuss.max_visible_height = 3;
 
@@ -773,19 +827,21 @@ mod tests {
 
     #[test]
     fn test_render_rows() {
-        let mut discuss = DiscussWidget::new("test");
+        let current_nick = "nickname".to_string();
+
+        let mut discuss = DiscussWidget::new("test", current_nick.to_string());
 
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
         );
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
         );
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), "hey".to_string()),
+            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
         );
 
         discuss.content_width = 10;

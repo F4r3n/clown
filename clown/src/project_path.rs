@@ -13,6 +13,10 @@ impl ProjectPath {
         Self::project_dir().map(|v| v.cache_dir().to_path_buf())
     }
 
+    pub fn log_dir() -> Option<PathBuf> {
+        Self::project_dir().map(|v| v.data_local_dir().join("logs").to_path_buf())
+    }
+
     pub fn log_name() -> &'static str {
         "app.log"
     }

@@ -1,9 +1,10 @@
-use crate::config::Config;
+use crate::message_irc::message_logger::MessageLogger;
+use crate::project_path::ProjectPath;
+use crate::{config::Config, message_event::MessageEvent};
 use clown_core::{
     client::LoginConfig, command::Command, conn::ConnectionConfig, message::ServerMessage,
 };
 use tokio::{sync::mpsc, task::JoinHandle};
-
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum RunningState {
     #[default]
@@ -41,12 +42,17 @@ pub struct Model {
     pub current_channel: String,
     pub irc_connection: Option<IRCConnection>,
     pub retry: u8,
+
+    pub logger: MessageLogger,
 }
 
 impl Model {
     pub fn new(config_name: String) -> Self {
         let config = Config::new(&config_name);
         let channel = config.login_config.channel.to_string();
+        let log_dir = ProjectPath::log_dir()
+            .unwrap_or(std::env::current_dir().unwrap_or(std::path::Path::new("").to_path_buf()));
+
         Self {
             running_state: RunningState::Start,
             current_channel: channel.to_lowercase(),
@@ -55,6 +61,7 @@ impl Model {
                 stored_name: config_name,
             },
             irc_connection: None,
+            logger: MessageLogger::new(log_dir),
             retry: 5,
         }
     }
@@ -128,5 +135,14 @@ impl Model {
         self.irc_connection
             .as_mut()
             .and_then(|v| v.error_receiver.try_recv().ok())
+    }
+
+    pub fn log(&mut self, message: &MessageEvent) -> color_eyre::Result<()> {
+        if let Some(connection_config) = self.get_connection_config() {
+            self.logger
+                .write_message(&connection_config.address, message)
+        } else {
+            Err(color_eyre::eyre::eyre!("No address set"))
+        }
     }
 }

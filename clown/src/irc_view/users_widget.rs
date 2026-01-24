@@ -494,7 +494,7 @@ impl crate::component::EventHandler for UsersWidget {
 
                 None
             }
-            MessageEvent::Join(channel, user) => {
+            MessageEvent::Join(channel, user, _main) => {
                 self.add_section(channel.to_string());
                 if let Some(user) = user {
                     self.add_user_with_section(channel, user);

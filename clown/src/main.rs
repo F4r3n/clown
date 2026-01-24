@@ -72,7 +72,10 @@ async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let mut model = model::Model::new(args.config_name);
-    let mut current_view = Views::Main(main_view::MainView::new(model.get_login_channel()));
+    let mut current_view = Views::Main(main_view::MainView::new(
+        model.get_login_channel(),
+        model.get_nickname(),
+    ));
 
     let mut events = EventHandler::new();
     EventHandler::enable_mouse_event()?;

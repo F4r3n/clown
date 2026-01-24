@@ -42,7 +42,7 @@ pub struct MainView<'a> {
 }
 
 impl MainView<'_> {
-    pub fn new(current_channel: &str) -> Self {
+    pub fn new(current_channel: &str, current_nickname: &str) -> Self {
         let mut cinput = input_widget::CInput::default();
         cinput.add_completion_command_list(
             ClientCommand::iter().map(|v| v.get_message().unwrap_or("")),
@@ -56,7 +56,7 @@ impl MainView<'_> {
         //list_components.push()
         let messages_display = Component::new(
             "messages",
-            discuss_widget::DiscussWidget::new(current_channel),
+            discuss_widget::DiscussWidget::new(current_channel, current_nickname.to_string()),
         );
         let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
         Self {
@@ -125,22 +125,20 @@ impl MainView<'_> {
                         model.current_channel.to_string(),
                         format!("\x01ACTION {}\x01", content.clone()),
                     ));
-                    self.messages_display
-                        .handle_actions(&MessageEvent::AddMessageView(
-                            None,
-                            MessageContent::new_action(Some(nickname), content),
-                        ))
+                    Some(MessageEvent::ActionMsg(
+                        nickname,
+                        model.current_channel.to_string(),
+                        content,
+                    ))
                 }
                 command::ClientCommand::PrivMSG(channel, content) => {
                     model.send_command(clown_core::command::Command::PrivMsg(
                         channel.clone(),
                         content.clone(),
                     ));
-                    self.messages_display
-                        .handle_actions(&MessageEvent::AddMessageView(
-                            None,
-                            MessageContent::new_privmsg(channel, content),
-                        ))
+
+                    let nickname = model.get_nickname().to_string();
+                    Some(MessageEvent::PrivMsg(Some(nickname), channel, content))
                 }
                 command::ClientCommand::Unknown(command_name) => self
                     .messages_display
@@ -158,11 +156,12 @@ impl MainView<'_> {
                 model.current_channel.to_string(),
                 content.to_string(),
             ));
-            self.messages_display
-                .handle_actions(&MessageEvent::AddMessageView(
-                    None,
-                    MessageContent::new(Some(nickname), content.to_string()),
-                ))
+
+            Some(MessageEvent::PrivMsg(
+                Some(nickname),
+                model.current_channel.to_string(),
+                content.to_string(),
+            ))
         }
     }
 
@@ -219,41 +218,37 @@ impl MainView<'_> {
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {
-                        let from = if target.eq_ignore_ascii_case(model.get_nickname()) {
+                        let target = if target.eq_ignore_ascii_case(model.get_nickname()) {
                             source.clone().unwrap_or_default()
                         } else {
                             target
                         };
-                        if !from.eq_ignore_ascii_case(&model.current_channel) {
-                            messages.push_message(MessageEvent::HighlightUser(from.clone()));
+                        if !target.eq_ignore_ascii_case(&model.current_channel) {
+                            messages.push_message(MessageEvent::HighlightUser(target.clone()));
                         }
 
                         if content.starts_with("\x01ACTION") {
-                            if let Some(parsed_content) = content.get(8..content.len() - 1) {
-                                messages.push_message(MessageEvent::AddMessageView(
-                                    Some(from),
-                                    MessageContent::new_action(source, parsed_content.to_string()),
+                            if let Some(parsed_content) = content.get(8..content.len() - 1)
+                                && let Some(source) = source
+                            {
+                                messages.push_message(MessageEvent::ActionMsg(
+                                    source,
+                                    target,
+                                    parsed_content.to_string(),
                                 ));
                             }
                         } else {
-                            messages.push_message(MessageEvent::AddMessageView(
-                                Some(from),
-                                MessageContent::new_message(
-                                    source,
-                                    content,
-                                    model.get_nickname().to_string(),
-                                ),
-                            ));
+                            messages.push_message(MessageEvent::PrivMsg(source, target, content));
                         }
                     }
                     Command::Nick(new_user) => messages.push_message(MessageEvent::ReplaceUser(
                         source.unwrap_or_default(),
                         new_user,
                     )),
-                    Command::Notice(_target, message) => {
+                    Command::Notice(target, message) => {
                         //Display a notice directly to the user current channel
                         messages.push_message(MessageEvent::AddMessageView(
-                            None,
+                            Some(target),
                             MessageContent::new_notice(source, message),
                         ));
                     }
@@ -279,20 +274,8 @@ impl MainView<'_> {
                         messages.push_message(MessageEvent::Join(
                             channel.clone(),
                             Some(source.clone()),
+                            source.eq_ignore_ascii_case(model.get_nickname()),
                         ));
-
-                        if !source.eq_ignore_ascii_case(model.get_nickname()) {
-                            messages.push_message(MessageEvent::AddMessageView(
-                                None,
-                                MessageContent::new_info(format!("{} has joined", source)),
-                            ));
-                        } else {
-                            messages.push_message(MessageEvent::SelectChannel(channel));
-                            messages.push_message(MessageEvent::AddMessageView(
-                                None,
-                                MessageContent::new_info("You joined the channel".to_string()),
-                            ));
-                        }
                     }
                     Command::Error(_err) => messages.push_message(MessageEvent::DisConnect),
                     _ => {}
@@ -307,6 +290,7 @@ impl MainView<'_> {
                         messages.push_message(MessageEvent::Join(
                             source.clone().unwrap_or_default(),
                             None,
+                            false,
                         ));
                         messages.push_message(MessageEvent::AddMessageView(
                             source.clone(),
@@ -491,6 +475,9 @@ impl widget_view::WidgetView for MainView<'_> {
             }
             MessageEvent::PullIRC => self.update_pull_irc(model, messages),
             _ => {
+                if let Err(e) = model.log(&msg) {
+                    tracing::error!("Unabled to write logs: {}", e);
+                }
                 for mut child in self.children() {
                     child.handle_actions(&msg);
                 }
