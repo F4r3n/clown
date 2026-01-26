@@ -505,6 +505,9 @@ impl crate::component::EventHandler for UsersWidget {
                 if let Some(user) = user {
                     self.add_user_with_section(channel, user);
                 }
+                if let Some(id) = self.get_section_id(channel) {
+                    self.list_state.current_section = id;
+                }
                 self.need_redraw = true;
 
                 None
