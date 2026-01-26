@@ -39,6 +39,7 @@ pub struct MainView<'a> {
     tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
 
     need_redraw: bool,
+    has_focus: bool,
 }
 
 impl MainView<'_> {
@@ -66,6 +67,7 @@ impl MainView<'_> {
             messages_display,
             tooltip_widget,
             need_redraw: false,
+            has_focus: true,
         }
     }
 
@@ -402,14 +404,22 @@ impl widget_view::WidgetView for MainView<'_> {
         match event {
             Event::Crossterm(crossterm::event::Event::Key(_)) => {
                 // Pass event to focused widget
-                for child in self.children().iter_mut() {
-                    if let Some(new_message) = child.handle_events(event) {
-                        messages.push_message(new_message);
+                if self.has_focus {
+                    for child in self.children().iter_mut() {
+                        if let Some(new_message) = child.handle_events(event) {
+                            messages.push_message(new_message);
+                        }
                     }
                 }
             }
             Event::Crossterm(crossterm::event::Event::Resize(_, _)) => {
                 self.need_redraw = true;
+            }
+            Event::Crossterm(crossterm::event::Event::FocusGained) => {
+                self.has_focus = true;
+            }
+            Event::Crossterm(crossterm::event::Event::FocusLost) => {
+                self.has_focus = false;
             }
             Event::Crossterm(crossterm::event::Event::Paste(_)) => {
                 self.input.handle_events(event);
