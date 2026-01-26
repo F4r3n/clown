@@ -373,6 +373,9 @@ impl ListStateWidget {
     }
 
     fn previous(&mut self, max_section: usize) {
+        if self.current_selected == 0 {
+            self.current_selected = max_section;
+        }
         self.current_selected = self.current_selected.saturating_sub(1) % max_section;
     }
 
@@ -382,6 +385,9 @@ impl ListStateWidget {
     }
 
     fn previous_section(&mut self, max_nb_sections: usize) {
+        if self.current_section == 0 {
+            self.current_section = max_nb_sections;
+        }
         self.current_section = self.current_section.saturating_sub(1) % max_nb_sections;
         self.current_selected = 0;
     }
