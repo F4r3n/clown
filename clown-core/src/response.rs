@@ -196,8 +196,8 @@ pub enum ResponseNumber {
     NoTopic(String),
     /// 332: <channel>, Topic
     Topic(String, String),
-    /// 333: Topic who/time
-    TopicWhoTime(String),
+    /// 333: Topic <channel> <nick> <setat>
+    TopicWhoTime(String, String, u64),
 
     /// 341: INVITE confirmation
     Invite(String),
@@ -367,7 +367,16 @@ impl ResponseBuilder {
                 Some(param) => Topic(param.to_string(), string_to_send),
                 _ => Unknown(reply_number, string_to_send),
             },
-            333 => TopicWhoTime(parameters.join(" ")),
+            333 => {
+                if let Some(channel) = parameters.get(1)
+                    && let Some(nick) = parameters.get(2)
+                    && let Some(setat) = parameters.get(3).and_then(|v| v.parse::<u64>().ok())
+                {
+                    TopicWhoTime(channel.to_string(), nick.to_string(), setat)
+                } else {
+                    Unknown(reply_number, string_to_send)
+                }
+            }
             341 => Invite(string_to_send),
             342 => SummonAnswer(string_to_send),
             346 => InviteList(string_to_send),

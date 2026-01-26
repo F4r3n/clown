@@ -241,8 +241,8 @@ mod tests {
         let server_message = ServerMessage::new(message);
         let reply = server_message.reply();
         assert!(
-            matches!(reply, Response::Rpl(ResponseNumber::TopicWhoTime(msg))
-            if msg == "farine_test #rust-spam farineA 1754165495")
+            matches!(reply, Response::Rpl(ResponseNumber::TopicWhoTime(channel, nick, unix))
+            if channel == "#rust-spam" && nick == "farineA" && unix == 1754165495)
         );
     }
 

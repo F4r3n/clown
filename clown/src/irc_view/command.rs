@@ -40,6 +40,11 @@ pub enum ClientCommand {
         detailed_message = "To send a message to a user or channel"
     )]
     PrivMSG(String, String),
+    #[strum(
+        message = "topic",
+        detailed_message = "To set the topic of the channel"
+    )]
+    Topic(String),
     Unknown(Option<String>),
 }
 
@@ -58,6 +63,7 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
             match command.to_lowercase().as_str() {
                 "connect" => Some(ClientCommand::Connect),
                 "quit" => Some(ClientCommand::Quit(args.map(|v| v.to_string()))),
+                "topic" => args.map(|v| ClientCommand::Topic(v.to_string())),
                 "nick" => args.map(|v| ClientCommand::Nick(v.to_string())),
                 "help" => Some(ClientCommand::Help),
                 "spell" => Some(ClientCommand::Spell(args.map(|v| v.to_string()))),

@@ -492,6 +492,17 @@ impl crate::component::EventHandler for DiscussWidget {
                 }
                 None
             }
+            MessageEvent::SetTopic(source, channel, content) => {
+                if let Some(source) = source {
+                    let data = format!(
+                        "{} has changed topic for {} to \"{}\"",
+                        source, channel, content
+                    );
+                    self.add_line(channel, MessageContent::new_info(data));
+                }
+
+                None
+            }
             MessageEvent::Quit(user, reason) => {
                 self.add_line(
                     &self.current_channel.clone(),

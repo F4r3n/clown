@@ -106,6 +106,11 @@ impl MainView<'_> {
                     model.send_command(Command::Nick(new_nick.clone()));
                     None
                 }
+                command::ClientCommand::Topic(topic) => {
+                    model
+                        .send_command(Command::Topic(model.current_channel.clone(), topic.clone()));
+                    None
+                }
                 command::ClientCommand::Spell(language) => {
                     Some(MessageEvent::SpellChecker(language))
                 }
@@ -253,7 +258,7 @@ impl MainView<'_> {
                         ));
                     }
                     Command::Topic(channel, topic) => {
-                        messages.push_message(MessageEvent::SetTopic(channel, topic))
+                        messages.push_message(MessageEvent::SetTopic(source, channel, topic));
                     }
                     Command::Quit(reason) => {
                         let source = source.unwrap_or_default();
@@ -320,7 +325,7 @@ impl MainView<'_> {
                         messages.push_message(MessageEvent::UpdateUsers(channel, list_users));
                     }
                     ResponseNumber::Topic(channel, topic) => {
-                        messages.push_message(MessageEvent::SetTopic(channel, topic));
+                        messages.push_message(MessageEvent::SetTopic(None, channel, topic));
                     }
                     ResponseNumber::Err(_, content) => {
                         messages.push_message(MessageEvent::AddMessageView(

@@ -58,7 +58,7 @@ impl EventHandler for TopicWidget {
     }
     fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
         match event {
-            MessageEvent::SetTopic(channel, topic) => {
+            MessageEvent::SetTopic(_, channel, topic) => {
                 self.update_topic(channel, topic);
                 self.need_redraw = true;
                 None

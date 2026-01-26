@@ -24,7 +24,11 @@ pub enum MessageEvent {
         Option<String>, /*user */
         bool,           /*main user */
     ),
-    SetTopic(String /*channel */, String /*topic */),
+    SetTopic(
+        Option<String>, /*source*/
+        String,         /*channel */
+        String,         /*topic */
+    ),
     #[cfg(feature = "website-preview")]
     HoverURL(String /* URL */),
     #[allow(dead_code)]
