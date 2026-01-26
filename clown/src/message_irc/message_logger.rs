@@ -78,7 +78,9 @@ impl MessageLogger {
         let name = format!(
             "{}.{}.log",
             server_addres.to_lowercase(),
-            target.unwrap_or("server")
+            target
+                .unwrap_or("server")
+                .replace(std::path::MAIN_SEPARATOR, "_")
         );
 
         let logger = match self.writers.entry(name.clone()) {
