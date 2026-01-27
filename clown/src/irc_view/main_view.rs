@@ -31,6 +31,8 @@ use strum::{EnumMessage, IntoEnumIterator};
 use tracing::debug;
 use tracing::error;
 
+const LOG_FLUSH_CHECK_TIMER: u64 = 10;
+
 pub struct MainView<'a> {
     input: Component<'a, CInput>,
     messages_display: Component<'a, discuss_widget::DiscussWidget>,
@@ -40,6 +42,8 @@ pub struct MainView<'a> {
 
     need_redraw: bool,
     has_focus: bool,
+
+    log_instant: std::time::Instant,
 }
 
 impl MainView<'_> {
@@ -68,6 +72,7 @@ impl MainView<'_> {
             tooltip_widget,
             need_redraw: false,
             has_focus: true,
+            log_instant: std::time::Instant::now(),
         }
     }
 
@@ -207,7 +212,12 @@ impl MainView<'_> {
 
     fn handle_tick(&mut self, model: &mut Model, event: &Event, messages: &mut MessageQueue) {
         self.handle_irc(model, messages);
-
+        if self.log_instant.elapsed() > std::time::Duration::from_secs(LOG_FLUSH_CHECK_TIMER) {
+            if let Err(e) = model.flush_log() {
+                tracing::error!("Cannot flush logs {}", e);
+            }
+            self.log_instant = std::time::Instant::now();
+        }
         for mut child in self.children() {
             if let Some(message) = child.handle_events(event) {
                 messages.push_message(message);

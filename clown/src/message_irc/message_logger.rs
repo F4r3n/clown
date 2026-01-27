@@ -5,10 +5,10 @@ use std::{
 
 use crate::message_event::MessageEvent;
 use ahash::AHashMap;
+const LOG_FLUSH_TIMER_SECONDS: u64 = 5;
 
 struct Logger {
     duration: std::time::Instant,
-    number_messages: usize,
     buffer: std::io::BufWriter<std::fs::File>,
 }
 
@@ -16,7 +16,6 @@ impl Logger {
     pub fn try_from_path(path: &Path) -> color_eyre::Result<Logger> {
         Ok(Self {
             duration: std::time::Instant::now(),
-            number_messages: 0,
             buffer: Self::init_writer(path)?,
         })
     }
@@ -34,10 +33,8 @@ impl Logger {
 
     fn flush(&mut self, force_flush: bool) -> color_eyre::Result<()> {
         if force_flush
-            || self.number_messages > 5
-            || (self.duration.elapsed() > std::time::Duration::from_secs(10))
+            || (self.duration.elapsed() > std::time::Duration::from_secs(LOG_FLUSH_TIMER_SECONDS))
         {
-            self.number_messages = 0;
             self.duration = std::time::Instant::now();
             self.buffer.flush()?;
         }
@@ -45,7 +42,6 @@ impl Logger {
     }
 
     fn write(&mut self, data: &str) -> color_eyre::Result<()> {
-        self.number_messages = self.number_messages.saturating_add(1);
         writeln!(self.buffer, "{}\t{}", Self::get_current_time(), data)?;
 
         Ok(())
@@ -70,28 +66,46 @@ impl MessageLogger {
         }
     }
 
+    fn sanitize_path(word: &str) -> String {
+        word.to_lowercase()
+            .chars()
+            .map(|v| match v {
+                '\\' | '/' => '_',
+                _ => v,
+            })
+            .collect::<String>()
+    }
+
     fn init_buffer(
         &mut self,
         server_addres: &str,
         target: Option<&str>,
     ) -> color_eyre::Result<&mut Logger> {
-        let name = format!(
-            "{}.{}.log",
-            server_addres.to_lowercase(),
-            target
-                .unwrap_or("server")
-                .replace(std::path::MAIN_SEPARATOR, "_")
-        );
+        //The name is not sanitized because is only used as a key to a hashmap
+        let name = format!("{}.{}.log", server_addres, target.unwrap_or("server"));
 
-        let logger = match self.writers.entry(name.clone()) {
+        let logger = match self.writers.entry(name) {
             std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
             std::collections::hash_map::Entry::Vacant(v) => {
+                //If new key, sanitize input
+                let name = format!(
+                    "{}.{}.log",
+                    Self::sanitize_path(server_addres),
+                    Self::sanitize_path(target.unwrap_or("server"))
+                );
                 let logger = Logger::try_from_path(&self.folder.join(name))?;
                 v.insert(logger)
             }
         };
 
         Ok(logger)
+    }
+
+    pub fn flush_checker(&mut self) -> color_eyre::Result<()> {
+        for (_, logger) in self.writers.iter_mut() {
+            logger.flush(false)?;
+        }
+        Ok(())
     }
 
     pub fn write_message(
@@ -148,5 +162,37 @@ impl MessageLogger {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_sanitize_path() {
+        assert_eq!(
+            MessageLogger::sanitize_path("../../Chat/Room"),
+            ".._.._chat_room"
+        );
+        assert_eq!(MessageLogger::sanitize_path("Admin\\Tasks"), "admin_tasks");
+        assert_eq!(MessageLogger::sanitize_path("General"), "general");
+    }
+
+    #[test]
+    fn test_logger_creation_and_writing() {
+        let dir = tempdir().expect("Cannot create dir");
+        let log_path = dir.path().join("test.log");
+
+        let mut logger = Logger::try_from_path(&log_path).unwrap();
+        logger.write("Hello, Rust!").unwrap();
+        logger.flush(true).unwrap(); // Force flush to ensure it hits the disk
+
+        let content = fs::read_to_string(log_path).unwrap();
+        assert!(content.contains("Hello, Rust!"));
+        // Check for timestamp format (YYYY-MM-DD)
+        assert!(content.contains(&chrono::Local::now().format("%Y-%m-%d").to_string()));
     }
 }

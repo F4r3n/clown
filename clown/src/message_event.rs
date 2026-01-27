@@ -29,6 +29,7 @@ pub enum MessageEvent {
         String,         /*channel */
         String,         /*topic */
     ),
+    LogFlush,
     #[cfg(feature = "website-preview")]
     HoverURL(String /* URL */),
     #[allow(dead_code)]

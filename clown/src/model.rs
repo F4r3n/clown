@@ -145,4 +145,8 @@ impl Model {
             Err(color_eyre::eyre::eyre!("No address set"))
         }
     }
+
+    pub fn flush_log(&mut self) -> color_eyre::Result<()> {
+        self.logger.flush_checker()
+    }
 }
