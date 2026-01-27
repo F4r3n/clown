@@ -332,10 +332,12 @@ impl DiscussWidget {
         let channel = channel.to_lowercase();
 
         self.messages.add_message(&channel, in_message);
-
-        if self.follow_last && channel.eq_ignore_ascii_case(&self.current_channel) {
-            // Show last lines that fit the view
-            self.scroll_offset = 0;
+        if channel.eq_ignore_ascii_case(&self.current_channel) {
+            if self.follow_last {
+                self.scroll_offset = 0;
+            } else {
+                self.scroll_offset = self.scroll_offset.saturating_add(1);
+            }
         }
 
         self.redraw = true;
