@@ -99,17 +99,35 @@ impl Completion {
             return;
         }
 
-        self.current_index = Some(0);
         if let Some(end) = slice.strip_prefix("/") {
             self.completion_start = Some(start.saturating_add(1));
             self.current_completion = self.input_completion.list_command(end);
+            self.current_index = if self
+                .current_completion
+                .as_ref()
+                .is_some_and(|v| !v.is_empty())
+            {
+                Some(0)
+            } else {
+                None
+            };
         } else {
             self.completion_start = Some(start);
             self.current_completion = self.input_completion.list(&self.current_channel, slice);
+            self.current_index = if self
+                .current_completion
+                .as_ref()
+                .is_some_and(|v| !v.is_empty())
+            {
+                Some(0)
+            } else {
+                None
+            };
         }
     }
 
     pub fn get_next_completion(&mut self) -> Option<(usize, String)> {
+        self.current_index?;
         self.current_index = Some(
             self.current_index
                 .as_mut()
@@ -168,5 +186,16 @@ mod test {
         comp.reset();
         comp.set_completion(0, "/h");
         assert_eq!(comp.get_next_completion(), Some((1, "help".to_string())));
+    }
+
+    #[test]
+    fn test_insert_uppercase() {
+        let mut comp = Completion::default();
+
+        comp.input_completion
+            .add_users("#test", &vec!["tata".to_string(), "Titi".to_string()]);
+        comp.current_channel = "#test".to_string();
+        comp.set_completion(0, "t");
+        assert_eq!(comp.get_next_completion(), Some((0, "Titi".to_string())));
     }
 }

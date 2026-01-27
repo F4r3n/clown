@@ -1,6 +1,6 @@
 #[derive(Default)]
 struct TrieNode {
-    end_word: bool,
+    word_id: Option<usize>,
     character: char,
     nodes: Vec<TrieNode>,
 }
@@ -26,9 +26,9 @@ impl Ord for TrieNode {
 }
 
 impl TrieNode {
-    pub fn new(character: char, end_word: bool) -> Self {
+    pub fn new(character: char, word_id: Option<usize>) -> Self {
         Self {
-            end_word,
+            word_id,
             character,
             nodes: Vec::new(),
         }
@@ -38,15 +38,17 @@ impl TrieNode {
         self.nodes.binary_search_by_key(&c, |v| v.character).ok()
     }
 
-    pub fn insert_node(&mut self, c: char, end: bool) -> &mut TrieNode {
+    pub fn insert_node(&mut self, c: char, word_id: Option<usize>) -> &mut TrieNode {
         match self.nodes.binary_search_by_key(&c, |v| v.character) {
             Ok(index) => {
                 let n = &mut self.nodes[index];
-                n.end_word |= end;
+                if word_id.is_some() {
+                    n.word_id = self.word_id;
+                }
                 n
             }
             Err(index) => {
-                self.nodes.insert(index, TrieNode::new(c, end));
+                self.nodes.insert(index, TrieNode::new(c, word_id));
                 &mut self.nodes[index]
             }
         }
@@ -55,11 +57,13 @@ impl TrieNode {
 
 pub struct Trie {
     root: TrieNode,
+    words: Vec<String>,
 }
 
 struct Navigator<'a> {
     start_node: &'a TrieNode,
-    result: Option<Vec<String>>,
+
+    result: Option<Vec<usize>>,
 }
 
 impl<'a> Navigator<'a> {
@@ -70,22 +74,20 @@ impl<'a> Navigator<'a> {
         }
     }
 
-    fn list(&mut self, start: &str) -> Option<Vec<String>> {
-        self.dfs_list(self.start_node, &mut start.to_string());
+    fn list(&mut self) -> Option<Vec<usize>> {
+        self.dfs_list(self.start_node);
         self.result.take()
     }
 
-    fn dfs_list(&mut self, node: &'a TrieNode, current_word: &mut String) {
-        if node.end_word
+    fn dfs_list(&mut self, node: &'a TrieNode) {
+        if let Some(word_id) = node.word_id
             && let Some(result) = &mut self.result
         {
-            result.push(current_word.clone());
+            result.push(word_id);
         }
 
         for n in &node.nodes {
-            current_word.push(n.character);
-            self.dfs_list(n, current_word);
-            current_word.pop();
+            self.dfs_list(n);
         }
     }
 }
@@ -94,15 +96,19 @@ impl Trie {
     pub fn new() -> Self {
         Self {
             root: TrieNode::default(),
+            words: Vec::new(),
         }
     }
 
     pub fn add_word(&mut self, word: &str) {
         let mut current_node = &mut self.root;
-        let mut chars = word.chars().peekable();
+        let new_id = self.words.len();
+        self.words.push(word.to_string());
+        let lower = word.to_lowercase();
+        let mut chars = lower.chars().peekable();
 
         while let Some(next) = chars.next() {
-            current_node = current_node.insert_node(next, chars.peek().is_none());
+            current_node = current_node.insert_node(next, chars.peek().is_none().then_some(new_id));
         }
     }
 
@@ -144,23 +150,28 @@ impl Trie {
     }
 
     pub fn disable_word(&mut self, word: &str) {
-        self.navigate_word_mut(word, |v| v.end_word = false);
+        self.navigate_word_mut(&word.to_lowercase(), |v| v.word_id = None);
     }
 
+    #[cfg(test)]
     pub fn check_word(&self, word: &str) -> bool {
-        let mut exists = false;
-        self.navigate_word(word, |v| exists = v.end_word);
-        exists
+        let mut id = None;
+        self.navigate_word(&word.to_lowercase(), |v| id = v.word_id);
+        id.is_some_and(|i| self.words[i].eq(word))
     }
 
     pub fn list(&self, word: &str) -> Option<Vec<String>> {
         let mut result = None;
-        self.navigate_word(word, |node| {
+        self.navigate_word(&word.to_lowercase(), |node| {
             let mut navigator = Navigator::new(node);
-            result = navigator.list(word);
+            result = navigator.list();
         });
 
-        result
+        result.map(|v| {
+            v.into_iter()
+                .map(|id| self.words[id].to_string())
+                .collect::<Vec<String>>()
+        })
     }
 }
 
@@ -182,10 +193,10 @@ mod tests {
     fn test_list() {
         let mut trie = Trie::new();
         trie.add_word("cat");
-        trie.add_word("caravane");
+        trie.add_word("CaravAne");
         trie.add_word("dog");
 
-        let result = vec!["caravane".to_string(), "cat".to_string()];
+        let result = vec!["CaravAne".to_string(), "cat".to_string()];
 
         assert_eq!(trie.list("c"), Some(result));
 
@@ -193,6 +204,7 @@ mod tests {
         let result = vec!["cat".to_string()];
 
         assert_eq!(trie.list("c"), Some(result));
+        assert_eq!(trie.list("A"), None);
     }
 
     #[test]
