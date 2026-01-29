@@ -66,18 +66,23 @@ impl MessageContent {
             .filter(|w| w.starts_with("http://") || w.starts_with("https://"))
     }
 
-    pub fn new_message(source: Option<String>, content: String, current_nickname: &str) -> Self {
-        let kind = if content.contains(current_nickname) {
-            MessageKind::Highlight
-        } else {
-            MessageKind::Normal
-        };
+    pub fn new_message(source: Option<String>, content: String) -> Self {
         Self {
             time: std::time::SystemTime::now(),
             source,
             width_without_format: get_width_without_format(&content),
             content,
-            kind,
+            kind: MessageKind::Normal,
+        }
+    }
+
+    pub fn new_hightlight(source: Option<String>, content: String) -> Self {
+        Self {
+            time: std::time::SystemTime::now(),
+            source,
+            width_without_format: get_width_without_format(&content),
+            content,
+            kind: MessageKind::Highlight,
         }
     }
 

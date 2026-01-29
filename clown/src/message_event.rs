@@ -14,8 +14,6 @@ pub enum MessageEvent {
         String, /*target*/
         String, /*content*/
     ),
-
-    HighlightUser(String),
     SelectChannel(String),
     UpdateUsers(String /*channel*/, Vec<String> /*list users */),
     ReplaceUser(String /*old */, String /*new */),
@@ -29,7 +27,6 @@ pub enum MessageEvent {
         String,         /*channel */
         String,         /*topic */
     ),
-    LogFlush,
     #[cfg(feature = "website-preview")]
     HoverURL(String /* URL */),
     #[allow(dead_code)]
@@ -45,4 +42,5 @@ pub enum MessageEvent {
         bool,   /*main user*/
     ),
     Quit(String /*user*/, Option<String> /*reason*/),
+    Bel,
 }

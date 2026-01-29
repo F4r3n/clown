@@ -483,19 +483,26 @@ impl crate::component::EventHandler for UsersWidget {
 
                 None
             }
+            MessageEvent::PrivMsg(_, target, _) | MessageEvent::ActionMsg(_, target, _) => {
+                if let Some(selected_name) = self.get_selected_name() {
+                    if !selected_name.eq_ignore_ascii_case(target) {
+                        self.add_user_global_section(target);
+                        self.hightlight_user(target);
+                        self.need_redraw = true;
+                    }
+                } else {
+                    self.add_user_global_section(target);
+                    self.hightlight_user(target);
+                    self.need_redraw = true;
+                }
+                None
+            }
             MessageEvent::Part(channel, user, is_main) => {
                 if *is_main {
                     self.remove_all_users_section(self.get_section_id(channel));
                 } else if let Some(channel_id) = self.get_section_id(channel) {
                     self.remove_user(channel_id, user);
                 }
-                self.need_redraw = true;
-
-                None
-            }
-            MessageEvent::HighlightUser(user) => {
-                self.add_user_global_section(user);
-                self.hightlight_user(user);
                 self.need_redraw = true;
 
                 None

@@ -403,6 +403,29 @@ impl DiscussWidget {
 
         self.redraw = true;
     }
+
+    fn should_highlight(&self, in_content: &str) -> bool {
+        let nick = &self.current_nickname;
+
+        if let Some(start_byte) = in_content.find(nick) {
+            let end_byte = start_byte + nick.len();
+
+            // char before
+            let prev_char = in_content[..start_byte].chars().next_back();
+
+            // char after
+            let next_char = in_content[end_byte..].chars().next();
+
+            let is_boundary = |c: char| c.is_ascii_punctuation() || c.is_ascii_whitespace();
+
+            let start_ok = prev_char.is_none() || prev_char.is_some_and(is_boundary);
+            let end_ok = next_char.is_none() || next_char.is_some_and(is_boundary);
+
+            start_ok && end_ok
+        } else {
+            false
+        }
+    }
 }
 
 impl Draw for DiscussWidget {
@@ -539,16 +562,22 @@ impl crate::component::EventHandler for DiscussWidget {
                         MessageContent::new_privmsg(target.clone(), content.clone()),
                     );
                 }
+
+                let is_highlight = self.should_highlight(content);
+
                 self.add_line(
                     target,
-                    MessageContent::new_message(
-                        source.clone(),
-                        content.clone(),
-                        &self.current_nickname,
-                    ),
+                    if is_highlight {
+                        MessageContent::new_hightlight(source.clone(), content.clone())
+                    } else {
+                        MessageContent::new_message(source.clone(), content.clone())
+                    },
                 );
-
-                None
+                if is_highlight {
+                    Some(MessageEvent::Bel)
+                } else {
+                    None
+                }
             }
 
             MessageEvent::ActionMsg(source, target, content) => {
@@ -735,15 +764,15 @@ mod tests {
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
+            MessageContent::new_message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
+            MessageContent::new_message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
+            MessageContent::new_message(None, "HELLO".to_string()),
         );
         discuss.scroll_offset = 0;
 
@@ -842,6 +871,19 @@ mod tests {
     }
 
     #[test]
+    fn test_should_hightlight() {
+        let current_nick = "nickname".to_string();
+
+        let discuss = DiscussWidget::new("test", current_nick.to_string());
+        assert!(discuss.should_highlight("my nickname is "));
+        assert!(!discuss.should_highlight("my nicknameis "));
+        assert!(discuss.should_highlight("nickname"));
+        assert!(discuss.should_highlight(" nickname"));
+        assert!(discuss.should_highlight("nickname "));
+        assert!(discuss.should_highlight(",nickname "));
+    }
+
+    #[test]
     fn test_render_rows() {
         let current_nick = "nickname".to_string();
 
@@ -849,15 +891,15 @@ mod tests {
 
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
+            MessageContent::new_message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
+            MessageContent::new_message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             "test",
-            MessageContent::new_message(None, "HELLO".to_string(), &current_nick),
+            MessageContent::new_message(None, "HELLO".to_string()),
         );
 
         discuss.content_width = 10;

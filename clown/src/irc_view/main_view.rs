@@ -240,9 +240,6 @@ impl MainView<'_> {
                         } else {
                             target
                         };
-                        if !target.eq_ignore_ascii_case(&model.current_channel) {
-                            messages.push_message(MessageEvent::HighlightUser(target.clone()));
-                        }
 
                         if content.starts_with("\x01ACTION") {
                             if let Some(parsed_content) = content.get(8..content.len() - 1)
@@ -464,6 +461,10 @@ impl widget_view::WidgetView for MainView<'_> {
                         messages.push_message(v)
                     }
                 }
+            }
+            #[allow(clippy::print_stdout)]
+            MessageEvent::Bel => {
+                print!("{}", 0x07 as char);
             }
             MessageEvent::OpenWeb(url) => {
                 if let Err(e) = open::that(&url) {
