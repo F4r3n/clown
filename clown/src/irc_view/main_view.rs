@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use self::command::connect_irc;
 use self::command::help;
 use crate::irc_view::command;
@@ -464,7 +466,7 @@ impl widget_view::WidgetView for MainView<'_> {
             }
             #[allow(clippy::print_stdout)]
             MessageEvent::Bel => {
-                print!("{}", 0x07 as char);
+                println!("{}", 0x07 as char);
             }
             MessageEvent::OpenWeb(url) => {
                 if let Err(e) = open::that(&url) {
@@ -505,7 +507,9 @@ impl widget_view::WidgetView for MainView<'_> {
                     tracing::error!("Unabled to write logs: {}", e);
                 }
                 for mut child in self.children() {
-                    child.handle_actions(&msg);
+                    if let Some(msg) = child.handle_actions(&msg) {
+                        messages.push_message(msg);
+                    }
                 }
             }
         };
