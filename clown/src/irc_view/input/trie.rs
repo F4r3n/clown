@@ -43,7 +43,7 @@ impl TrieNode {
             Ok(index) => {
                 let n = &mut self.nodes[index];
                 if word_id.is_some() {
-                    n.word_id = self.word_id;
+                    n.word_id = word_id;
                 }
                 n
             }
@@ -329,5 +329,17 @@ mod tests {
 
         assert!(!trie.check_word("r"));
         assert!(!trie.check_word("ル"));
+    }
+
+    #[test]
+    fn test_disable_enable() {
+        let mut trie = Trie::new();
+
+        trie.add_word("rust");
+        trie.disable_word("rust");
+
+        assert!(!trie.check_word("rust"));
+        trie.add_word("rust");
+        assert!(trie.check_word("rust"));
     }
 }
