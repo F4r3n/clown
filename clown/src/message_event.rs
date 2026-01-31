@@ -42,5 +42,10 @@ pub enum MessageEvent {
         bool,   /*main user*/
     ),
     Quit(String /*user*/, Option<String> /*reason*/),
+    QuitChannels(
+        Vec<String>,    /*channel*/
+        String,         /*user*/
+        Option<String>, /*reason*/
+    ),
     Bel,
 }

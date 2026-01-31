@@ -253,6 +253,18 @@ impl UsersWidget {
         }
     }
 
+    fn get_all_joined_channel(&mut self, user: &str) -> Vec<String> {
+        let mut list_channels = Vec::new();
+        if let Some(u) = self.list_users.get_mut(user) {
+            for section in &self.list_sections {
+                if u.has_joined_section(section.section_info.id) {
+                    list_channels.push(section.section_info.name.clone());
+                }
+            }
+        }
+        list_channels
+    }
+
     fn remove_user(&mut self, section_id: usize, user: &str) {
         let user = UsersWidget::sanitize_name(user);
 
@@ -477,11 +489,16 @@ impl crate::component::EventHandler for UsersWidget {
 
                 None
             }
-            MessageEvent::Quit(user, _) => {
+            MessageEvent::Quit(user, _reason) => {
+                let list_channels = self.get_all_joined_channel(user);
                 self.remove_user_from_all(user);
                 self.need_redraw = true;
 
-                None
+                Some(MessageEvent::QuitChannels(
+                    list_channels,
+                    user.to_string(),
+                    _reason.clone(),
+                ))
             }
             MessageEvent::PrivMsg(_, target, _) | MessageEvent::ActionMsg(_, target, _) => {
                 if let Some(selected_name) = self.get_selected_name() {
@@ -624,6 +641,10 @@ mod tests {
 
         users_widget.add_user_with_section("#spam_2", "@farine");
         assert_eq!(users_widget.list_users.len(), 1);
+        assert_eq!(
+            users_widget.get_all_joined_channel(user_name),
+            vec!["#spam", "#spam_2"]
+        );
     }
 
     #[test]

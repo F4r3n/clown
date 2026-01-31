@@ -108,58 +108,84 @@ impl MessageLogger {
         Ok(())
     }
 
+    fn write_to_target(
+        &mut self,
+        server_address: &str,
+        target: Option<&str>,
+        data: &str,
+        force_flush: bool,
+    ) -> color_eyre::Result<()> {
+        let logger = self.init_buffer(server_address, target)?;
+        logger.write(data)?;
+        logger.flush(force_flush)?;
+
+        Ok(())
+    }
+
     pub fn write_message(
         &mut self,
         server_address: &str,
         message: &MessageEvent,
     ) -> color_eyre::Result<()> {
-        let mut force_flush = false;
-        let (target, data) = match message {
-            MessageEvent::Join(channel, user, _) => {
-                let data = user
-                    .as_ref()
-                    .map(|v| format!("-->\t {} has joined {}", v, channel));
-                (Some(channel.as_str()), data)
+        match message {
+            MessageEvent::Join(channel, Some(user), _) => {
+                self.write_to_target(
+                    server_address,
+                    Some(channel),
+                    format!("-->\t {} has joined {}", user, channel).as_str(),
+                    false,
+                )?;
             }
 
             MessageEvent::Part(channel, user, _) => {
-                force_flush = true;
-                let data = Some(format!("<--\t {} has left {}", user, channel));
-                (Some(channel.as_str()), data)
+                self.write_to_target(
+                    server_address,
+                    Some(channel),
+                    format!("<--\t {} has left {}", user, channel).as_str(),
+                    true,
+                )?;
             }
-            MessageEvent::Quit(user, _) => {
-                force_flush = true;
-                let data = Some(format!("<--\t {} has quit", user));
-                (None, data)
-            }
-            MessageEvent::SetTopic(source, channel, content) => {
-                if let Some(source) = source {
-                    let data = Some(format!(
-                        "--\t {} has changed topic for {} to \"{}\"",
-                        source, channel, content
-                    ));
-                    (Some(channel.as_str()), data)
-                } else {
-                    (None, None)
+            MessageEvent::QuitChannels(channels, user, _) => {
+                for channel in channels {
+                    self.write_to_target(
+                        server_address,
+                        Some(channel),
+                        format!("<--\t {} has quit", user).as_str(),
+                        true,
+                    )?;
                 }
             }
-            MessageEvent::PrivMsg(source, target, content) => {
-                let data = source.as_ref().map(|v| format!("{} {}", v, content));
-                (Some(target.as_str()), data)
+            MessageEvent::SetTopic(Some(source), channel, content) => {
+                self.write_to_target(
+                    server_address,
+                    Some(channel),
+                    format!(
+                        "--\t {} has changed topic for {} to \"{}\"",
+                        source, channel, content
+                    )
+                    .as_str(),
+                    false,
+                )?;
+            }
+            MessageEvent::PrivMsg(Some(source), target, content) => {
+                self.write_to_target(
+                    server_address,
+                    Some(target),
+                    format!("{} {}", source, content).as_str(),
+                    false,
+                )?;
             }
 
             MessageEvent::ActionMsg(source, target, content) => {
-                let data = Some(format!("* {} {}", source, content));
-                (Some(target.as_str()), data)
+                self.write_to_target(
+                    server_address,
+                    Some(target),
+                    format!("* {} {}", source, content).as_str(),
+                    false,
+                )?;
             }
-            _ => (None, None),
+            _ => {}
         };
-
-        if let Some(data) = data {
-            let logger = self.init_buffer(server_address, target)?;
-            logger.write(&data)?;
-            logger.flush(force_flush)?;
-        }
 
         Ok(())
     }

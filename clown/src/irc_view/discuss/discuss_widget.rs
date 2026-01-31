@@ -35,6 +35,10 @@ impl ChannelMessages {
             .push(in_message);
     }
 
+    pub fn has_messages(&self, channel: &str) -> bool {
+        self.messages.get(channel).is_some_and(|c| !c.is_empty())
+    }
+
     pub fn get_messages(&self, channel: &str) -> Option<&Vec<MessageContent>> {
         self.messages.get(channel)
     }
@@ -323,6 +327,11 @@ impl DiscussWidget {
             .unwrap_or(0)
     }
 
+    pub fn has_message(&self, channel: &str) -> bool {
+        let channel = channel.to_lowercase();
+        self.messages.has_messages(&channel)
+    }
+
     pub fn add_line(&mut self, channel: &str, in_message: MessageContent) {
         if let Some(source) = in_message.get_source() {
             self.color_map
@@ -528,16 +537,30 @@ impl crate::component::EventHandler for DiscussWidget {
 
                 None
             }
-            MessageEvent::Quit(user, reason) => {
-                self.add_line(
-                    &self.current_channel.clone(),
-                    MessageContent::new_info(
-                        reason
-                            .as_ref()
-                            .map(|v| format!("{} has quit: {}", user, v))
-                            .unwrap_or_else(|| format!("{} has quit", user)),
-                    ),
-                );
+            MessageEvent::QuitChannels(channels, user, reason) => {
+                for channel in channels {
+                    self.add_line(
+                        channel,
+                        MessageContent::new_info(
+                            reason
+                                .as_ref()
+                                .map(|v| format!("{} has quit: {}", user, v))
+                                .unwrap_or_else(|| format!("{} has quit", user)),
+                        ),
+                    );
+                }
+
+                if self.has_message(user) {
+                    self.add_line(
+                        user,
+                        MessageContent::new_info(
+                            reason
+                                .as_ref()
+                                .map(|v| format!("{} has quit: {}", user, v))
+                                .unwrap_or_else(|| format!("{} has quit", user)),
+                        ),
+                    );
+                }
 
                 None
             }
@@ -547,6 +570,12 @@ impl crate::component::EventHandler for DiscussWidget {
                     channel,
                     MessageContent::new_info(format!("{} has quit", user)),
                 );
+                if self.has_message(user) {
+                    self.add_line(
+                        channel,
+                        MessageContent::new_info(format!("{} has quit", user)),
+                    );
+                }
 
                 None
             }
