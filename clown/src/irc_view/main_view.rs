@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use self::command::connect_irc;
 use self::command::help;
 use crate::irc_view::command;

@@ -189,7 +189,7 @@ impl MessageContent {
             nickname_style = nickname_style.fg(*color_source);
         }
         if self.kind.eq(&MessageKind::Highlight) {
-            nickname_style = nickname_style.bg(Color::LightRed);
+            nickname_style = nickname_style.bg(Color::Red).fg(Color::LightYellow);
         }
 
         let default_style = match &self.kind {

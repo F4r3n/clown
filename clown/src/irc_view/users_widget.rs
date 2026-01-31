@@ -416,7 +416,9 @@ impl ListStateWidget {
         let mut style = Style::default().fg(color);
 
         if is_selected {
-            style = style.bg(ratatui::style::Color::Rgb(25, 25, 114));
+            style = style
+                .bg(ratatui::style::Color::Rgb(25, 25, 114))
+                .fg(ratatui::style::Color::Rgb(147, 135, 147));
         }
 
         if is_highlighted {
