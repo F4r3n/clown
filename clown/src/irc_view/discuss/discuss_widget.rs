@@ -391,7 +391,7 @@ impl DiscussWidget {
 
     fn scroll_page_down(&mut self) {
         self.scroll_offset = self.scroll_offset.saturating_sub(self.max_visible_height);
-        self.follow_last = false;
+        self.follow_last = self.scroll_offset == 0;
         self.redraw = true;
     }
 
