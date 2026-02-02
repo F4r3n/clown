@@ -128,7 +128,7 @@ impl MessageLogger {
         message: &MessageEvent,
     ) -> color_eyre::Result<()> {
         match message {
-            MessageEvent::Join(channel, Some(user), _) => {
+            MessageEvent::Join(channel, user, _) => {
                 self.write_to_target(
                     server_address,
                     Some(channel),

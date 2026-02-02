@@ -287,7 +287,7 @@ impl MainView<'_> {
                         //Create a new 'user' as IRC-Server
                         messages.push_message(MessageEvent::Join(
                             channel.clone(),
-                            Some(source.clone()),
+                            source.clone(),
                             source.eq_ignore_ascii_case(model.get_nickname()),
                         ));
                     }
@@ -300,12 +300,14 @@ impl MainView<'_> {
                         model.send_command(clown_core::command::Command::Join(
                             model.get_login_channel().to_string(),
                         ));
+                        //TODO: pass welcome message directly to the components
                         //Create a new 'user' as IRC-Server
-                        messages.push_message(MessageEvent::Join(
-                            source.clone().unwrap_or_default(),
-                            None,
-                            false,
-                        ));
+                        if let Some(source) = source.clone() {
+                            messages.push_message(MessageEvent::JoinServer(source));
+                        } else {
+                            tracing::error!("The message has no source");
+                        }
+
                         messages.push_message(MessageEvent::AddMessageView(
                             source.clone(),
                             MessageContent::new(source, content),

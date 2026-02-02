@@ -244,8 +244,13 @@ impl UsersWidget {
         }
     }
 
-    fn remove_user_from_all(&mut self, user: &str) {
+    fn remove_user_from_all_except_global(&mut self, user: &str) {
         if let Some(u) = self.list_users.get_mut(user) {
+            for section in self.list_sections.iter_mut() {
+                if section.section_info.id > 0 && u.has_joined_section(section.section_info.id) {
+                    section.remove_user(user);
+                }
+            }
             u.quit_all_except_global();
             if !u.has_joined_any_section() {
                 self.list_users.remove(user);
@@ -493,7 +498,7 @@ impl crate::component::EventHandler for UsersWidget {
             }
             MessageEvent::Quit(user, _reason) => {
                 let list_channels = self.get_all_joined_channel(user);
-                self.remove_user_from_all(user);
+                self.remove_user_from_all_except_global(user);
                 self.need_redraw = true;
 
                 Some(MessageEvent::QuitChannels(
@@ -526,11 +531,15 @@ impl crate::component::EventHandler for UsersWidget {
 
                 None
             }
-            MessageEvent::Join(channel, user, _main) => {
+            MessageEvent::JoinServer(server) => {
+                self.add_section(server.to_string());
+                self.need_redraw = true;
+                None
+            }
+            MessageEvent::Join(channel, user, _) => {
                 self.add_section(channel.to_string());
-                if let Some(user) = user {
-                    self.add_user_with_section(channel, user);
-                }
+                self.add_user_with_section(channel, user);
+
                 if let Some(id) = self.get_section_id(channel) {
                     self.list_state.current_section = id;
                 }
@@ -609,6 +618,8 @@ impl crate::component::EventHandler for UsersWidget {
 
 #[cfg(test)]
 mod tests {
+    use crate::component::EventHandler;
+
     use super::*;
 
     #[test]
@@ -622,6 +633,98 @@ mod tests {
         assert_eq!(user.name, user_name.to_string());
         assert_eq!(user.color, nickname_color(user_name));
         assert_eq!(users_widget.list_users.len(), 1);
+    }
+
+    #[test]
+    fn test_join_speak_quit_channel() {
+        let mut users_widget = UsersWidget::new();
+        let user_name = "farine";
+        let channel = "#rust";
+        let server_name = "IRC-Server";
+
+        //Join server
+        users_widget.handle_actions(&MessageEvent::JoinServer(server_name.to_string()));
+        assert_eq!(users_widget.nb_sections(), 1);
+
+        //join channel
+        users_widget.handle_actions(&MessageEvent::Join(
+            channel.to_string(),
+            user_name.to_string(),
+            true,
+        ));
+        assert_eq!(users_widget.nb_sections(), 2);
+        assert_eq!(users_widget.list_sections[0].section_info.name, server_name);
+        assert_eq!(&users_widget.list_sections[1].section_info.name, &channel);
+
+        // a and b join channel
+        users_widget.handle_actions(&MessageEvent::UpdateUsers(
+            channel.to_string(),
+            vec!["a", "b"]
+                .into_iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<String>>(),
+        ));
+
+        assert_eq!(users_widget.nb_sections(), 2);
+        assert_eq!(users_widget.list_sections[1].order_user.len(), 3);
+        assert_eq!(users_widget.list_sections[0].order_user.len(), 0);
+
+        //me to 'a'
+        users_widget.handle_actions(&MessageEvent::PrivMsg(
+            Some(user_name.to_string()),
+            "a".to_string(),
+            "Message".to_string(),
+        ));
+        assert_eq!(users_widget.list_sections[0].order_user.len(), 1);
+
+        //'a' quits
+        users_widget.handle_actions(&MessageEvent::Quit(user_name.to_string(), None));
+        assert_eq!(users_widget.list_sections[0].order_user.len(), 1);
+        assert_eq!(users_widget.list_sections[1].order_user.len(), 2);
+    }
+
+    #[test]
+    fn test_join_speak_part_channel() {
+        let mut users_widget = UsersWidget::new();
+        let user_name = "farine";
+        let channel = "#rust";
+        let server_name = "IRC-Server";
+
+        //Join server
+        users_widget.handle_actions(&MessageEvent::JoinServer(server_name.to_string()));
+        assert_eq!(users_widget.nb_sections(), 1);
+
+        //join channel
+        users_widget.handle_actions(&MessageEvent::Join(
+            channel.to_string(),
+            user_name.to_string(),
+            true,
+        ));
+
+        // a and b join channel
+        users_widget.handle_actions(&MessageEvent::UpdateUsers(
+            channel.to_string(),
+            vec!["a", "b"]
+                .into_iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<String>>(),
+        ));
+
+        //me to 'a'
+        users_widget.handle_actions(&MessageEvent::PrivMsg(
+            Some(user_name.to_string()),
+            "a".to_string(),
+            "Message".to_string(),
+        ));
+
+        //'a' part
+        users_widget.handle_actions(&MessageEvent::Part(
+            channel.to_string(),
+            user_name.to_string(),
+            false,
+        ));
+        assert_eq!(users_widget.list_sections[0].order_user.len(), 1);
+        assert_eq!(users_widget.list_sections[1].order_user.len(), 2);
     }
 
     #[test]

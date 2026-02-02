@@ -91,11 +91,9 @@ impl crate::component::EventHandler for CInput {
                 self.completion.current_channel = channel.to_string();
                 None
             }
-            MessageEvent::Join(channel, user, _main) => {
+            MessageEvent::Join(channel, user, _) => {
                 self.completion.current_channel = channel.to_string();
-                if let Some(user) = user {
-                    self.completion.input_completion.add_user(channel, user);
-                }
+                self.completion.input_completion.add_user(channel, user);
 
                 None
             }

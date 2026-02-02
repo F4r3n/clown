@@ -18,10 +18,11 @@ pub enum MessageEvent {
     UpdateUsers(String /*channel*/, Vec<String> /*list users */),
     ReplaceUser(String /*old */, String /*new */),
     Join(
-        String,         /*channel*/
-        Option<String>, /*user */
-        bool,           /*main user */
+        String, /*channel*/
+        String, /*user */
+        bool,   /*main */
     ),
+    JoinServer(String),
     SetTopic(
         Option<String>, /*source*/
         String,         /*channel */

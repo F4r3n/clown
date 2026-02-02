@@ -617,18 +617,24 @@ impl crate::component::EventHandler for DiscussWidget {
 
                 None
             }
+            MessageEvent::JoinServer(server) => {
+                self.add_line(
+                    server,
+                    MessageContent::new_info(format!("{} has joined", server)),
+                );
+                None
+            }
             MessageEvent::Join(channel, source, main) => {
-                if *main {
+                let main = *main;
+                if main {
                     self.set_current_channel(channel);
                 }
                 self.add_line(
                     channel,
-                    if *main {
+                    if main {
                         MessageContent::new_info(format!("You joined the channel {}", channel))
-                    } else if let Some(source) = source {
-                        MessageContent::new_info(format!("{} has joined", source))
                     } else {
-                        MessageContent::new_error("Hum should not happen".to_string())
+                        MessageContent::new_info(format!("{} has joined", source))
                     },
                 );
                 None
