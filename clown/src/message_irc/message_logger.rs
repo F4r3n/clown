@@ -167,7 +167,7 @@ impl MessageLogger {
                     false,
                 )?;
             }
-            MessageEvent::PrivMsg(Some(source), target, content) => {
+            MessageEvent::PrivMsg(source, target, content) => {
                 self.write_to_target(
                     server_address,
                     Some(target),

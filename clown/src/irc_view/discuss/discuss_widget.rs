@@ -580,10 +580,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::PrivMsg(source, target, content) => {
-                if source
-                    .clone()
-                    .unwrap_or("".to_string())
-                    .eq_ignore_ascii_case(&self.current_nickname)
+                if source.clone().eq_ignore_ascii_case(&self.current_nickname)
                     && !target.eq_ignore_ascii_case(&self.current_channel)
                 {
                     self.add_line(
@@ -597,9 +594,9 @@ impl crate::component::EventHandler for DiscussWidget {
                 self.add_line(
                     target,
                     if is_highlight {
-                        MessageContent::new_hightlight(source.clone(), content.clone())
+                        MessageContent::new_hightlight(Some(source.clone()), content.clone())
                     } else {
-                        MessageContent::new_message(source.clone(), content.clone())
+                        MessageContent::new_message(Some(source.clone()), content.clone())
                     },
                 );
                 if is_highlight {

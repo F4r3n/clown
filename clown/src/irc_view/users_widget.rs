@@ -671,7 +671,7 @@ mod tests {
 
         //me to 'a'
         users_widget.handle_actions(&MessageEvent::PrivMsg(
-            Some(user_name.to_string()),
+            user_name.to_string(),
             "a".to_string(),
             "Message".to_string(),
         ));
@@ -712,7 +712,7 @@ mod tests {
 
         //me to 'a'
         users_widget.handle_actions(&MessageEvent::PrivMsg(
-            Some(user_name.to_string()),
+            user_name.to_string(),
             "a".to_string(),
             "Message".to_string(),
         ));

@@ -150,7 +150,7 @@ impl MainView<'_> {
                     ));
 
                     let nickname = model.get_nickname().to_string();
-                    Some(MessageEvent::PrivMsg(Some(nickname), channel, content))
+                    Some(MessageEvent::PrivMsg(nickname, channel, content))
                 }
                 command::ClientCommand::Unknown(command_name) => self
                     .messages_display
@@ -170,7 +170,7 @@ impl MainView<'_> {
             ));
 
             Some(MessageEvent::PrivMsg(
-                Some(nickname),
+                nickname,
                 model.current_channel.to_string(),
                 content.to_string(),
             ))
@@ -251,7 +251,7 @@ impl MainView<'_> {
                                     parsed_content.to_string(),
                                 ));
                             }
-                        } else {
+                        } else if let Some(source) = source {
                             messages.push_message(MessageEvent::PrivMsg(source, target, content));
                         }
                     }

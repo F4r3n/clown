@@ -5,9 +5,9 @@ pub enum MessageEvent {
     MessageInput(String),
     AddMessageView(Option<String>, MessageContent),
     PrivMsg(
-        Option<String>, /*source */
-        String,         /*target*/
-        String,         /*content*/
+        String, /*source */
+        String, /*target*/
+        String, /*content*/
     ),
     ActionMsg(
         String, /*source */
