@@ -1,10 +1,9 @@
 use self::command::connect_irc;
 use self::command::help;
-use crate::irc_view::command;
-
 use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
+use crate::irc_view::command;
 use crate::irc_view::command::ClientCommand;
 use crate::irc_view::discuss::discuss_widget;
 use crate::irc_view::input::input_widget;
@@ -30,6 +29,11 @@ use strum::{EnumMessage, IntoEnumIterator};
 
 use tracing::debug;
 use tracing::error;
+#[derive(Debug, thiserror::Error)]
+pub enum MessageError {
+    #[error("The message should have a source")]
+    MissingSource,
+}
 
 const LOG_FLUSH_CHECK_TIMER: u64 = 10;
 
@@ -214,7 +218,7 @@ impl MainView<'_> {
         self.handle_irc(model, messages);
         if self.log_instant.elapsed() > std::time::Duration::from_secs(LOG_FLUSH_CHECK_TIMER) {
             if let Err(e) = model.flush_log() {
-                tracing::error!("Cannot flush logs {}", e);
+                tracing::error!(error = %e, "Log flush failed");
             }
             self.log_instant = std::time::Instant::now();
         }
@@ -235,30 +239,36 @@ impl MainView<'_> {
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {
-                        let target = if target.eq_ignore_ascii_case(model.get_nickname()) {
-                            source.clone().unwrap_or_default()
-                        } else {
-                            target
-                        };
+                        if let Some(source) = source {
+                            let target = if target.eq_ignore_ascii_case(model.get_nickname()) {
+                                source.clone()
+                            } else {
+                                target
+                            };
 
-                        if content.starts_with("\x01ACTION") {
-                            if let Some(parsed_content) = content.get(8..content.len() - 1)
-                                && let Some(source) = source
-                            {
-                                messages.push_message(MessageEvent::ActionMsg(
-                                    source,
-                                    target,
-                                    parsed_content.to_string(),
-                                ));
+                            if content.starts_with("\x01ACTION") {
+                                if let Some(parsed_content) = content.get(8..content.len() - 1) {
+                                    messages.push_message(MessageEvent::ActionMsg(
+                                        source,
+                                        target,
+                                        parsed_content.to_string(),
+                                    ));
+                                }
+                            } else {
+                                messages
+                                    .push_message(MessageEvent::PrivMsg(source, target, content));
                             }
-                        } else if let Some(source) = source {
-                            messages.push_message(MessageEvent::PrivMsg(source, target, content));
+                        } else {
+                            tracing::error!(error = %MessageError::MissingSource, "PrivMSG");
                         }
                     }
-                    Command::Nick(new_user) => messages.push_message(MessageEvent::ReplaceUser(
-                        source.unwrap_or_default(),
-                        new_user,
-                    )),
+                    Command::Nick(new_user) => {
+                        if let Some(source) = source {
+                            messages.push_message(MessageEvent::ReplaceUser(source, new_user));
+                        } else {
+                            tracing::error!(error = %MessageError::MissingSource, "Nick");
+                        }
+                    }
                     Command::Notice(target, message) => {
                         //Display a notice directly to the user current channel
                         messages.push_message(MessageEvent::AddMessageView(
@@ -270,26 +280,35 @@ impl MainView<'_> {
                         messages.push_message(MessageEvent::SetTopic(source, channel, topic));
                     }
                     Command::Quit(reason) => {
-                        let source = source.unwrap_or_default();
-                        messages.push_message(MessageEvent::Quit(source, reason));
+                        if let Some(source) = source {
+                            messages.push_message(MessageEvent::Quit(source, reason));
+                        } else {
+                            tracing::error!(error = %MessageError::MissingSource, "Quit");
+                        }
                     }
                     Command::Part(channel, _reason) => {
-                        let source = source.unwrap_or_default();
-                        let is_main_user = model.get_nickname().eq_ignore_ascii_case(&source);
-                        messages.push_message(MessageEvent::Part(
-                            channel.to_string(),
-                            source,
-                            is_main_user,
-                        ));
+                        if let Some(source) = source {
+                            let is_main_user = model.get_nickname().eq_ignore_ascii_case(&source);
+                            messages.push_message(MessageEvent::Part(
+                                channel.to_string(),
+                                source,
+                                is_main_user,
+                            ));
+                        } else {
+                            tracing::error!(error = %MessageError::MissingSource, "Part");
+                        }
                     }
                     Command::Join(channel) => {
-                        let source = source.unwrap_or_default();
-                        //Create a new 'user' as IRC-Server
-                        messages.push_message(MessageEvent::Join(
-                            channel.clone(),
-                            source.clone(),
-                            source.eq_ignore_ascii_case(model.get_nickname()),
-                        ));
+                        if let Some(source) = source {
+                            //Create a new 'user' as IRC-Server
+                            messages.push_message(MessageEvent::Join(
+                                channel.clone(),
+                                source.clone(),
+                                source.eq_ignore_ascii_case(model.get_nickname()),
+                            ));
+                        } else {
+                            tracing::error!(error = %MessageError::MissingSource, "Join");
+                        }
                     }
                     Command::Error(_err) => messages.push_message(MessageEvent::DisConnect),
                     _ => {}
@@ -297,6 +316,7 @@ impl MainView<'_> {
                 Response::Rpl(reply) => match reply {
                     ResponseNumber::Welcome(content) => {
                         model.reset_retry();
+
                         model.send_command(clown_core::command::Command::Join(
                             model.get_login_channel().to_string(),
                         ));
@@ -305,7 +325,7 @@ impl MainView<'_> {
                         if let Some(source) = source.clone() {
                             messages.push_message(MessageEvent::JoinServer(source));
                         } else {
-                            tracing::error!("The message has no source");
+                            tracing::error!(error = %MessageError::MissingSource, "Welcome");
                         }
 
                         messages.push_message(MessageEvent::AddMessageView(
@@ -504,7 +524,7 @@ impl widget_view::WidgetView for MainView<'_> {
             MessageEvent::PullIRC => self.update_pull_irc(model, messages),
             _ => {
                 if let Err(e) = model.log(&msg) {
-                    tracing::error!("Unabled to write logs: {}", e);
+                    tracing::error!(error = %e, "Cannot write logs");
                 }
                 for mut child in self.children() {
                     if let Some(msg) = child.handle_actions(&msg) {

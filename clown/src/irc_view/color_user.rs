@@ -1,5 +1,4 @@
 use palette::FromColor;
-use palette::num::Powf;
 use palette::{Oklch, Srgb};
 use ratatui::style::Color;
 

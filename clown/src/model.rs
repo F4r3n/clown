@@ -146,7 +146,7 @@ impl Model {
         }
     }
 
-    pub fn flush_log(&mut self) -> color_eyre::Result<()> {
+    pub fn flush_log(&mut self) -> std::io::Result<()> {
         self.logger.flush_checker()
     }
 }

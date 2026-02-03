@@ -31,7 +31,7 @@ impl Logger {
         Ok(BufWriter::new(file))
     }
 
-    fn flush(&mut self, force_flush: bool) -> color_eyre::Result<()> {
+    fn flush(&mut self, force_flush: bool) -> std::io::Result<()> {
         if force_flush
             || (self.duration.elapsed() > std::time::Duration::from_secs(LOG_FLUSH_TIMER_SECONDS))
         {
@@ -41,7 +41,7 @@ impl Logger {
         Ok(())
     }
 
-    fn write(&mut self, data: &str) -> color_eyre::Result<()> {
+    fn write(&mut self, data: &str) -> std::io::Result<()> {
         writeln!(self.buffer, "{}\t{}", Self::get_current_time(), data)?;
 
         Ok(())
@@ -101,7 +101,7 @@ impl MessageLogger {
         Ok(logger)
     }
 
-    pub fn flush_checker(&mut self) -> color_eyre::Result<()> {
+    pub fn flush_checker(&mut self) -> std::io::Result<()> {
         for (_, logger) in self.writers.iter_mut() {
             logger.flush(false)?;
         }

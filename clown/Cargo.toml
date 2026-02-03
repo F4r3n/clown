@@ -49,6 +49,7 @@ tracing-appender = "0.2.3"
 shadow-rs = {version="1.4.0", default-features=false}
 clap = { version = "4.5.53", features = ["derive", "help", "std"], default-features = false }
 bit-vec = "0.8.0"
+thiserror = "2.0.18"
 
 [dev-dependencies]
 anyhow = "1.0.100"

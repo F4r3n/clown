@@ -717,10 +717,16 @@ mod tests {
             "Message".to_string(),
         ));
 
+        users_widget.handle_actions(&MessageEvent::ReplaceUser("a".to_string(), "c".to_string()));
+        assert_eq!(users_widget.list_sections[0].order_user.len(), 1);
+        assert_eq!(users_widget.list_sections[0].order_user[0], "c".to_string());
+        assert_eq!(users_widget.list_users.get("a"), None);
+        assert_eq!(users_widget.list_users.get("c").unwrap().name, "c");
+
         //'a' part
         users_widget.handle_actions(&MessageEvent::Part(
             channel.to_string(),
-            user_name.to_string(),
+            "c".to_string(),
             false,
         ));
         assert_eq!(users_widget.list_sections[0].order_user.len(), 1);
