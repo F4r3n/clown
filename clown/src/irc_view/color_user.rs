@@ -1,4 +1,5 @@
 use palette::FromColor;
+use palette::num::Powf;
 use palette::{Oklch, Srgb};
 use ratatui::style::Color;
 
@@ -13,18 +14,17 @@ pub fn nickname_color(nickname: &str) -> ratatui::style::Color {
 }
 
 fn compute_color(index: u64) -> Oklch<f32> {
-    let hue_index: u32 = (index >> 32) as u32;
     let lower = index as u32;
     let lum_index: u16 = (lower >> 16) as u16;
     let chroma_index: u16 = lower as u16;
     // Spread hue evenly around the color wheel
-    let hue = (hue_index % 360) as f32;
+    let hue = (index % 360) as f32;
 
     let lumf = (f32::from(lum_index)) / (f32::from(u16::MAX));
     let chromaf = (f32::from(chroma_index)) / (f32::from(u16::MAX));
 
-    let luminance = lumf.max(0.15).powf(0.5);
-    let chroma = 0.11 + (chromaf * 0.1);
+    let luminance = lumf.max(0.3).powf(0.7);
+    let chroma = 0.02 + (chromaf * 0.25);
     Oklch::new(luminance, chroma, hue)
 }
 
@@ -190,5 +190,44 @@ mod tests {
         let color_b = nickname_color("farine");
 
         assert!(color_a != color_b);
+    }
+
+    fn print_colored_nickname(name: &str) {
+        let color = nickname_color(name);
+
+        // We match on the Ratatui color to extract RGB values
+        if let ratatui::style::Color::Rgb(r, g, b) = color {
+            // \x1b[38;2;R;G;Bm sets the foreground color (text)
+            // \x1b[48;2;R;G;Bm sets the background color
+            // \x1b[0m resets the formatting
+            println!(
+                "\x1b[38;2;{r};{g};{b}m█\x1b[0m {name:.<12} -> Rgb({r}, {g}, {b})",
+                r = r,
+                g = g,
+                b = b,
+                name = name
+            );
+        } else {
+            println!("{:?}: {}", color, name);
+        }
+    }
+
+    #[test]
+    fn test_distinct_color_() {
+        let color_a = nickname_color("guill");
+        let color_b = nickname_color("farine");
+
+        assert!(color_a != color_b);
+        for i in 0..26 {
+            let c = char::from(b'a' + i);
+            let mut name = String::new();
+            name.push(c);
+            /*name.push(c);
+            name.push(c);
+            name.push(c);
+            name.push(c);*/
+
+            print_colored_nickname(&name);
+        }
     }
 }
