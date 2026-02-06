@@ -516,7 +516,11 @@ impl crate::component::EventHandler for DiscussWidget {
         self.redraw
     }
 
-    fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
+    fn handle_actions(
+        &mut self,
+        irc_model: &crate::irc_view::irc_model::IrcModel,
+        event: &MessageEvent,
+    ) -> Option<MessageEvent> {
         match event {
             MessageEvent::AddMessageView(channel, in_message) => {
                 if let Some(channel) = channel {
@@ -537,10 +541,10 @@ impl crate::component::EventHandler for DiscussWidget {
 
                 None
             }
-            MessageEvent::QuitChannels(channels, user, reason) => {
-                for channel in channels {
+            MessageEvent::Quit(user, reason) => {
+                for channel in irc_model.get_all_joined_channel(user) {
                     self.add_line(
-                        channel,
+                        channel.as_str(),
                         MessageContent::new_info(
                             reason
                                 .as_ref()
@@ -565,7 +569,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
 
-            MessageEvent::Part(channel, user, _main) => {
+            MessageEvent::Part(channel, user) => {
                 self.add_line(
                     channel,
                     MessageContent::new_info(format!("{} has quit", user)),
@@ -621,8 +625,8 @@ impl crate::component::EventHandler for DiscussWidget {
                 );
                 None
             }
-            MessageEvent::Join(channel, source, main) => {
-                let main = *main;
+            MessageEvent::Join(channel, source) => {
+                let main = irc_model.is_main_user(source);
                 if main {
                     self.set_current_channel(channel);
                 }

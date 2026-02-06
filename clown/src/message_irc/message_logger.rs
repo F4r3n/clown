@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::message_event::MessageEvent;
+use crate::{irc_view::irc_model, message_event::MessageEvent};
 use ahash::AHashMap;
 const LOG_FLUSH_TIMER_SECONDS: u64 = 5;
 
@@ -125,10 +125,11 @@ impl MessageLogger {
     pub fn write_message(
         &mut self,
         server_address: &str,
+        irc_model: &crate::irc_view::irc_model::IrcModel,
         message: &MessageEvent,
     ) -> color_eyre::Result<()> {
         match message {
-            MessageEvent::Join(channel, user, _) => {
+            MessageEvent::Join(channel, user) => {
                 self.write_to_target(
                     server_address,
                     Some(channel),
@@ -137,7 +138,7 @@ impl MessageLogger {
                 )?;
             }
 
-            MessageEvent::Part(channel, user, _) => {
+            MessageEvent::Part(channel, user) => {
                 self.write_to_target(
                     server_address,
                     Some(channel),
@@ -145,11 +146,12 @@ impl MessageLogger {
                     true,
                 )?;
             }
-            MessageEvent::QuitChannels(channels, user, _) => {
-                for channel in channels {
+            MessageEvent::Quit(user, _) => {
+                //TODO iterator
+                for channel in irc_model.get_all_joined_channel(user) {
                     self.write_to_target(
                         server_address,
-                        Some(channel),
+                        Some(&channel),
                         format!("<--\t {} has quit", user).as_str(),
                         true,
                     )?;

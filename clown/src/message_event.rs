@@ -17,11 +17,7 @@ pub enum MessageEvent {
     SelectChannel(String),
     UpdateUsers(String /*channel*/, Vec<String> /*list users */),
     ReplaceUser(String /*old */, String /*new */),
-    Join(
-        String, /*channel*/
-        String, /*user */
-        bool,   /*main */
-    ),
+    Join(String /*channel*/, String /*user */),
     JoinServer(String),
     SetTopic(
         Option<String>, /*source*/
@@ -37,16 +33,7 @@ pub enum MessageEvent {
     DisConnect,
     OpenWeb(String),
     SpellChecker(Option<String>),
-    Part(
-        String, /*channel */
-        String, /*user */
-        bool,   /*main user*/
-    ),
+    Part(String /*channel */, String /*user */),
     Quit(String /*user*/, Option<String> /*reason*/),
-    QuitChannels(
-        Vec<String>,    /*channel*/
-        String,         /*user*/
-        Option<String>, /*reason*/
-    ),
     Bel,
 }

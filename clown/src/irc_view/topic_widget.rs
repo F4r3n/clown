@@ -56,7 +56,11 @@ impl EventHandler for TopicWidget {
     fn get_area(&self) -> ratatui::prelude::Rect {
         Rect::default()
     }
-    fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
+    fn handle_actions(
+        &mut self,
+        irc_model: &crate::irc_view::irc_model::IrcModel,
+        event: &MessageEvent,
+    ) -> Option<MessageEvent> {
         match event {
             MessageEvent::SetTopic(_, channel, topic) => {
                 self.update_topic(channel, topic);
@@ -68,8 +72,8 @@ impl EventHandler for TopicWidget {
                 self.need_redraw = true;
                 None
             }
-            MessageEvent::Join(channel, _user, main) => {
-                if *main {
+            MessageEvent::Join(channel, user) => {
+                if irc_model.is_main_user(user) {
                     self.set_channel(channel.to_string());
                     self.need_redraw = true;
                 }

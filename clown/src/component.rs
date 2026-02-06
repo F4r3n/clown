@@ -1,4 +1,5 @@
 use crate::event_handler::Event;
+use crate::irc_view::irc_model;
 use crate::message_event::MessageEvent;
 use ratatui::{Frame, layout::Rect};
 use std::ops::{Deref, DerefMut};
@@ -9,7 +10,11 @@ pub trait Draw {
 
 pub trait EventHandler {
     fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>;
-    fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent>;
+    fn handle_actions(
+        &mut self,
+        irc_model: &irc_model::IrcModel,
+        event: &MessageEvent,
+    ) -> Option<MessageEvent>;
     fn need_redraw(&self) -> bool;
 
     fn get_area(&self) -> Rect;
@@ -46,11 +51,15 @@ impl<'a, T> Component<'a, T> {
         self.inner.need_redraw()
     }
 
-    pub fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent>
+    pub fn handle_actions(
+        &mut self,
+        irc_model: &irc_model::IrcModel,
+        event: &MessageEvent,
+    ) -> Option<MessageEvent>
     where
         T: EventHandler,
     {
-        self.inner.handle_actions(event)
+        self.inner.handle_actions(irc_model, event)
     }
 
     pub fn render(&mut self, frame: &mut Frame<'_>, area: Rect)
@@ -111,8 +120,12 @@ impl EventHandler for Child<'_> {
         self.deref().get_area()
     }
 
-    fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
-        self.deref_mut().handle_actions(event)
+    fn handle_actions(
+        &mut self,
+        irc_model: &irc_model::IrcModel,
+        event: &MessageEvent,
+    ) -> Option<MessageEvent> {
+        self.deref_mut().handle_actions(irc_model, event)
     }
 
     fn need_redraw(&self) -> bool {

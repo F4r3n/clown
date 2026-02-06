@@ -8,6 +8,7 @@ use crate::irc_view::command::ClientCommand;
 use crate::irc_view::discuss::discuss_widget;
 use crate::irc_view::input::input_widget;
 use crate::irc_view::input::input_widget::CInput;
+use crate::irc_view::irc_model::IrcModel;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
@@ -156,15 +157,18 @@ impl MainView<'_> {
                     let nickname = model.get_nickname().to_string();
                     Some(MessageEvent::PrivMsg(nickname, channel, content))
                 }
-                command::ClientCommand::Unknown(command_name) => self
-                    .messages_display
-                    .handle_actions(&MessageEvent::AddMessageView(
-                        None,
-                        MessageContent::new_error(format!(
-                            "Unknown command {}",
-                            command_name.unwrap_or_default()
-                        )),
-                    )),
+                command::ClientCommand::Unknown(command_name) => {
+                    self.messages_display.handle_actions(
+                        &model.irc_model,
+                        &MessageEvent::AddMessageView(
+                            None,
+                            MessageContent::new_error(format!(
+                                "Unknown command {}",
+                                command_name.unwrap_or_default()
+                            )),
+                        ),
+                    )
+                }
             }
         } else {
             let nickname = model.get_nickname().to_string();
@@ -288,12 +292,7 @@ impl MainView<'_> {
                     }
                     Command::Part(channel, _reason) => {
                         if let Some(source) = source {
-                            let is_main_user = model.get_nickname().eq_ignore_ascii_case(&source);
-                            messages.push_message(MessageEvent::Part(
-                                channel.to_string(),
-                                source,
-                                is_main_user,
-                            ));
+                            messages.push_message(MessageEvent::Part(channel.to_string(), source));
                         } else {
                             tracing::error!(error = %MessageError::MissingSource, "Part");
                         }
@@ -301,11 +300,8 @@ impl MainView<'_> {
                     Command::Join(channel) => {
                         if let Some(source) = source {
                             //Create a new 'user' as IRC-Server
-                            messages.push_message(MessageEvent::Join(
-                                channel.clone(),
-                                source.clone(),
-                                source.eq_ignore_ascii_case(model.get_nickname()),
-                            ));
+                            messages
+                                .push_message(MessageEvent::Join(channel.clone(), source.clone()));
                         } else {
                             tracing::error!(error = %MessageError::MissingSource, "Join");
                         }
@@ -508,7 +504,7 @@ impl widget_view::WidgetView for MainView<'_> {
             MessageEvent::SelectChannel(ref channel) => {
                 model.current_channel = channel.to_string();
                 for mut child in self.children() {
-                    child.handle_actions(&msg);
+                    child.handle_actions(&model.irc_model, &msg);
                 }
             }
             MessageEvent::DisConnect => {
@@ -527,10 +523,11 @@ impl widget_view::WidgetView for MainView<'_> {
                     tracing::error!(error = %e, "Cannot write logs");
                 }
                 for mut child in self.children() {
-                    if let Some(msg) = child.handle_actions(&msg) {
+                    if let Some(msg) = child.handle_actions(&model.irc_model, &msg) {
                         messages.push_message(msg);
                     }
                 }
+                model.irc_model.handle_action(&msg);
             }
         };
     }

@@ -1,3 +1,4 @@
+use crate::irc_view::irc_model::IrcModel;
 use crate::message_irc::message_logger::MessageLogger;
 use crate::project_path::ProjectPath;
 use crate::{config::Config, message_event::MessageEvent};
@@ -44,6 +45,7 @@ pub struct Model {
     pub retry: u8,
 
     pub logger: MessageLogger,
+    pub irc_model: IrcModel,
 }
 
 impl Model {
@@ -52,10 +54,10 @@ impl Model {
         let channel = config.login_config.channel.to_string();
         let log_dir = ProjectPath::log_dir()
             .unwrap_or(std::env::current_dir().unwrap_or(std::path::Path::new("").to_path_buf()));
-
         Self {
             running_state: RunningState::Start,
             current_channel: channel.to_lowercase(),
+            irc_model: IrcModel::new_model(config.login_config.nickname.to_string()),
             stored_config: StoredConfig {
                 config,
                 stored_name: config_name,
@@ -140,7 +142,7 @@ impl Model {
     pub fn log(&mut self, message: &MessageEvent) -> color_eyre::Result<()> {
         if let Some(connection_config) = self.get_connection_config() {
             self.logger
-                .write_message(&connection_config.address, message)
+                .write_message(&connection_config.address, &self.irc_model, message)
         } else {
             Err(color_eyre::eyre::eyre!("No address set"))
         }

@@ -1,6 +1,7 @@
 use super::completion::Completion;
 use super::history::InputHistory;
 use super::spell_checker::SpellChecker;
+use crate::irc_view::irc_model::IrcModel;
 use crate::message_event::MessageEvent;
 use crate::{component::Draw, message_irc::message_content::MessageContent};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -65,7 +66,11 @@ impl crate::component::EventHandler for CInput {
     fn need_redraw(&self) -> bool {
         self.redraw
     }
-    fn handle_actions(&mut self, event: &MessageEvent) -> Option<MessageEvent> {
+    fn handle_actions(
+        &mut self,
+        irc_model: &IrcModel,
+        event: &MessageEvent,
+    ) -> Option<MessageEvent> {
         match event {
             MessageEvent::SpellChecker(language) => {
                 if let Some(language) = language {
@@ -91,14 +96,14 @@ impl crate::component::EventHandler for CInput {
                 self.completion.current_channel = channel.to_string();
                 None
             }
-            MessageEvent::Join(channel, user, _) => {
+            MessageEvent::Join(channel, user) => {
                 self.completion.current_channel = channel.to_string();
                 self.completion.input_completion.add_user(channel, user);
 
                 None
             }
-            MessageEvent::Part(channel, user, main) => {
-                if *main {
+            MessageEvent::Part(channel, user) => {
+                if irc_model.is_main_user(user) {
                     self.completion.input_completion.remove_channel(channel);
                 } else {
                     self.completion.input_completion.disable_user(channel, user);

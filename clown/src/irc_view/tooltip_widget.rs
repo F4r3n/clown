@@ -1,6 +1,6 @@
 #[cfg(feature = "website-preview")]
 use crate::irc_view::website_preview::WebsitePreview;
-use crate::{component::Draw, message_event::MessageEvent};
+use crate::{component::Draw, irc_view::irc_model, message_event::MessageEvent};
 
 use ratatui::{
     Frame,
@@ -142,6 +142,7 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
     }
     fn handle_actions(
         &mut self,
+        irc_model: &irc_model::IrcModel,
         event: &crate::message_event::MessageEvent,
     ) -> Option<crate::message_event::MessageEvent> {
         match event {

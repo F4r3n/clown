@@ -1,6 +1,7 @@
 mod color_user;
 mod command;
 mod discuss;
+pub mod irc_model;
 pub mod main_view;
 
 mod input;

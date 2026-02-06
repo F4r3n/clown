@@ -22,6 +22,7 @@ use ratatui::Frame;
 use shadow_rs::shadow;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+
 pub enum Views<'a> {
     Main(main_view::MainView<'a>),
 }
