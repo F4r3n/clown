@@ -7,6 +7,7 @@ struct User {
     name: String,
     connected_sections: bit_vec::BitVec,
     is_main: bool,
+    has_received_msg: bool,
 }
 const NB_SECTIONS: usize = 32;
 
@@ -16,6 +17,7 @@ impl User {
             name,
             is_main,
             connected_sections: bit_vec::BitVec::from_elem(NB_SECTIONS, false),
+            has_received_msg: false,
         }
     }
 
@@ -64,8 +66,8 @@ impl IrcModel {
         }
     }
 
-    fn sanitize_name(user: &str) -> &str {
-        user.strip_prefix('@').unwrap_or(user)
+    fn sanitize_name(user: &str) -> String {
+        user.strip_prefix('@').unwrap_or(user).to_lowercase()
     }
 
     fn add_channel(&mut self, channel: &str) -> usize {
@@ -99,35 +101,34 @@ impl IrcModel {
         let id = self.add_channel(channel);
 
         let mut should_delete = false;
-        if let Some(user) = self.users.get_mut(nick) {
+        if let Some(user) = self.users.get_mut(&nick) {
             user.quit_section(id);
             should_delete = user.has_joined_any_section();
         }
 
         if should_delete {
-            self.users.remove(nick);
+            self.users.remove(&nick);
         }
     }
 
     fn quit(&mut self, nick: &str) {
         let nick = Self::sanitize_name(nick);
 
-        self.users.remove(nick);
+        self.users.remove(&nick);
     }
 
     fn nick(&mut self, old: &str, new: &str) {
         let old = Self::sanitize_name(old);
-        let new = Self::sanitize_name(new);
 
-        if let Some(user) = self.users.get(old) {
+        if let Some(user) = self.users.get(&old) {
             let mut old_user = (*user).clone();
             old_user.name = new.to_string();
-            self.users.insert(new.to_string(), old_user);
+            self.users.insert(Self::sanitize_name(new), old_user);
         }
     }
 
     pub fn is_main_user(&self, user: &str) -> bool {
-        if let Some(user) = self.users.get(Self::sanitize_name(user)) {
+        if let Some(user) = self.users.get(Self::sanitize_name(user).as_str()) {
             user.is_main
         } else {
             false
@@ -145,7 +146,9 @@ impl IrcModel {
 
     pub fn handle_action(&mut self, event: &MessageEvent) {
         match event {
-            MessageEvent::JoinServer(_server) => {}
+            MessageEvent::JoinServer(server) => {
+                self.add_channel(server);
+            }
             MessageEvent::Join(channel, user) => {
                 self.join(channel, user);
             }

@@ -12,7 +12,12 @@ pub struct TopicWidget {
 }
 
 impl Draw for TopicWidget {
-    fn render(&mut self, frame: &mut ratatui::Frame<'_>, area: ratatui::prelude::Rect) {
+    fn render(
+        &mut self,
+        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        frame: &mut ratatui::Frame<'_>,
+        area: ratatui::prelude::Rect,
+    ) {
         if self.need_redraw {
             self.need_redraw = false;
         }

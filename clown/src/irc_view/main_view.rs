@@ -381,7 +381,7 @@ impl widget_view::WidgetView for MainView<'_> {
         }
         false
     }
-    fn view(&mut self, _model: &mut Model, frame: &mut Frame<'_>) {
+    fn view(&mut self, model: &mut Model, frame: &mut Frame<'_>) {
         if self.need_redraw {
             self.need_redraw = false;
         }
@@ -405,22 +405,25 @@ impl widget_view::WidgetView for MainView<'_> {
                 .split(*message_area_layout);
 
             if let Some(message_area) = top_layout.first() {
-                self.messages_display.render(frame, *message_area);
-                self.tooltip_widget.render(frame, *message_area);
+                self.messages_display
+                    .render(&model.irc_model, frame, *message_area);
+                self.tooltip_widget
+                    .render(&model.irc_model, frame, *message_area);
             }
 
             if let Some(list_users) = top_layout.get(1) {
-                self.list_users_view.render(frame, *list_users);
+                self.list_users_view
+                    .render(&model.irc_model, frame, *list_users);
             }
         }
 
         // Render widgets
         if let Some(input_area) = main_layout.get(2) {
-            self.input.render(frame, *input_area);
+            self.input.render(&model.irc_model, frame, *input_area);
         }
 
         if let Some(topic_area) = main_layout.first() {
-            self.topic_view.render(frame, *topic_area);
+            self.topic_view.render(&model.irc_model, frame, *topic_area);
         }
     }
 

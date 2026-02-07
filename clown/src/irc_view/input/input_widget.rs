@@ -28,7 +28,12 @@ pub struct CInput {
 }
 
 impl Draw for CInput {
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
+    fn render(
+        &mut self,
+        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        frame: &mut Frame<'_>,
+        area: Rect,
+    ) {
         self.area = area;
         if self.redraw {
             self.redraw = false;
