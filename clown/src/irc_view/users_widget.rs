@@ -59,20 +59,6 @@ impl User {
     }
 }
 
-impl DrawableItem for User {
-    fn display_color(&self) -> ratatui::style::Color {
-        self.color
-    }
-
-    fn display_title(&self) -> &str {
-        &self.name
-    }
-
-    fn is_highlighted(&self) -> bool {
-        self.need_hightlight
-    }
-}
-
 #[derive(Debug)]
 struct RegisteredSection {
     name: String,
@@ -90,12 +76,6 @@ impl RegisteredSection {
             highlight: false,
         }
     }
-}
-
-trait DrawableItem {
-    fn display_title(&self) -> &str;
-    fn display_color(&self) -> ratatui::style::Color;
-    fn is_highlighted(&self) -> bool;
 }
 
 #[derive(Debug)]
@@ -355,7 +335,7 @@ impl UsersWidget {
 impl Draw for UsersWidget {
     fn render(
         &mut self,
-        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        irc_model: &crate::irc_view::irc_model::IrcModel,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -364,7 +344,7 @@ impl Draw for UsersWidget {
         }
         self.area = area;
         self.list_state
-            .render(&self.list_sections, &self.list_users, frame, area);
+            .render(irc_model, &self.list_sections, frame, area);
     }
 }
 //#channel
@@ -443,8 +423,8 @@ impl ListStateWidget {
 
     fn render(
         &mut self,
+        irc_model: &crate::irc_view::irc_model::IrcModel,
         sections: &[Section],
-        users: &AHashMap<String, User>,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -461,12 +441,12 @@ impl ListStateWidget {
             items.push(item);
 
             for (i, user_name) in section.order_user.iter().enumerate() {
-                if let Some(user) = users.get(user_name) {
+                if let Some(user) = irc_model.get_user(user_name) {
                     let spans = self.add_item(
                         1,
-                        user.display_color(),
-                        user.display_title(),
-                        user.is_highlighted(),
+                        nickname_color(user_name),
+                        user_name,
+                        user.has_unread_message(),
                         (self.current_section == section_i) && (self.current_selected == (i + 1)),
                     );
 
@@ -645,7 +625,10 @@ mod tests {
         let user_name = "farine";
         let channel = "#rust";
         let server_name = "IRC-Server";
-        let mut irc_model = crate::irc_view::irc_model::IrcModel::new_model(user_name.to_string());
+        let mut irc_model = crate::irc_view::irc_model::IrcModel::new_model(
+            user_name.to_string(),
+            channel.to_string(),
+        );
         //Join server
         users_widget.handle_actions(
             &irc_model,
@@ -704,7 +687,10 @@ mod tests {
         let user_name = "farine";
         let channel = "#rust";
         let server_name = "IRC-Server";
-        let mut irc_model = crate::irc_view::irc_model::IrcModel::new_model(user_name.to_string());
+        let mut irc_model = crate::irc_view::irc_model::IrcModel::new_model(
+            user_name.to_string(),
+            channel.to_string(),
+        );
 
         //Join server
         let action = MessageEvent::JoinServer(server_name.to_string());

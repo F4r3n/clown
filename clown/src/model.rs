@@ -56,8 +56,11 @@ impl Model {
             .unwrap_or(std::env::current_dir().unwrap_or(std::path::Path::new("").to_path_buf()));
         Self {
             running_state: RunningState::Start,
+            irc_model: IrcModel::new_model(
+                config.login_config.nickname.to_string(),
+                channel.to_string(),
+            ),
             current_channel: channel.to_lowercase(),
-            irc_model: IrcModel::new_model(config.login_config.nickname.to_string()),
             stored_config: StoredConfig {
                 config,
                 stored_name: config_name,
