@@ -40,7 +40,6 @@ impl StoredConfig {
 pub struct Model {
     pub running_state: RunningState,
     stored_config: StoredConfig,
-    pub current_channel: String,
     pub irc_connection: Option<IRCConnection>,
     pub retry: u8,
 
@@ -60,7 +59,6 @@ impl Model {
                 config.login_config.nickname.to_string(),
                 channel.to_string(),
             ),
-            current_channel: channel.to_lowercase(),
             stored_config: StoredConfig {
                 config,
                 stored_name: config_name,

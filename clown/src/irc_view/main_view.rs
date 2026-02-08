@@ -8,7 +8,6 @@ use crate::irc_view::command::ClientCommand;
 use crate::irc_view::discuss::discuss_widget;
 use crate::irc_view::input::input_widget;
 use crate::irc_view::input::input_widget::CInput;
-use crate::irc_view::irc_model::IrcModel;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
@@ -52,7 +51,7 @@ pub struct MainView<'a> {
 }
 
 impl MainView<'_> {
-    pub fn new(current_channel: &str, current_nickname: &str) -> Self {
+    pub fn new(current_channel: &str) -> Self {
         let mut cinput = input_widget::CInput::default();
         cinput.add_completion_command_list(
             ClientCommand::iter().map(|v| v.get_message().unwrap_or("")),
@@ -66,7 +65,7 @@ impl MainView<'_> {
         //list_components.push()
         let messages_display = Component::new(
             "messages",
-            discuss_widget::DiscussWidget::new(current_channel, current_nickname.to_string()),
+            discuss_widget::DiscussWidget::new(current_channel),
         );
         let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
         Self {
@@ -119,8 +118,10 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Topic(topic) => {
-                    model
-                        .send_command(Command::Topic(model.current_channel.clone(), topic.clone()));
+                    model.send_command(Command::Topic(
+                        model.irc_model.get_current_channel().to_string(),
+                        topic.clone(),
+                    ));
                     None
                 }
                 command::ClientCommand::Spell(language) => {
@@ -131,7 +132,8 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Part(channel, reason) => {
-                    let chanel = channel.unwrap_or_else(|| model.current_channel.clone());
+                    let chanel = channel
+                        .unwrap_or_else(|| model.irc_model.get_current_channel().to_string());
                     model.send_command(Command::Part(chanel.clone(), reason.clone())); //the server will check
                     None
                 }
@@ -139,12 +141,12 @@ impl MainView<'_> {
                     let nickname = model.get_nickname().to_string();
 
                     model.send_command(clown_core::command::Command::PrivMsg(
-                        model.current_channel.to_string(),
+                        model.irc_model.get_current_channel().to_string(),
                         format!("\x01ACTION {}\x01", content.clone()),
                     ));
                     Some(MessageEvent::ActionMsg(
                         nickname,
-                        model.current_channel.to_string(),
+                        model.irc_model.get_current_channel().to_string(),
                         content,
                     ))
                 }
@@ -173,13 +175,13 @@ impl MainView<'_> {
         } else {
             let nickname = model.get_nickname().to_string();
             model.send_command(clown_core::command::Command::PrivMsg(
-                model.current_channel.to_string(),
+                model.irc_model.get_current_channel().to_string(),
                 content.to_string(),
             ));
 
             Some(MessageEvent::PrivMsg(
                 nickname,
-                model.current_channel.to_string(),
+                model.irc_model.get_current_channel().to_string(),
                 content.to_string(),
             ))
         }
@@ -244,12 +246,6 @@ impl MainView<'_> {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {
                         if let Some(source) = source {
-                            let target = if target.eq_ignore_ascii_case(model.get_nickname()) {
-                                source.clone()
-                            } else {
-                                target
-                            };
-
                             if content.starts_with("\x01ACTION") {
                                 if let Some(parsed_content) = content.get(8..content.len() - 1) {
                                     messages.push_message(MessageEvent::ActionMsg(
@@ -502,12 +498,6 @@ impl widget_view::WidgetView for MainView<'_> {
                 ));
                 if let Some(v) = connect_irc(model) {
                     messages.push_message(v)
-                }
-            }
-            MessageEvent::SelectChannel(ref channel) => {
-                model.current_channel = channel.to_string();
-                for mut child in self.children() {
-                    child.handle_actions(&model.irc_model, &msg);
                 }
             }
             MessageEvent::DisConnect => {

@@ -141,6 +141,9 @@ impl UsersWidget {
         let old = Self::sanitize_name(old);
         let new = Self::sanitize_name(new);
         let global_section_id = self.get_global_section_id();
+        tracing::debug!("{:?}", &irc_model);
+        tracing::debug!("{:?}", &self.list_sections);
+
         //not really performant, but not expecting a lot of changes
         for section in self.list_sections.iter_mut() {
             if irc_model.has_user_joined_channel(old, &section.section_info.name)
@@ -422,7 +425,10 @@ impl crate::component::EventHandler for UsersWidget {
                 self.need_redraw = true;
                 None
             }
-            MessageEvent::PrivMsg(_, target, _) | MessageEvent::ActionMsg(_, target, _) => {
+            MessageEvent::PrivMsg(source, target, _)
+            | MessageEvent::ActionMsg(source, target, _) => {
+                let target = irc_model.get_target(source, target);
+
                 if let Some(selected_name) = self.get_selected_name() {
                     if !selected_name.eq_ignore_ascii_case(target) {
                         self.add_user_global_section(target);
@@ -720,6 +726,8 @@ mod tests {
         assert_eq!(widget_test.users_widget.list_state.current_section, 1);
 
         assert_eq!(widget_test.next_item(), Some("farine".to_string()));
+        assert!(widget_test.irc_model.has_unread_message("a"));
+
         assert_eq!(widget_test.next_item(), Some("a".to_string()));
         assert!(!widget_test.irc_model.has_unread_message("a"));
 
@@ -787,6 +795,56 @@ mod tests {
 
         assert_eq!(users_widget.list_sections[0].order_user.len(), 1);
         assert_eq!(users_widget.list_sections[1].order_user.len(), 2);
+    }
+
+    #[test]
+    fn test_join_speak_rename() {
+        let users_widget = UsersWidget::new();
+        let user_name = "farine";
+        let channel = "#rust";
+        let server_name = "IRC-Server";
+        let irc_model = crate::irc_view::irc_model::IrcModel::new_model(
+            user_name.to_string(),
+            channel.to_string(),
+        );
+        let mut widget_test = WidgetTest {
+            irc_model,
+            users_widget,
+        };
+        widget_test.join_server(server_name);
+        widget_test.join_channel(channel, user_name);
+
+        // a join channel
+        widget_test.join_channel_users(channel, vec!["a"]);
+
+        //a to farine
+        let action = MessageEvent::PrivMsg(
+            "a".to_string(),
+            user_name.to_string(),
+            "Message".to_string(),
+        );
+        widget_test.handle_action(&action);
+
+        //nick 'a' to 'c'
+        let action = MessageEvent::ReplaceUser("a".to_string(), "c".to_string());
+        widget_test.handle_action(&action);
+        assert_eq!(
+            widget_test.users_widget.list_sections[0].order_user.len(),
+            1
+        );
+        assert_eq!(
+            widget_test.users_widget.list_sections[0].order_user[0],
+            "c".to_string()
+        );
+
+        assert_eq!(
+            widget_test.users_widget.list_sections[1].order_user.len(),
+            2
+        );
+        assert_eq!(
+            widget_test.users_widget.list_sections[1].order_user[1],
+            "c".to_string()
+        );
     }
 
     #[test]

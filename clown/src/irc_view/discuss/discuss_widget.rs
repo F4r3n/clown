@@ -35,6 +35,12 @@ impl ChannelMessages {
             .push(in_message);
     }
 
+    fn rename(&mut self, old: &str, new: &str) {
+        if let Some(messages) = self.messages.remove(old) {
+            self.messages.insert(new.to_string(), messages);
+        }
+    }
+
     pub fn has_messages(&self, channel: &str) -> bool {
         self.messages.get(channel).is_some_and(|c| !c.is_empty())
     }
@@ -85,7 +91,6 @@ pub struct DiscussWidget {
     content_width: usize,
     messages: ChannelMessages,
     current_channel: String,
-    current_nickname: String,
 
     last_hovered: Option<Hovered>,
     color_map: AHashMap<String, ratatui::style::Color>,
@@ -93,10 +98,9 @@ pub struct DiscussWidget {
 }
 
 impl DiscussWidget {
-    pub fn new(current_channel: &str, current_nickname: String) -> Self {
+    pub fn new(current_channel: &str) -> Self {
         Self {
             current_channel: current_channel.to_lowercase(),
-            current_nickname,
             messages: ChannelMessages::default(),
             scroll_offset: 0,
             max_visible_height: 10,
@@ -404,8 +408,6 @@ impl DiscussWidget {
     }
 
     fn scroll_down(&mut self) {
-        //let max_scroll = self.nb_lines_to_fit();
-
         self.scroll_offset = self.scroll_offset.saturating_sub(1);
 
         self.follow_last = self.scroll_offset == 0;
@@ -413,8 +415,8 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
-    fn should_highlight(&self, in_content: &str) -> bool {
-        let nick = &self.current_nickname;
+    fn should_highlight(&self, current_nickname: &str, in_content: &str) -> bool {
+        let nick = current_nickname;
 
         if let Some(start_byte) = in_content.find(nick) {
             let end_byte = start_byte + nick.len();
@@ -473,10 +475,7 @@ impl Draw for DiscussWidget {
                     .saturating_sub(4_u16)
             })
             .unwrap_or(0);
-        /*if (content_width as usize) != self.content_width {
-            self.messages
-                .update_messages_width(&self.current_channel, content_width);
-        }*/
+
         self.content_width = content_width as usize;
         self.scroll_boundary();
         self.vertical_scroll_state = ScrollbarState::new(self.get_fake_total_lines()).position(
@@ -589,16 +588,18 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::PrivMsg(source, target, content) => {
-                if source.clone().eq_ignore_ascii_case(&self.current_nickname)
-                    && !target.eq_ignore_ascii_case(&self.current_channel)
+                let target = irc_model.get_target(source, target);
+
+                if source.eq_ignore_ascii_case(irc_model.get_current_nick())
+                    && !target.eq_ignore_ascii_case(irc_model.get_current_channel())
                 {
                     self.add_line(
-                        &self.current_channel.clone(),
-                        MessageContent::new_privmsg(target.clone(), content.clone()),
+                        irc_model.get_current_channel(),
+                        MessageContent::new_privmsg(target.to_string(), content.clone()),
                     );
                 }
 
-                let is_highlight = self.should_highlight(content);
+                let is_highlight = self.should_highlight(irc_model.get_current_nick(), content);
 
                 self.add_line(
                     target,
@@ -616,6 +617,8 @@ impl crate::component::EventHandler for DiscussWidget {
             }
 
             MessageEvent::ActionMsg(source, target, content) => {
+                let target = irc_model.get_target(source, target);
+
                 self.add_line(
                     target,
                     MessageContent::new_action(source.clone(), content.clone()),
@@ -646,8 +649,9 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::ReplaceUser(old, new) => {
-                if self.current_nickname.eq_ignore_ascii_case(old) {
-                    self.current_nickname = new.to_string();
+                self.messages.rename(old, new);
+                if self.current_channel.eq_ignore_ascii_case(old) {
+                    self.current_channel = new.to_ascii_lowercase();
                 }
                 None
             }
@@ -798,8 +802,7 @@ mod tests {
     fn test_find_index() {
         pub const TEXT_START: usize = TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH;
 
-        let current_nick = "nickname".to_string();
-        let mut discuss = DiscussWidget::new("test", current_nick.clone());
+        let mut discuss = DiscussWidget::new("test");
         discuss.content_width = 4;
         discuss.max_visible_height = 4;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;
@@ -869,7 +872,7 @@ mod tests {
 
     #[test]
     fn test_total_lines() {
-        let mut discuss = DiscussWidget::new("", "".to_string());
+        let mut discuss = DiscussWidget::new("");
         discuss.content_width = 10;
 
         discuss.add_line(
@@ -890,7 +893,7 @@ mod tests {
 
     #[test]
     fn test_can_scroll_up() {
-        let mut discuss = DiscussWidget::new("", "".to_string());
+        let mut discuss = DiscussWidget::new("");
         discuss.content_width = 5;
         discuss.max_visible_height = 3;
 
@@ -915,20 +918,18 @@ mod tests {
     fn test_should_hightlight() {
         let current_nick = "nickname".to_string();
 
-        let discuss = DiscussWidget::new("test", current_nick.to_string());
-        assert!(discuss.should_highlight("my nickname is "));
-        assert!(!discuss.should_highlight("my nicknameis "));
-        assert!(discuss.should_highlight("nickname"));
-        assert!(discuss.should_highlight(" nickname"));
-        assert!(discuss.should_highlight("nickname "));
-        assert!(discuss.should_highlight(",nickname "));
+        let discuss = DiscussWidget::new("test");
+        assert!(discuss.should_highlight(&current_nick, "my nickname is "));
+        assert!(!discuss.should_highlight(&current_nick, "my nicknameis "));
+        assert!(discuss.should_highlight(&current_nick, "nickname"));
+        assert!(discuss.should_highlight(&current_nick, " nickname"));
+        assert!(discuss.should_highlight(&current_nick, "nickname "));
+        assert!(discuss.should_highlight(&current_nick, ",nickname "));
     }
 
     #[test]
     fn test_render_rows() {
-        let current_nick = "nickname".to_string();
-
-        let mut discuss = DiscussWidget::new("test", current_nick.to_string());
+        let mut discuss = DiscussWidget::new("test");
 
         discuss.add_line(
             "test",
