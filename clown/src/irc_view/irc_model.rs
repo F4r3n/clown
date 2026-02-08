@@ -7,8 +7,6 @@ pub struct User {
     name: String,
     connected_sections: bit_vec::BitVec,
     is_main: bool,
-    has_unread_message: bool,
-    has_received_message: bool,
 }
 const NB_SECTIONS: usize = 32;
 
@@ -18,13 +16,10 @@ impl User {
             name,
             is_main,
             connected_sections: bit_vec::BitVec::from_elem(NB_SECTIONS, false),
-            has_unread_message: false,
-            has_received_message: false,
         }
     }
-
-    pub fn has_unread_message(&self) -> bool {
-        self.has_unread_message
+    pub fn get_name(&self) -> &str {
+        &self.name
     }
 
     pub fn join_section(&mut self, id: usize) {
@@ -52,10 +47,16 @@ impl User {
 struct Channel {
     id: usize,
     name: String,
+
+    has_unread_message: bool,
+    has_received_message: bool,
 }
 
+#[derive(Debug)]
 pub struct IrcModel {
     users: ahash::AHashMap<String, User>,
+
+    //Usually not a lot of channels, so keeping a vector is fine
     list_channels: Vec<Channel>,
     current_channel: String,
 }
@@ -78,6 +79,26 @@ impl IrcModel {
         user.strip_prefix('@').unwrap_or(user).to_lowercase()
     }
 
+    fn get_channel_id(&self, channel: &str) -> Option<usize> {
+        for c in &self.list_channels {
+            if c.name.eq_ignore_ascii_case(channel) {
+                return Some(c.id);
+            }
+        }
+
+        None
+    }
+
+    fn get_channel_mut(&mut self, channel: &str) -> Option<&mut Channel> {
+        self.get_channel_id(channel)
+            .and_then(|v| self.list_channels.get_mut(v))
+    }
+
+    fn get_channel(&self, channel: &str) -> Option<&Channel> {
+        self.get_channel_id(channel)
+            .and_then(|v| self.list_channels.get(v))
+    }
+
     fn add_channel(&mut self, channel: &str) -> usize {
         for c in &self.list_channels {
             if c.name.eq_ignore_ascii_case(channel) {
@@ -87,6 +108,8 @@ impl IrcModel {
         let new_channel = Channel {
             id: self.list_channels.len(),
             name: channel.to_string(),
+            has_received_message: false,
+            has_unread_message: false,
         };
         let id = new_channel.id;
         self.list_channels.push(new_channel);
@@ -128,8 +151,8 @@ impl IrcModel {
     fn nick(&mut self, old: &str, new: &str) {
         let old = Self::sanitize_name(old);
 
-        if let Some(user) = self.users.get(&old) {
-            let mut old_user = (*user).clone();
+        if let Some(user) = self.users.remove(&old) {
+            let mut old_user = user.clone();
             old_user.name = new.to_string();
             self.users.insert(Self::sanitize_name(new), old_user);
         }
@@ -147,6 +170,17 @@ impl IrcModel {
         self.users.get(&Self::sanitize_name(user))
     }
 
+    pub fn has_user_joined_channel(&self, user: &str, channel: &str) -> bool {
+        if let Some(id) = self.get_channel_id(channel) {
+            self.users
+                .get(&Self::sanitize_name(user))
+                .map(|v| v.has_joined_section(id))
+                .is_some_and(|v| v)
+        } else {
+            false
+        }
+    }
+
     pub fn get_all_joined_channel(&self, user: &str) -> impl Iterator<Item = String> + '_ {
         self.users.get(user).into_iter().flat_map(move |u| {
             self.list_channels
@@ -156,19 +190,25 @@ impl IrcModel {
         })
     }
 
-    fn received_message(&mut self, target: &str) {
-        let target = Self::sanitize_name(target);
-        if let Some(user) = self.users.get_mut(&target) {
-            user.has_unread_message = self.current_channel.eq(&target);
-            user.has_received_message = true;
+    fn received_message(&mut self, channel: &str) {
+        let new_message = self.current_channel.eq_ignore_ascii_case(channel);
+        let id = self.add_channel(channel);
+
+        if let Some(c) = self.list_channels.get_mut(id) {
+            c.has_received_message = true;
+            c.has_unread_message = !new_message;
         }
     }
 
     fn select_channel(&mut self, channel: &str) {
-        self.current_channel = Self::sanitize_name(channel);
-        if let Some(user) = self.users.get_mut(&self.current_channel) {
-            user.has_unread_message = false;
+        if let Some(c) = self.get_channel_mut(channel) {
+            c.has_unread_message = false;
         }
+    }
+
+    pub fn has_unread_message(&self, channel: &str) -> bool {
+        self.get_channel(channel)
+            .is_some_and(|v| v.has_unread_message)
     }
 
     pub fn handle_action(&mut self, event: &MessageEvent) {
@@ -188,11 +228,16 @@ impl IrcModel {
             MessageEvent::ReplaceUser(old, new) => {
                 self.nick(old, new);
             }
+            MessageEvent::UpdateUsers(channel, list_users) => {
+                for user in list_users {
+                    self.join(channel, user);
+                }
+            }
             MessageEvent::SelectChannel(channel) => {
                 self.select_channel(channel);
             }
-            MessageEvent::PrivMsg(_, target, _) | MessageEvent::ActionMsg(_, target, _) => {
-                self.received_message(target);
+            MessageEvent::PrivMsg(source, _, _) | MessageEvent::ActionMsg(source, _, _) => {
+                self.received_message(source);
             }
             _ => {}
         }
