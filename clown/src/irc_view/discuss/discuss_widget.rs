@@ -635,9 +635,6 @@ impl crate::component::EventHandler for DiscussWidget {
             }
             MessageEvent::Join(channel, source) => {
                 let main = irc_model.is_main_user(source);
-                if main {
-                    self.set_current_channel(channel);
-                }
                 self.add_line(
                     channel,
                     if main {

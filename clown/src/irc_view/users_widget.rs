@@ -141,8 +141,6 @@ impl UsersWidget {
         let old = Self::sanitize_name(old);
         let new = Self::sanitize_name(new);
         let global_section_id = self.get_global_section_id();
-        tracing::debug!("{:?}", &irc_model);
-        tracing::debug!("{:?}", &self.list_sections);
 
         //not really performant, but not expecting a lot of changes
         for section in self.list_sections.iter_mut() {
@@ -429,17 +427,10 @@ impl crate::component::EventHandler for UsersWidget {
             | MessageEvent::ActionMsg(source, target, _) => {
                 let target = irc_model.get_target(source, target);
 
-                if let Some(selected_name) = self.get_selected_name() {
-                    if !selected_name.eq_ignore_ascii_case(target) {
-                        self.add_user_global_section(target);
-                        self.hightlight_user(target);
-                        self.need_redraw = true;
-                    }
-                } else {
-                    self.add_user_global_section(target);
-                    self.hightlight_user(target);
-                    self.need_redraw = true;
-                }
+                self.add_user_global_section(target);
+                self.hightlight_user(target);
+                self.need_redraw = true;
+
                 None
             }
             MessageEvent::Part(channel, user) => {

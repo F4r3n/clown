@@ -146,6 +146,9 @@ impl IrcModel {
             .entry(nick.to_string())
             .or_insert_with(|| User::new(nick.to_string(), false));
         entry.join_section(id);
+        if entry.is_main {
+            self.current_channel = Self::sanitize_name(channel);
+        }
     }
 
     fn part(&mut self, channel: &str, nick: &str) {

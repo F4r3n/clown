@@ -298,6 +298,7 @@ impl MainView<'_> {
                             //Create a new 'user' as IRC-Server
                             messages
                                 .push_message(MessageEvent::Join(channel.clone(), source.clone()));
+                            messages.push_message(MessageEvent::SelectChannel(channel.clone()));
                         } else {
                             tracing::error!(error = %MessageError::MissingSource, "Join");
                         }
