@@ -213,14 +213,15 @@ impl IrcModel {
         }
     }
 
-    //TODO: iterator should need to send &str
-    pub fn get_all_joined_channel(&self, user: &str) -> impl Iterator<Item = String> + '_ {
+    pub fn get_all_joined_channel(&self, user: &str) -> impl Iterator<Item = &str> + '_ {
         let user = Self::sanitize_name(user).to_lowercase();
-        self.users.get(&user).into_iter().flat_map(move |u| {
+        let maybe_user = self.users.get(&user);
+
+        maybe_user.into_iter().flat_map(|u| {
             self.list_channels
                 .iter()
-                .filter(move |section| u.has_joined_section(section.id))
-                .map(|section| section.name.clone())
+                .filter(|section| u.has_joined_section(section.id))
+                .map(|section| section.name.as_str())
         })
     }
 

@@ -548,7 +548,6 @@ impl crate::component::EventHandler for DiscussWidget {
             MessageEvent::Quit(user, reason) => {
                 for channel in irc_model.get_all_joined_channel(user) {
                     self.add_line(
-                        channel.as_str(),
                         MessageContent::new_info(
                             reason
                                 .as_ref()
