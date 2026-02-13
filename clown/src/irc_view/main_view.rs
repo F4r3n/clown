@@ -113,8 +113,11 @@ impl MainView<'_> {
                 }
                 command::ClientCommand::Help => Some(help()),
                 command::ClientCommand::Nick(new_nick) => {
-                    let _ = model.set_nickname(new_nick.clone());
                     model.send_command(Command::Nick(new_nick.clone()));
+                    if !model.is_connected() {
+                        let _ = model.set_nickname(new_nick.clone());
+                    }
+
                     None
                 }
                 command::ClientCommand::Topic(topic) => {
