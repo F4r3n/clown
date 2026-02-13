@@ -650,7 +650,7 @@ impl crate::component::EventHandler for DiscussWidget {
                     self.add_line(
                         channel,
                         MessageContent::new_info(format!(
-                            "{} has changed his nickname to {}",
+                            "{} has changed their nickname to {}",
                             &old, &new
                         )),
                     );

@@ -142,7 +142,7 @@ impl MessageLogger {
                     self.write_to_target(
                         server_address,
                         Some(channel),
-                        format!("<--\t {} has changed his nickname to {}", &old, &new).as_str(),
+                        format!("<--\t {} has changed their nickname to {}", &old, &new).as_str(),
                         true,
                     )?;
                 }

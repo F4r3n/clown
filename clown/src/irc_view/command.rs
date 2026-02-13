@@ -63,14 +63,24 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
             match command.to_lowercase().as_str() {
                 "connect" => Some(ClientCommand::Connect),
                 "quit" => Some(ClientCommand::Quit(args.map(|v| v.to_string()))),
-                "topic" => args.map(|v| ClientCommand::Topic(v.to_string())),
-                "nick" => args.map(|v| ClientCommand::Nick(v.to_string())),
+                "topic" => Some(args.map_or(ClientCommand::Unknown(None), |v| {
+                    ClientCommand::Topic(v.to_string())
+                })),
+                "nick" => Some(args.map_or(ClientCommand::Unknown(None), |v| {
+                    ClientCommand::Nick(v.to_string())
+                })),
                 "help" => Some(ClientCommand::Help),
                 "spell" => Some(ClientCommand::Spell(args.map(|v| v.to_string()))),
-                "me" => args.map(|v| ClientCommand::Action(v.to_string())),
-                "join" => args.map(|v| ClientCommand::Join(v.to_string())),
+                "me" => Some(args.map_or(ClientCommand::Unknown(None), |v| {
+                    ClientCommand::Action(v.to_string())
+                })),
+                "join" => Some(args.map_or(ClientCommand::Unknown(None), |v| {
+                    ClientCommand::Join(v.to_string())
+                })),
                 "part" => Some(part(args)),
-                "msg" => args.and_then(|v| privmsg(v).or(Some(ClientCommand::Unknown(None)))),
+                "msg" => args.map_or(Some(ClientCommand::Unknown(None)), |v| {
+                    privmsg(v).or(Some(ClientCommand::Unknown(None)))
+                }),
                 _ => Some(ClientCommand::Unknown(Some(command.to_string()))),
             }
         } else {

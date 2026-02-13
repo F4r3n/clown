@@ -267,6 +267,9 @@ impl MainView<'_> {
                     }
                     Command::Nick(new_user) => {
                         if let Some(source) = source {
+                            if source.eq_ignore_ascii_case(model.get_nickname()) {
+                                let _ = model.set_nickname(new_user.clone());
+                            }
                             messages.push_message(MessageEvent::ReplaceUser(source, new_user));
                         } else {
                             tracing::error!(error = %MessageError::MissingSource, "Nick");
