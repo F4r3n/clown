@@ -38,7 +38,7 @@ impl InputCompletion {
     }
 
     fn sanitize_key(key: &str) -> String {
-        key.to_ascii_lowercase()
+        key.to_lowercase()
     }
 
     pub fn replace_user(&mut self, old: &str, new: &str) {
