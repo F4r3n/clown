@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{irc_view::irc_model, message_event::MessageEvent};
+use crate::message_event::MessageEvent;
 use ahash::AHashMap;
 const LOG_FLUSH_TIMER_SECONDS: u64 = 5;
 
@@ -137,7 +137,16 @@ impl MessageLogger {
                     false,
                 )?;
             }
-
+            MessageEvent::ReplaceUser(old, new) => {
+                for channel in irc_model.get_all_joined_channel(old) {
+                    self.write_to_target(
+                        server_address,
+                        Some(channel),
+                        format!("<--\t {} has changed his nickname to {}", &old, &new).as_str(),
+                        true,
+                    )?;
+                }
+            }
             MessageEvent::Part(channel, user) => {
                 self.write_to_target(
                     server_address,
@@ -147,11 +156,10 @@ impl MessageLogger {
                 )?;
             }
             MessageEvent::Quit(user, _) => {
-                //TODO iterator
                 for channel in irc_model.get_all_joined_channel(user) {
                     self.write_to_target(
                         server_address,
-                        Some(&channel),
+                        Some(channel),
                         format!("<--\t {} has quit", user).as_str(),
                         true,
                     )?;

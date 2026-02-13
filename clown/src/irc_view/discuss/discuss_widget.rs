@@ -548,6 +548,7 @@ impl crate::component::EventHandler for DiscussWidget {
             MessageEvent::Quit(user, reason) => {
                 for channel in irc_model.get_all_joined_channel(user) {
                     self.add_line(
+                        channel,
                         MessageContent::new_info(
                             reason
                                 .as_ref()
@@ -645,6 +646,16 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::ReplaceUser(old, new) => {
+                for channel in irc_model.get_all_joined_channel(old) {
+                    self.add_line(
+                        channel,
+                        MessageContent::new_info(format!(
+                            "{} has changed his nickname to {}",
+                            &old, &new
+                        )),
+                    );
+                }
+
                 self.messages.rename(old, new);
                 if self.current_channel.eq_ignore_ascii_case(old) {
                     self.current_channel = new.to_ascii_lowercase();
