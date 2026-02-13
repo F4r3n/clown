@@ -140,6 +140,10 @@ impl Model {
             .and_then(|v| v.error_receiver.try_recv().ok())
     }
 
+    pub fn is_connected(&self) -> bool {
+        self.irc_connection.is_some()
+    }
+
     pub fn log(&mut self, message: &MessageEvent) -> color_eyre::Result<()> {
         if let Some(connection_config) = self.get_connection_config() {
             self.logger
