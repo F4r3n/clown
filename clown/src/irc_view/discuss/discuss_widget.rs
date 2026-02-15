@@ -399,14 +399,6 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
-    fn scroll_boundary(&mut self) {
-        let max_scroll = 0;
-        self.scroll_offset = self.scroll_offset.max(max_scroll);
-        if self.follow_last {
-            self.scroll_offset = max_scroll;
-        }
-    }
-
     fn scroll_down(&mut self) {
         self.scroll_offset = self.scroll_offset.saturating_sub(1);
 
@@ -477,7 +469,6 @@ impl Draw for DiscussWidget {
             .unwrap_or(0);
 
         self.content_width = content_width as usize;
-        self.scroll_boundary();
         self.vertical_scroll_state = ScrollbarState::new(self.get_fake_total_lines()).position(
             self.get_fake_total_lines()
                 .saturating_sub(self.scroll_offset),
@@ -604,7 +595,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 self.add_line(
                     target,
                     if is_highlight {
-                        MessageContent::new_hightlight(Some(source.clone()), content.clone())
+                        MessageContent::new_highlight(Some(source.clone()), content.clone())
                     } else {
                         MessageContent::new_message(Some(source.clone()), content.clone())
                     },
@@ -753,11 +744,11 @@ impl crate::component::EventHandler for DiscussWidget {
                         None
                     }
                     KeyCode::Home => {
-                        self.scroll_offset = 0;
+                        self.scroll_offset = self.get_total_lines();
                         None
                     }
                     KeyCode::End => {
-                        self.scroll_offset = self.get_total_lines();
+                        self.scroll_offset = 0;
                         None
                     }
                     _ => None,

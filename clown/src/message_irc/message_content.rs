@@ -1,6 +1,6 @@
 use crate::message_irc::message_parser::get_width_without_format;
 use crate::message_irc::textwrapper::{wrap_content, wrapped_line_count};
-use chrono::{DateTime, Local, Timelike};
+use chrono::{DateTime, Local};
 use ratatui::{
     style::{Color, Style},
     text::{Line, Span},
@@ -10,15 +10,15 @@ use std::borrow::Cow;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct WordPos {
-    character_start: usize,
-    character_end: usize,
+    byte_start: usize,
+    byte_end: usize,
 }
 
 impl WordPos {
-    pub fn from(character_start: usize, character_end: usize) -> Self {
+    pub fn from(byte_start: usize, byte_end: usize) -> Self {
         Self {
-            character_start,
-            character_end,
+            byte_start,
+            byte_end,
         }
     }
 }
@@ -58,7 +58,7 @@ impl MessageContent {
     }
 
     pub fn get_word_from_pos(&self, pos: &WordPos) -> Option<&str> {
-        self.content.get(pos.character_start..pos.character_end)
+        self.content.get(pos.byte_start..pos.byte_end)
     }
 
     pub fn get_url_from_pos(&self, pos: &WordPos) -> Option<&str> {
@@ -76,7 +76,7 @@ impl MessageContent {
         }
     }
 
-    pub fn new_hightlight(source: Option<String>, content: String) -> Self {
+    pub fn new_highlight(source: Option<String>, content: String) -> Self {
         Self {
             time: std::time::SystemTime::now(),
             source,
@@ -163,17 +163,9 @@ impl MessageContent {
         Some(WordPos::from(start, end))
     }
 
-    fn time_format(&self) -> String {
+    fn time_format(&self) -> impl std::fmt::Display {
         let datetime: DateTime<Local> = self.time.into();
-
-        // Format as HH:MM:SS
-        let formatted_time = format!(
-            "{:02}:{:02}:{:02}",
-            datetime.hour(),
-            datetime.minute(),
-            datetime.second()
-        );
-        formatted_time
+        datetime.format("%H:%M:%S")
     }
 
     pub fn create_rows(
@@ -196,8 +188,7 @@ impl MessageContent {
             MessageKind::Error => Style::default().fg(Color::Red),
             MessageKind::Info => Style::default().fg(Color::LightBlue),
             MessageKind::Action | MessageKind::Notice => Style::default().fg(Color::LightBlue),
-            MessageKind::Normal => Style::default(),
-            _ => Style::default(),
+            MessageKind::Normal | MessageKind::Highlight => Style::default(),
         };
         let wrapped = self.wrap_content(content_width as usize);
 
@@ -218,16 +209,18 @@ impl MessageContent {
         ]);
 
         if wrapped.len() > 1 {
-            visible_rows.extend(vec![
-                [
-                    Cell::from(format!("{:<width$}", " ", width = time_length)),
-                    Cell::from(format!("{:<width$}", " ", width = nickname_length))
-                        .style(nickname_style),
-                    Cell::from("┃ "),
-                    Cell::from(""),
-                ];
-                wrapped.len() - 1
-            ]);
+            visible_rows.extend(
+                std::iter::repeat_with(|| {
+                    [
+                        Cell::from(format!("{:<width$}", " ", width = time_length)),
+                        Cell::from(format!("{:<width$}", " ", width = nickname_length))
+                            .style(nickname_style),
+                        Cell::from("┃ "),
+                        Cell::from(""),
+                    ]
+                })
+                .take(wrapped.len() - 1),
+            );
         }
 
         //FIXME: colors on multiline is broken

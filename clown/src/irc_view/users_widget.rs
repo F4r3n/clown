@@ -239,6 +239,12 @@ impl UsersWidget {
     }
 
     fn add_user_global_section(&mut self, user: &str) {
+        if let Some(global_section) = self.list_sections.get(self.get_global_section_id())
+            && global_section.section_info.name.eq(user)
+        {
+            return;
+        }
+
         if !user.starts_with("#") {
             self.add_user(self.get_global_section_id(), user);
         }

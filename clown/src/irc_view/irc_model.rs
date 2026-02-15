@@ -137,6 +137,12 @@ impl IrcModel {
         id
     }
 
+    fn rename_channel(&mut self, old: &str, new: &str) {
+        if let Some(c) = self.get_channel_mut(old) {
+            c.name = new.to_string();
+        }
+    }
+
     fn join(&mut self, channel: &str, nick: &str) {
         let nick = Self::sanitize_name(nick);
         let id = self.add_channel(channel);
@@ -173,16 +179,19 @@ impl IrcModel {
     }
 
     fn nick(&mut self, old: &str, new: &str) {
-        let old = Self::sanitize_name(old).to_lowercase();
+        let old = Self::sanitize_name(old);
+        let new = Self::sanitize_name(new);
+        let old_lower = old.to_lowercase();
 
-        if let Some(user) = self.users.remove(&old) {
+        if let Some(user) = self.users.remove(&old_lower) {
+            self.rename_channel(old, new);
+
             let mut old_user = user.clone();
             old_user.name = new.to_string();
             if old_user.is_main {
                 self.current_nick = new.to_string()
             }
-            let new = Self::sanitize_name(new);
-            if self.current_channel.eq(&old) {
+            if self.current_channel.eq(&old_lower) {
                 self.current_channel = new.to_string();
             }
 
@@ -227,14 +236,17 @@ impl IrcModel {
 
     // a(source) sends to b(target)
     fn received_message(&mut self, source: &str, target: &str) {
+        let target = Self::sanitize_name(target);
+        let source = Self::sanitize_name(source);
+
         let target = self.get_target(source, target);
         let id = self.add_channel(target);
 
-        let target = &Self::sanitize_name(target).to_lowercase();
+        let target = target.to_lowercase();
 
-        let new_message = self.current_channel.eq_ignore_ascii_case(target);
+        let new_message = self.current_channel.eq_ignore_ascii_case(&target);
 
-        if let Some(user) = self.get_user(target)
+        if let Some(user) = self.get_user(&target)
             && user.is_main
         {
             return;
@@ -348,10 +360,26 @@ mod tests {
         let mut model = model();
 
         model.handle_action(&MessageEvent::Join("#rust".into(), "Alice".into()));
+        model.handle_action(&MessageEvent::Join("#rust".into(), "Jack".into()));
+
+        model.handle_action(&MessageEvent::PrivMsg(
+            "jack".into(),
+            "me".into(),
+            "hello".into(),
+        ));
+        assert!(model.get_channel_id("jack").is_some());
+
         model.handle_action(&MessageEvent::ReplaceUser("ALICE".into(), "BoB".into()));
 
         assert!(model.get_user("alice").is_none());
         assert!(model.get_user("bob").is_some());
+
+        model.handle_action(&MessageEvent::ReplaceUser("Jack".into(), "miki".into()));
+
+        assert!(model.get_user("jack").is_none());
+        assert!(model.get_user("miki").is_some());
+        assert!(model.get_channel_id("jack").is_none());
+        assert!(model.get_channel_id("miki").is_some());
     }
 
     #[test]
