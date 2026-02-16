@@ -92,7 +92,7 @@ impl DrawToolTip for WebsitePreview {
 impl Draw for WebsitePreview {
     fn render(
         &mut self,
-        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,
     ) {

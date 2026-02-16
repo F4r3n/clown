@@ -14,7 +14,6 @@ pub struct LoginConfig {
     pub real_name: Option<String>,
     pub username: Option<String>,
     pub password: Option<String>,
-    pub channel: String,
 }
 
 pub struct Client {

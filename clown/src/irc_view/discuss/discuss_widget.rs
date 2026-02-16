@@ -3,6 +3,7 @@ use std::time::Duration;
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::component::Draw;
 use crate::irc_view::color_user::nickname_color;
+use crate::irc_view::irc_model;
 use crate::message_irc::message_content::WordPos;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use ahash::AHashMap;
@@ -16,7 +17,7 @@ use ratatui::{
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 struct Range {
     line: usize,
     word_pos: WordPos,
@@ -68,6 +69,8 @@ impl ChannelMessages {
             })
     }
 }
+
+#[derive(Debug)]
 struct Hovered {
     time: std::time::Instant,
     range: Range,
@@ -82,6 +85,7 @@ impl Hovered {
     }
 }
 
+#[derive(Debug)]
 pub struct DiscussWidget {
     vertical_scroll_state: ScrollbarState,
     scroll_offset: usize,
@@ -98,9 +102,9 @@ pub struct DiscussWidget {
 }
 
 impl DiscussWidget {
-    pub fn new(current_channel: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            current_channel: current_channel.to_lowercase(),
+            current_channel: String::new(),
             messages: ChannelMessages::default(),
             scroll_offset: 0,
             max_visible_height: 10,
@@ -434,13 +438,14 @@ impl DiscussWidget {
 impl Draw for DiscussWidget {
     fn render(
         &mut self,
-        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,
     ) {
         if self.redraw {
             self.redraw = false;
         }
+        tracing::debug!("Render {:?}", &self);
 
         self.area = area;
 
@@ -485,7 +490,6 @@ impl Draw for DiscussWidget {
         )
         .column_spacing(1)
         .style(text_style);
-
         if let Some(layout) = layout.first() {
             frame.render_widget(table, *layout)
         }
@@ -513,11 +517,12 @@ impl crate::component::EventHandler for DiscussWidget {
 
     fn handle_actions(
         &mut self,
-        irc_model: &crate::irc_view::irc_model::IrcModel,
+        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
             MessageEvent::AddMessageView(channel, in_message) => {
+                tracing::debug!("Has received a message {:?}", &channel);
                 if let Some(channel) = channel {
                     self.add_line(channel, in_message.clone());
                 } else {
@@ -537,28 +542,30 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::Quit(user, reason) => {
-                for channel in irc_model.get_all_joined_channel(user) {
-                    self.add_line(
-                        channel,
-                        MessageContent::new_info(
-                            reason
-                                .as_ref()
-                                .map(|v| format!("{} has quit: {}", user, v))
-                                .unwrap_or_else(|| format!("{} has quit", user)),
-                        ),
-                    );
-                }
+                if let Some(irc_model) = irc_model {
+                    for channel in irc_model.get_all_joined_channel(user) {
+                        self.add_line(
+                            channel,
+                            MessageContent::new_info(
+                                reason
+                                    .as_ref()
+                                    .map(|v| format!("{} has quit: {}", user, v))
+                                    .unwrap_or_else(|| format!("{} has quit", user)),
+                            ),
+                        );
+                    }
 
-                if self.has_message(user) {
-                    self.add_line(
-                        user,
-                        MessageContent::new_info(
-                            reason
-                                .as_ref()
-                                .map(|v| format!("{} has quit: {}", user, v))
-                                .unwrap_or_else(|| format!("{} has quit", user)),
-                        ),
-                    );
+                    if self.has_message(user) {
+                        self.add_line(
+                            user,
+                            MessageContent::new_info(
+                                reason
+                                    .as_ref()
+                                    .map(|v| format!("{} has quit: {}", user, v))
+                                    .unwrap_or_else(|| format!("{} has quit", user)),
+                            ),
+                        );
+                    }
                 }
 
                 None
@@ -579,41 +586,47 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::PrivMsg(source, target, content) => {
-                let target = irc_model.get_target(source, target);
+                if let Some(irc_model) = irc_model {
+                    let target = irc_model.get_target(source, target);
 
-                if source.eq_ignore_ascii_case(irc_model.get_current_nick())
-                    && !target.eq_ignore_ascii_case(irc_model.get_current_channel())
-                {
+                    if source.eq_ignore_ascii_case(irc_model.get_current_nick())
+                        && !target.eq_ignore_ascii_case(irc_model.get_current_channel())
+                    {
+                        self.add_line(
+                            irc_model.get_current_channel(),
+                            MessageContent::new_privmsg(target.to_string(), content.clone()),
+                        );
+                    }
+
+                    let is_highlight = self.should_highlight(irc_model.get_current_nick(), content);
+
                     self.add_line(
-                        irc_model.get_current_channel(),
-                        MessageContent::new_privmsg(target.to_string(), content.clone()),
+                        target,
+                        if is_highlight {
+                            MessageContent::new_highlight(Some(source.clone()), content.clone())
+                        } else {
+                            MessageContent::new_message(Some(source.clone()), content.clone())
+                        },
                     );
-                }
-
-                let is_highlight = self.should_highlight(irc_model.get_current_nick(), content);
-
-                self.add_line(
-                    target,
                     if is_highlight {
-                        MessageContent::new_highlight(Some(source.clone()), content.clone())
+                        Some(MessageEvent::Bel)
                     } else {
-                        MessageContent::new_message(Some(source.clone()), content.clone())
-                    },
-                );
-                if is_highlight {
-                    Some(MessageEvent::Bel)
+                        None
+                    }
                 } else {
                     None
                 }
             }
 
             MessageEvent::ActionMsg(source, target, content) => {
-                let target = irc_model.get_target(source, target);
+                if let Some(irc_model) = irc_model {
+                    let target = irc_model.get_target(source, target);
 
-                self.add_line(
-                    target,
-                    MessageContent::new_action(source.clone(), content.clone()),
-                );
+                    self.add_line(
+                        target,
+                        MessageContent::new_action(source.clone(), content.clone()),
+                    );
+                }
 
                 None
             }
@@ -625,31 +638,35 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::Join(channel, source) => {
-                let main = irc_model.is_main_user(source);
-                self.add_line(
-                    channel,
-                    if main {
-                        MessageContent::new_info(format!("You joined the channel {}", channel))
-                    } else {
-                        MessageContent::new_info(format!("{} has joined", source))
-                    },
-                );
+                if let Some(irc_model) = irc_model {
+                    let main = irc_model.is_main_user(source);
+                    self.add_line(
+                        channel,
+                        if main {
+                            MessageContent::new_info(format!("You joined the channel {}", channel))
+                        } else {
+                            MessageContent::new_info(format!("{} has joined", source))
+                        },
+                    );
+                }
                 None
             }
             MessageEvent::ReplaceUser(old, new) => {
-                for channel in irc_model.get_all_joined_channel(old) {
-                    self.add_line(
-                        channel,
-                        MessageContent::new_info(format!(
-                            "{} has changed their nickname to {}",
-                            &old, &new
-                        )),
-                    );
-                }
+                if let Some(irc_model) = irc_model {
+                    for channel in irc_model.get_all_joined_channel(old) {
+                        self.add_line(
+                            channel,
+                            MessageContent::new_info(format!(
+                                "{} has changed their nickname to {}",
+                                &old, &new
+                            )),
+                        );
+                    }
 
-                self.messages.rename(old, new);
-                if self.current_channel.eq_ignore_ascii_case(old) {
-                    self.current_channel = new.to_ascii_lowercase();
+                    self.messages.rename(old, new);
+                    if self.current_channel.eq_ignore_ascii_case(old) {
+                        self.current_channel = new.to_ascii_lowercase();
+                    }
                 }
                 None
             }
@@ -800,7 +817,8 @@ mod tests {
     fn test_find_index() {
         pub const TEXT_START: usize = TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH;
 
-        let mut discuss = DiscussWidget::new("test");
+        let mut discuss = DiscussWidget::new();
+        discuss.current_channel = "test".to_string();
         discuss.content_width = 4;
         discuss.max_visible_height = 4;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;
@@ -870,7 +888,7 @@ mod tests {
 
     #[test]
     fn test_total_lines() {
-        let mut discuss = DiscussWidget::new("");
+        let mut discuss = DiscussWidget::new();
         discuss.content_width = 10;
 
         discuss.add_line(
@@ -891,7 +909,7 @@ mod tests {
 
     #[test]
     fn test_can_scroll_up() {
-        let mut discuss = DiscussWidget::new("");
+        let mut discuss = DiscussWidget::new();
         discuss.content_width = 5;
         discuss.max_visible_height = 3;
 
@@ -916,7 +934,7 @@ mod tests {
     fn test_should_hightlight() {
         let current_nick = "nickname".to_string();
 
-        let discuss = DiscussWidget::new("test");
+        let discuss = DiscussWidget::new();
         assert!(discuss.should_highlight(&current_nick, "my nickname is "));
         assert!(!discuss.should_highlight(&current_nick, "my nicknameis "));
         assert!(discuss.should_highlight(&current_nick, "nickname"));
@@ -927,8 +945,8 @@ mod tests {
 
     #[test]
     fn test_render_rows() {
-        let mut discuss = DiscussWidget::new("test");
-
+        let mut discuss = DiscussWidget::new();
+        discuss.current_channel = "test".to_string();
         discuss.add_line(
             "test",
             MessageContent::new_message(None, "HELLO".to_string()),

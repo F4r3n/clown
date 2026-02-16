@@ -33,7 +33,9 @@ impl StoredConfig {
     }
 
     pub fn set_nickname(&mut self, nickname: String) {
-        self.config.login_config.nickname = nickname;
+        if let Some(server) = self.config.servers.first_mut() {
+            server.login.nickname = nickname
+        }
     }
 }
 
@@ -44,21 +46,18 @@ pub struct Model {
     pub retry: u8,
 
     pub logger: MessageLogger,
-    pub irc_model: IrcModel,
+    pub irc_model: Option<IrcModel>,
 }
 
 impl Model {
     pub fn new(config_name: String) -> Self {
         let config = Config::new(&config_name);
-        let channel = config.login_config.channel.to_string();
+
         let log_dir = ProjectPath::log_dir()
             .unwrap_or(std::env::current_dir().unwrap_or(std::path::Path::new("").to_path_buf()));
         Self {
             running_state: RunningState::Start,
-            irc_model: IrcModel::new_model(
-                config.login_config.nickname.to_string(),
-                channel.to_string(),
-            ),
+            irc_model: None,
             stored_config: StoredConfig {
                 config,
                 stored_name: config_name,
@@ -81,38 +80,34 @@ impl Model {
         self.stored_config.save()
     }
 
-    pub fn set_nickname(&mut self, nickname: String) -> color_eyre::Result<&str> {
-        self.stored_config.set_nickname(nickname);
-
+    pub fn set_nickname(&mut self, nickname: String) -> color_eyre::Result<()> {
+        self.stored_config.set_nickname(nickname.to_string());
         self.save()?;
-        Ok(&self.get_config().login_config.nickname)
+        Ok(())
     }
 
-    pub fn get_nickname(&self) -> &str {
-        &self.get_config().login_config.nickname
+    pub fn get_nickname(&self) -> Option<&str> {
+        self.get_config().get_nickname()
     }
 
-    pub fn get_login_channel(&self) -> &str {
-        &self.get_config().login_config.channel
+    pub fn get_channel(&self) -> Option<&str> {
+        self.get_config().get_channel()
     }
 
     pub fn get_address(&self) -> Option<&str> {
-        self.get_config()
-            .connection_config
-            .as_ref()
-            .map(|v| v.address.as_ref())
+        self.get_config().get_address()
     }
 
     pub fn is_autojoin(&self) -> bool {
-        self.get_config().client_config.auto_join
+        self.get_config().is_autojoin()
     }
 
     pub fn get_connection_config(&self) -> Option<ConnectionConfig> {
-        self.get_config().connection_config.clone()
+        self.get_config().get_connection_config()
     }
 
-    pub fn get_login_config(&self) -> LoginConfig {
-        self.get_config().login_config.clone()
+    pub fn get_login_config(&self) -> Option<LoginConfig> {
+        self.get_config().get_login_config()
     }
 
     pub fn send_command(&mut self, in_command: Command) {
@@ -145,15 +140,25 @@ impl Model {
     }
 
     pub fn log(&mut self, message: &MessageEvent) -> color_eyre::Result<()> {
-        if let Some(connection_config) = self.get_connection_config() {
+        if let Some(connection_config) = self.get_connection_config()
+            && let Some(irc) = &self.irc_model
+        {
             self.logger
-                .write_message(&connection_config.address, &self.irc_model, message)
+                .write_message(&connection_config.address, irc, message)
         } else {
-            Err(color_eyre::eyre::eyre!("No address set"))
+            Ok(())
         }
     }
 
     pub fn flush_log(&mut self) -> std::io::Result<()> {
         self.logger.flush_checker()
+    }
+
+    pub fn init_irc_model(&mut self) {
+        if let Some(nick) = self.get_nickname()
+            && let Some(channel) = self.get_channel()
+        {
+            self.irc_model = Some(IrcModel::new_model(nick.to_string(), channel.to_string()));
+        }
     }
 }

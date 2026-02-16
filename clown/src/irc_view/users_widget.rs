@@ -275,7 +275,7 @@ impl UsersWidget {
 impl Draw for UsersWidget {
     fn render(
         &mut self,
-        irc_model: &crate::irc_view::irc_model::IrcModel,
+        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -283,8 +283,10 @@ impl Draw for UsersWidget {
             self.need_redraw = false;
         }
         self.area = area;
-        self.list_state
-            .render(irc_model, &self.list_sections, frame, area);
+        if let Some(irc_model) = irc_model {
+            self.list_state
+                .render(irc_model, &self.list_sections, frame, area);
+        }
     }
 }
 //#channel
@@ -408,7 +410,7 @@ impl crate::component::EventHandler for UsersWidget {
     }
     fn handle_actions(
         &mut self,
-        irc_model: &crate::irc_view::irc_model::IrcModel,
+        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -419,33 +421,39 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::ReplaceUser(old, new) => {
-                self.replace_user(irc_model, old, new);
-                self.need_redraw = true;
-
+                if let Some(irc_model) = irc_model {
+                    self.replace_user(irc_model, old, new);
+                    self.need_redraw = true;
+                }
                 None
             }
             MessageEvent::Quit(user, _reason) => {
-                self.remove_user_from_all_except_global(irc_model, user);
-                self.need_redraw = true;
+                if let Some(irc_model) = irc_model {
+                    self.remove_user_from_all_except_global(irc_model, user);
+                    self.need_redraw = true;
+                }
                 None
             }
             MessageEvent::PrivMsg(source, target, _)
             | MessageEvent::ActionMsg(source, target, _) => {
-                let target = irc_model.get_target(source, target);
+                if let Some(irc_model) = irc_model {
+                    let target = irc_model.get_target(source, target);
 
-                self.add_user_global_section(target);
-                self.hightlight_user(target);
-                self.need_redraw = true;
-
+                    self.add_user_global_section(target);
+                    self.hightlight_user(target);
+                    self.need_redraw = true;
+                }
                 None
             }
             MessageEvent::Part(channel, user) => {
-                if irc_model.is_main_user(user) {
-                    self.remove_all_users_section(self.get_section_id(channel));
-                } else if let Some(channel_id) = self.get_section_id(channel) {
-                    self.remove_user(channel_id, user);
+                if let Some(irc_model) = irc_model {
+                    if irc_model.is_main_user(user) {
+                        self.remove_all_users_section(self.get_section_id(channel));
+                    } else if let Some(channel_id) = self.get_section_id(channel) {
+                        self.remove_user(channel_id, user);
+                    }
+                    self.need_redraw = true;
                 }
-                self.need_redraw = true;
 
                 None
             }
@@ -527,13 +535,16 @@ mod tests {
 
     struct WidgetTest {
         pub users_widget: UsersWidget,
-        pub irc_model: IrcModel,
+        pub irc_model: Option<IrcModel>,
     }
 
     impl WidgetTest {
         fn handle_action(&mut self, action: &MessageEvent) {
-            self.users_widget.handle_actions(&self.irc_model, action);
-            self.irc_model.handle_action(action);
+            self.users_widget
+                .handle_actions(self.irc_model.as_ref(), action);
+            if let Some(irc_model) = self.irc_model.as_mut() {
+                irc_model.handle_action(action);
+            }
         }
 
         fn join_server(&mut self, server_name: &str) {
@@ -624,7 +635,7 @@ mod tests {
             channel.to_string(),
         );
         let mut widget_test = WidgetTest {
-            irc_model,
+            irc_model: Some(irc_model),
             users_widget,
         };
         //Join server
@@ -693,10 +704,10 @@ mod tests {
         let user_name = "farine";
         let channel = "#rust";
         let server_name = "IRC-Server";
-        let irc_model = crate::irc_view::irc_model::IrcModel::new_model(
+        let irc_model = Some(crate::irc_view::irc_model::IrcModel::new_model(
             user_name.to_string(),
             channel.to_string(),
-        );
+        ));
         let mut widget_test = WidgetTest {
             irc_model,
             users_widget,
@@ -719,14 +730,32 @@ mod tests {
             widget_test.users_widget.list_sections[0].order_user.len(),
             1
         );
-        assert!(widget_test.irc_model.has_unread_message("a"));
+        assert!(
+            widget_test
+                .irc_model
+                .as_ref()
+                .unwrap()
+                .has_unread_message("a")
+        );
         assert_eq!(widget_test.users_widget.list_state.current_section, 1);
 
         assert_eq!(widget_test.next_item(), Some("farine".to_string()));
-        assert!(widget_test.irc_model.has_unread_message("a"));
+        assert!(
+            widget_test
+                .irc_model
+                .as_ref()
+                .unwrap()
+                .has_unread_message("a")
+        );
 
         assert_eq!(widget_test.next_item(), Some("a".to_string()));
-        assert!(!widget_test.irc_model.has_unread_message("a"));
+        assert!(
+            !widget_test
+                .irc_model
+                .as_ref()
+                .unwrap()
+                .has_unread_message("a")
+        );
 
         assert_eq!(widget_test.next_item(), Some("#rust".to_string()));
     }
@@ -737,23 +766,23 @@ mod tests {
         let user_name = "farine";
         let channel = "#rust";
         let server_name = "IRC-Server";
-        let mut irc_model = crate::irc_view::irc_model::IrcModel::new_model(
+        let mut irc_model = Some(crate::irc_view::irc_model::IrcModel::new_model(
             user_name.to_string(),
             channel.to_string(),
-        );
+        ));
 
         //Join server
         let action = MessageEvent::JoinServer(server_name.to_string());
 
-        users_widget.handle_actions(&irc_model, &action);
-        irc_model.handle_action(&action);
+        users_widget.handle_actions(irc_model.as_ref(), &action);
+        irc_model.as_mut().unwrap().handle_action(&action);
 
         assert_eq!(users_widget.nb_sections(), 1);
 
         //join channel
         let action = MessageEvent::Join(channel.to_string(), user_name.to_string());
-        users_widget.handle_actions(&irc_model, &action);
-        irc_model.handle_action(&action);
+        users_widget.handle_actions(irc_model.as_ref(), &action);
+        irc_model.as_mut().unwrap().handle_action(&action);
 
         // a and b join channel
         let action = MessageEvent::UpdateUsers(
@@ -764,8 +793,8 @@ mod tests {
                 .collect::<Vec<String>>(),
         );
 
-        users_widget.handle_actions(&irc_model, &action);
-        irc_model.handle_action(&action);
+        users_widget.handle_actions(irc_model.as_ref(), &action);
+        irc_model.as_mut().unwrap().handle_action(&action);
 
         //me to 'a'
         let action = MessageEvent::PrivMsg(
@@ -773,22 +802,30 @@ mod tests {
             "a".to_string(),
             "Message".to_string(),
         );
-        users_widget.handle_actions(&irc_model, &action);
-        irc_model.handle_action(&action);
+        users_widget.handle_actions(irc_model.as_ref(), &action);
+        irc_model.as_mut().unwrap().handle_action(&action);
 
         let action = MessageEvent::ReplaceUser("a".to_string(), "c".to_string());
-        users_widget.handle_actions(&irc_model, &action);
-        irc_model.handle_action(&action);
+        users_widget.handle_actions(irc_model.as_ref(), &action);
+        irc_model.as_mut().unwrap().handle_action(&action);
 
         assert_eq!(users_widget.list_sections[0].order_user.len(), 1);
         assert_eq!(users_widget.list_sections[0].order_user[0], "c".to_string());
-        assert_eq!(irc_model.get_user("a"), None);
-        assert_eq!(irc_model.get_user("c").unwrap().get_name(), "c");
+        assert_eq!(irc_model.as_ref().unwrap().get_user("a"), None);
+        assert_eq!(
+            irc_model
+                .as_ref()
+                .unwrap()
+                .get_user("c")
+                .unwrap()
+                .get_name(),
+            "c"
+        );
 
         //'a' part
         let action = MessageEvent::Part(channel.to_string(), "c".to_string());
-        users_widget.handle_actions(&irc_model, &action);
-        irc_model.handle_action(&action);
+        users_widget.handle_actions(irc_model.as_ref(), &action);
+        irc_model.as_mut().unwrap().handle_action(&action);
 
         assert_eq!(users_widget.list_sections[0].order_user.len(), 1);
         assert_eq!(users_widget.list_sections[1].order_user.len(), 2);
@@ -805,7 +842,7 @@ mod tests {
             channel.to_string(),
         );
         let mut widget_test = WidgetTest {
-            irc_model,
+            irc_model: Some(irc_model),
             users_widget,
         };
         widget_test.join_server(server_name);

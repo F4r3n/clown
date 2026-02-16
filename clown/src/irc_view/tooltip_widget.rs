@@ -29,7 +29,12 @@ impl MessagePreview {
 }
 
 impl Draw for MessagePreview {
-    fn render(&mut self, _irc_model: &irc_model::IrcModel, frame: &mut Frame<'_>, area: Rect) {
+    fn render(
+        &mut self,
+        _irc_model: Option<&irc_model::IrcModel>,
+        frame: &mut Frame<'_>,
+        area: Rect,
+    ) {
         frame.render_widget(ratatui::widgets::Clear, area);
         let block = Block::default()
             .borders(Borders::ALL)
@@ -113,7 +118,7 @@ impl ToolTipDiscussWidget {
 impl Draw for ToolTipDiscussWidget {
     fn render(
         &mut self,
-        irc_model: &irc_model::IrcModel,
+        irc_model: Option<&irc_model::IrcModel>,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -147,7 +152,7 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
     }
     fn handle_actions(
         &mut self,
-        _irc_model: &irc_model::IrcModel,
+        _irc_model: Option<&irc_model::IrcModel>,
         event: &crate::message_event::MessageEvent,
     ) -> Option<crate::message_event::MessageEvent> {
         match event {

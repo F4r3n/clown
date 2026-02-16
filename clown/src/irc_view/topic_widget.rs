@@ -14,7 +14,7 @@ pub struct TopicWidget {
 impl Draw for TopicWidget {
     fn render(
         &mut self,
-        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -63,7 +63,7 @@ impl EventHandler for TopicWidget {
     }
     fn handle_actions(
         &mut self,
-        irc_model: &crate::irc_view::irc_model::IrcModel,
+        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -78,9 +78,11 @@ impl EventHandler for TopicWidget {
                 None
             }
             MessageEvent::Join(channel, user) => {
-                if irc_model.is_main_user(user) {
-                    self.set_channel(channel.to_string());
-                    self.need_redraw = true;
+                if let Some(irc_model) = irc_model {
+                    if irc_model.is_main_user(user) {
+                        self.set_channel(channel.to_string());
+                        self.need_redraw = true;
+                    }
                 }
 
                 None

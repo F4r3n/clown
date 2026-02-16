@@ -30,7 +30,7 @@ pub struct CInput {
 impl Draw for CInput {
     fn render(
         &mut self,
-        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,
     ) {
@@ -73,7 +73,7 @@ impl crate::component::EventHandler for CInput {
     }
     fn handle_actions(
         &mut self,
-        irc_model: &IrcModel,
+        irc_model: Option<&IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -108,11 +108,14 @@ impl crate::component::EventHandler for CInput {
                 None
             }
             MessageEvent::Part(channel, user) => {
-                if irc_model.is_main_user(user) {
-                    self.completion.input_completion.remove_channel(channel);
-                } else {
-                    self.completion.input_completion.disable_user(channel, user);
+                if let Some(irc_model) = irc_model {
+                    if irc_model.is_main_user(user) {
+                        self.completion.input_completion.remove_channel(channel);
+                    } else {
+                        self.completion.input_completion.disable_user(channel, user);
+                    }
                 }
+
                 None
             }
             _ => None,

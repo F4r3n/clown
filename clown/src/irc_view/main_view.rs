@@ -51,7 +51,7 @@ pub struct MainView<'a> {
 }
 
 impl MainView<'_> {
-    pub fn new(current_channel: &str) -> Self {
+    pub fn new() -> Self {
         let mut cinput = input_widget::CInput::default();
         cinput.add_completion_command_list(
             ClientCommand::iter().map(|v| v.get_message().unwrap_or("")),
@@ -63,10 +63,9 @@ impl MainView<'_> {
         let topic_view: Component<'_, topic_widget::TopicWidget> =
             Component::new("topic_view", topic_widget::TopicWidget::new());
         //list_components.push()
-        let messages_display = Component::new(
-            "messages",
-            discuss_widget::DiscussWidget::new(current_channel),
-        );
+        let mut discuss_widget = discuss_widget::DiscussWidget::new();
+        discuss_widget.set_current_channel("Global");
+        let messages_display = Component::new("messages", discuss_widget);
         let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
         Self {
             list_users_view,
@@ -121,10 +120,13 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Topic(topic) => {
-                    model.send_command(Command::Topic(
-                        model.irc_model.get_current_channel().to_string(),
-                        topic.clone(),
-                    ));
+                    if let Some(irc_model) = model.irc_model.as_ref() {
+                        model.send_command(Command::Topic(
+                            irc_model.get_current_channel().to_string(),
+                            topic.clone(),
+                        ));
+                    }
+
                     None
                 }
                 command::ClientCommand::Spell(language) => {
@@ -135,23 +137,29 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Part(channel, reason) => {
-                    let chanel = channel
-                        .unwrap_or_else(|| model.irc_model.get_current_channel().to_string());
-                    model.send_command(Command::Part(chanel.clone(), reason.clone())); //the server will check
+                    if let Some(irc_model) = model.irc_model.as_ref() {
+                        let chanel =
+                            channel.unwrap_or_else(|| irc_model.get_current_channel().to_string());
+                        model.send_command(Command::Part(chanel.clone(), reason.clone())); //the server will check
+                    }
                     None
                 }
                 command::ClientCommand::Action(content) => {
-                    let nickname = model.get_nickname().to_string();
-
-                    model.send_command(clown_core::command::Command::PrivMsg(
-                        model.irc_model.get_current_channel().to_string(),
-                        format!("\x01ACTION {}\x01", content.clone()),
-                    ));
-                    Some(MessageEvent::ActionMsg(
-                        nickname,
-                        model.irc_model.get_current_channel().to_string(),
-                        content,
-                    ))
+                    if let Some(irc_model) = model.irc_model.as_ref() {
+                        let channel = irc_model.get_current_channel().to_string();
+                        let nickname = irc_model.get_current_nick().to_string();
+                        model.send_command(clown_core::command::Command::PrivMsg(
+                            channel.to_string(),
+                            format!("\x01ACTION {}\x01", content.clone()),
+                        ));
+                        Some(MessageEvent::ActionMsg(
+                            nickname.to_string(),
+                            channel.to_string(),
+                            content,
+                        ))
+                    } else {
+                        None
+                    }
                 }
                 command::ClientCommand::PrivMSG(channel, content) => {
                     model.send_command(clown_core::command::Command::PrivMsg(
@@ -159,34 +167,36 @@ impl MainView<'_> {
                         content.clone(),
                     ));
 
-                    let nickname = model.get_nickname().to_string();
-                    Some(MessageEvent::PrivMsg(nickname, channel, content))
+                    model
+                        .get_nickname()
+                        .map(|v| MessageEvent::PrivMsg(v.to_string(), channel, content))
                 }
                 command::ClientCommand::Unknown(command_name) => {
-                    self.messages_display.handle_actions(
-                        &model.irc_model,
-                        &MessageEvent::AddMessageView(
-                            None,
-                            MessageContent::new_error(format!(
-                                "Unknown command {}",
-                                command_name.unwrap_or_default()
-                            )),
-                        ),
-                    )
+                    Some(MessageEvent::AddMessageView(
+                        None,
+                        MessageContent::new_error(format!(
+                            "Unknown command {}",
+                            command_name.unwrap_or_default()
+                        )),
+                    ))
                 }
             }
-        } else {
-            let nickname = model.get_nickname().to_string();
+        } else if let Some(irc_model) = model.irc_model.as_ref() {
+            let channel = irc_model.get_current_channel().to_string();
+            let nickname = irc_model.get_current_nick().to_string();
+
             model.send_command(clown_core::command::Command::PrivMsg(
-                model.irc_model.get_current_channel().to_string(),
+                channel.to_string(),
                 content.to_string(),
             ));
 
             Some(MessageEvent::PrivMsg(
-                nickname,
-                model.irc_model.get_current_channel().to_string(),
+                nickname.to_string(),
+                channel.to_string(),
                 content.to_string(),
             ))
+        } else {
+            None
         }
     }
 
@@ -266,8 +276,10 @@ impl MainView<'_> {
                         }
                     }
                     Command::Nick(new_user) => {
-                        if let Some(source) = source {
-                            if source.eq_ignore_ascii_case(model.get_nickname()) {
+                        if let Some(source) = source
+                            && let Some(nickname) = model.get_nickname()
+                        {
+                            if source.eq_ignore_ascii_case(nickname) {
                                 let _ = model.set_nickname(new_user.clone());
                             }
                             messages.push_message(MessageEvent::ReplaceUser(source, new_user));
@@ -316,9 +328,12 @@ impl MainView<'_> {
                     ResponseNumber::Welcome(content) => {
                         model.reset_retry();
 
-                        model.send_command(clown_core::command::Command::Join(
-                            model.get_login_channel().to_string(),
-                        ));
+                        model.init_irc_model();
+                        if let Some(irc_model) = model.irc_model.as_ref() {
+                            model.send_command(clown_core::command::Command::Join(
+                                irc_model.get_current_channel().to_string(),
+                            ));
+                        }
                         //TODO: pass welcome message directly to the components
                         //Create a new 'user' as IRC-Server
                         if let Some(source) = source.clone() {
@@ -409,24 +424,26 @@ impl widget_view::WidgetView for MainView<'_> {
 
             if let Some(message_area) = top_layout.first() {
                 self.messages_display
-                    .render(&model.irc_model, frame, *message_area);
+                    .render(model.irc_model.as_ref(), frame, *message_area);
                 self.tooltip_widget
-                    .render(&model.irc_model, frame, *message_area);
+                    .render(model.irc_model.as_ref(), frame, *message_area);
             }
 
             if let Some(list_users) = top_layout.get(1) {
                 self.list_users_view
-                    .render(&model.irc_model, frame, *list_users);
+                    .render(model.irc_model.as_ref(), frame, *list_users);
             }
         }
 
         // Render widgets
         if let Some(input_area) = main_layout.get(2) {
-            self.input.render(&model.irc_model, frame, *input_area);
+            self.input
+                .render(model.irc_model.as_ref(), frame, *input_area);
         }
 
         if let Some(topic_area) = main_layout.first() {
-            self.topic_view.render(&model.irc_model, frame, *topic_area);
+            self.topic_view
+                .render(model.irc_model.as_ref(), frame, *topic_area);
         }
     }
 
@@ -523,11 +540,13 @@ impl widget_view::WidgetView for MainView<'_> {
                     tracing::error!(error = %e, "Cannot write logs");
                 }
                 for mut child in self.children() {
-                    if let Some(msg) = child.handle_actions(&model.irc_model, &msg) {
+                    if let Some(msg) = child.handle_actions(model.irc_model.as_ref(), &msg) {
                         messages.push_message(msg);
                     }
                 }
-                model.irc_model.handle_action(&msg);
+                if let Some(irc) = model.irc_model.as_mut() {
+                    irc.handle_action(&msg);
+                }
             }
         };
     }
