@@ -89,30 +89,39 @@ impl crate::component::EventHandler for CInput {
                 }
                 None
             }
-            MessageEvent::UpdateUsers(channel, users) => {
-                self.completion.input_completion.add_users(channel, users);
+            MessageEvent::UpdateUsers(server_id, channel, users) => {
+                self.completion
+                    .input_completion
+                    .add_users(*server_id, channel, users);
                 None
             }
-            MessageEvent::ReplaceUser(old, new) => {
+            MessageEvent::ReplaceUser(_, old, new) => {
                 self.completion.input_completion.replace_user(old, new);
                 None
             }
-            MessageEvent::SelectChannel(channel) => {
+            MessageEvent::SelectChannel(server_id, channel) => {
                 self.completion.current_channel = channel.to_string();
+                self.completion.server_id = *server_id;
                 None
             }
-            MessageEvent::Join(channel, user) => {
+            MessageEvent::Join(server_id, channel, user) => {
                 self.completion.current_channel = channel.to_string();
-                self.completion.input_completion.add_user(channel, user);
+                self.completion
+                    .input_completion
+                    .add_user(*server_id, channel, user);
 
                 None
             }
-            MessageEvent::Part(channel, user) => {
+            MessageEvent::Part(server_id, channel, user) => {
                 if let Some(irc_model) = irc_model {
-                    if irc_model.is_main_user(user) {
-                        self.completion.input_completion.remove_channel(channel);
+                    if irc_model.is_main_user(*server_id, user) {
+                        self.completion
+                            .input_completion
+                            .remove_channel(*server_id, channel);
                     } else {
-                        self.completion.input_completion.disable_user(channel, user);
+                        self.completion
+                            .input_completion
+                            .disable_user(*server_id, channel, user);
                     }
                 }
 

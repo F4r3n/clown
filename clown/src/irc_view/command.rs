@@ -1,10 +1,5 @@
+use crate::message_event::MessageEvent;
 use crate::message_irc::message_content::MessageContent;
-use crate::{
-    message_event::MessageEvent,
-    model::{IRCConnection, Model},
-};
-use clown_core::client::Client;
-use tokio::sync::mpsc;
 
 use strum::{EnumIter, EnumMessage, IntoEnumIterator, IntoStaticStr};
 
@@ -142,39 +137,4 @@ pub fn help() -> MessageEvent {
         );
     }
     MessageEvent::AddMessageView(None, MessageContent::new_info(output))
-}
-
-pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
-    if !model.is_irc_finished() {
-        return Some(MessageEvent::AddMessageView(
-            None,
-            MessageContent::new_error("Already connected".to_string()),
-        ));
-    }
-    if let Some(connection_config) = model.get_connection_config()
-        && let Some(login_config) = &model.get_login_config()
-    {
-        let mut client = Client::new(login_config);
-        if let Some(reciever) = client.message_receiver() {
-            let command_sender = client.command_sender();
-
-            let (error_sender, error_receiver) = mpsc::channel(10);
-            if model.retry > 0 {
-                model.retry -= 1;
-                model.irc_connection = Some(IRCConnection {
-                    command_sender,
-                    error_receiver,
-                    _error_sender: error_sender.clone(),
-                    message_reciever: reciever,
-                    task: tokio::spawn(async move {
-                        if let Err(err) = client.launch(&connection_config).await {
-                            let _ = error_sender.send(format!("Connection error: {err}")).await;
-                        }
-                    }),
-                });
-            }
-        }
-    }
-
-    None
 }

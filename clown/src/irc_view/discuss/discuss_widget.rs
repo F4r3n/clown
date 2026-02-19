@@ -3,7 +3,6 @@ use std::time::Duration;
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::component::Draw;
 use crate::irc_view::color_user::nickname_color;
-use crate::irc_view::irc_model;
 use crate::message_irc::message_content::WordPos;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use ahash::AHashMap;

@@ -25,12 +25,12 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(login_config: &LoginConfig) -> Self {
+    pub fn new(login_config: LoginConfig) -> Self {
         let mut outgoing = Outgoing::default();
         let (sender, message_receiver) = outgoing.create_outgoing();
         Self {
             sender,
-            login_config: login_config.clone(),
+            login_config,
             outgoing,
             message_receiver: Some(message_receiver),
         }

@@ -167,11 +167,11 @@ impl MessageLogger {
     pub fn write_message(
         &mut self,
         server_address: &str,
-        irc_model: &crate::irc_view::irc_model::IrcModel,
+        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         message: &MessageEvent,
     ) -> color_eyre::Result<()> {
         match message {
-            MessageEvent::Join(channel, user) => {
+            MessageEvent::Join(_, channel, user) => {
                 self.write_to_target(
                     server_address,
                     Some(channel),
@@ -179,17 +179,19 @@ impl MessageLogger {
                     false,
                 )?;
             }
-            MessageEvent::ReplaceUser(old, new) => {
-                for channel in irc_model.get_all_joined_channel(old) {
-                    self.write_to_target(
-                        server_address,
-                        Some(channel),
-                        format_args!("<--\t {} has changed their nickname to {}", &old, &new),
-                        true,
-                    )?;
+            MessageEvent::ReplaceUser(server_id, old, new) => {
+                if let Some(irc_model) = irc_model.as_ref() {
+                    for channel in irc_model.get_all_joined_channel(*server_id, old) {
+                        self.write_to_target(
+                            server_address,
+                            Some(channel),
+                            format_args!("<--\t {} has changed their nickname to {}", &old, &new),
+                            true,
+                        )?;
+                    }
                 }
             }
-            MessageEvent::Part(channel, user) => {
+            MessageEvent::Part(_, channel, user) => {
                 self.write_to_target(
                     server_address,
                     Some(channel),
@@ -197,17 +199,19 @@ impl MessageLogger {
                     true,
                 )?;
             }
-            MessageEvent::Quit(user, _) => {
-                for channel in irc_model.get_all_joined_channel(user) {
-                    self.write_to_target(
-                        server_address,
-                        Some(channel),
-                        format_args!("<--\t {} has quit", user),
-                        true,
-                    )?;
+            MessageEvent::Quit(server_id, user, _) => {
+                if let Some(irc_model) = irc_model.as_ref() {
+                    for channel in irc_model.get_all_joined_channel(*server_id, user) {
+                        self.write_to_target(
+                            server_address,
+                            Some(channel),
+                            format_args!("<--\t {} has quit", user),
+                            true,
+                        )?;
+                    }
                 }
             }
-            MessageEvent::SetTopic(Some(source), channel, content) => {
+            MessageEvent::SetTopic(_, Some(source), channel, content) => {
                 self.write_to_target(
                     server_address,
                     Some(channel),
@@ -218,7 +222,7 @@ impl MessageLogger {
                     false,
                 )?;
             }
-            MessageEvent::PrivMsg(source, target, content) => {
+            MessageEvent::PrivMsg(_, source, target, content) => {
                 self.write_to_target(
                     server_address,
                     Some(target),
@@ -227,7 +231,7 @@ impl MessageLogger {
                 )?;
             }
 
-            MessageEvent::ActionMsg(source, target, content) => {
+            MessageEvent::ActionMsg(_, source, target, content) => {
                 self.write_to_target(
                     server_address,
                     Some(target),

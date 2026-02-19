@@ -1,4 +1,5 @@
 use std::collections;
+use std::ops::Deref;
 use std::path::PathBuf;
 
 use clown_core::client::LoginConfig;
@@ -28,6 +29,7 @@ pub struct Channels {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Server {
+    pub name: String,
     pub connection: Connection,
     pub login: Login,
     pub channels: Channels,
@@ -157,7 +159,23 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            servers: vec![],
+            servers: vec![Server {
+                connection: Connection {
+                    address: "".into(),
+                    port: 6697,
+                },
+                channels: Channels {
+                    list: vec![],
+                    auto_join: false,
+                },
+                login: Login {
+                    nickname: "nickname".into(),
+                    real_name: None,
+                    username: None,
+                    password: None,
+                },
+                name: "IRC-Server".into(),
+            }],
             colors: Colors::default(),
             completion: Completion::default(),
             keybindings: Keybindings::default(),
@@ -203,33 +221,45 @@ impl Config {
         }
     }
 
-    pub fn get_nickname(&self) -> Option<&str> {
-        self.servers.first().map(|v| v.login.nickname.as_str())
+    pub fn get_nickname(&self, in_id: usize) -> Option<&str> {
+        self.servers.get(in_id).map(|v| v.login.nickname.as_str())
     }
 
-    pub fn get_channel(&self) -> Option<&str> {
+    pub fn get_channels(&self, in_id: usize) -> impl Iterator<Item = &str> {
         self.servers
-            .first()
-            .and_then(|v| v.channels.list.first().map(|v| v.as_str()))
+            .get(in_id)
+            .into_iter()
+            .flat_map(|v| v.channels.list.iter().map(|v| v.deref()))
     }
 
-    pub fn get_address(&self) -> Option<&str> {
-        self.servers.first().map(|v| v.connection.address.as_str())
+    pub fn get_address(&self, in_id: usize) -> Option<&str> {
+        self.servers
+            .get(in_id)
+            .map(|v| v.connection.address.as_str())
     }
 
-    pub fn is_autojoin(&self) -> bool {
-        self.servers.first().map_or(false, |v| v.channels.auto_join)
+    pub fn is_autojoin_id(&self, in_id: usize) -> bool {
+        self.servers
+            .get(in_id)
+            .is_some_and(|v| v.channels.auto_join)
     }
 
-    pub fn get_connection_config(&self) -> Option<ConnectionConfig> {
-        self.servers.first().map(|v| ConnectionConfig {
+    pub fn is_autojoin(&self) -> impl Iterator<Item = usize> {
+        self.servers
+            .iter()
+            .enumerate()
+            .filter_map(|(i, v)| v.channels.auto_join.then_some(i))
+    }
+
+    pub fn get_connection_config(&self, in_id: usize) -> Option<ConnectionConfig> {
+        self.servers.get(in_id).map(|v| ConnectionConfig {
             address: v.connection.address.to_string(),
             port: v.connection.port,
         })
     }
 
-    pub fn get_login_config(&self) -> Option<LoginConfig> {
-        self.servers.first().map(|v| LoginConfig {
+    pub fn get_login_config(&self, in_id: usize) -> Option<LoginConfig> {
+        self.servers.get(in_id).map(|v| LoginConfig {
             nickname: v.login.nickname.clone(),
             password: v.login.password.clone(),
             real_name: v.login.real_name.clone(),
