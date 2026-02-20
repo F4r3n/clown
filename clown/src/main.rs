@@ -11,6 +11,7 @@ mod project_path;
 mod tui;
 mod widget_view;
 use crate::irc_view::main_view;
+use crate::irc_view::session::Session;
 use clown::project_path::ProjectPath;
 use event_handler::Event;
 use event_handler::EventHandler;
@@ -73,6 +74,7 @@ async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let mut model = model::Model::new(args.config_name);
+    let mut session = Session::new(model.get_server_count());
     let mut current_view = Views::Main(main_view::MainView::new());
 
     let mut events = EventHandler::new();
@@ -82,6 +84,7 @@ async fn main() -> color_eyre::Result<()> {
     let mut list_messages = message_queue::MessageQueue::new();
     list_messages.push_message(MessageEvent::AddMessageView(
         None,
+        None,
         MessageContent::new_info("Use the command /help".to_string()),
     ));
 
@@ -89,10 +92,17 @@ async fn main() -> color_eyre::Result<()> {
         if let Some(event) = events.next().await {
             match event {
                 Event::Tick | Event::Crossterm(_) => {
-                    handle_event(&mut model, &mut current_view, event, &mut list_messages)?;
+                    handle_event(
+                        &mut model,
+                        &mut session,
+                        &mut current_view,
+                        event,
+                        &mut list_messages,
+                    )?;
                     while let Some(current_msg) = list_messages.next() {
                         update(
                             &mut model,
+                            &mut session,
                             &mut current_view,
                             current_msg,
                             &mut list_messages,
@@ -105,7 +115,7 @@ async fn main() -> color_eyre::Result<()> {
                 }
             }
             if need_redraw(&mut model, &mut current_view) {
-                terminal.draw(|f| view(&mut model, &mut current_view, f))?;
+                terminal.draw(|f| view(&mut model, &mut session, &mut current_view, f))?;
             }
         }
     }
@@ -115,23 +125,24 @@ async fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 
-fn view(model: &mut Model, views: &mut Views<'_>, frame: &mut Frame<'_>) {
+fn view(model: &mut Model, session: &mut Session, views: &mut Views<'_>, frame: &mut Frame<'_>) {
     match views {
         Views::Main(view) => {
-            view.view(model, frame);
+            view.view(model, session, frame);
         }
     }
 }
 
 fn handle_event(
     model: &mut Model,
+    session: &mut Session,
     views: &mut Views<'_>,
     event: Event,
     out_messages: &mut MessageQueue,
 ) -> color_eyre::Result<Option<MessageEvent>> {
     match views {
         Views::Main(view) => {
-            view.handle_event(model, &event, out_messages);
+            view.handle_event(model, session, &event, out_messages);
         }
     }
     Ok(None)
@@ -145,12 +156,13 @@ fn need_redraw(model: &mut Model, views: &mut Views<'_>) -> bool {
 
 async fn update(
     model: &mut Model,
+    session: &mut Session,
     views: &mut Views<'_>,
     msg: MessageEvent,
     out_messages: &mut MessageQueue,
 ) {
     match views {
-        Views::Main(view) => view.update(model, msg, out_messages),
+        Views::Main(view) => view.update(model, session, msg, out_messages),
     }
 }
 

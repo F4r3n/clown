@@ -265,16 +265,19 @@ impl CInput {
                         self.spell_checker = Some(spell_checker);
                         Some(MessageEvent::AddMessageView(
                             None,
+                            None,
                             MessageContent::new_info("Spell checker is ready".to_string()),
                         ))
                     }
                     Err(e) => Some(MessageEvent::AddMessageView(
+                        None,
                         None,
                         MessageContent::new_error(format!("Spell checker error: {}", e)),
                     )),
                 }
             } else {
                 Some(MessageEvent::AddMessageView(
+                    None,
                     None,
                     MessageContent::new_error("Error no spell checker retrieved".to_string()),
                 ))

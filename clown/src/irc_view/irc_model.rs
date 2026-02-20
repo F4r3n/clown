@@ -166,10 +166,13 @@ impl IrcModel {
                     }
                 }
             }
-            MessageEvent::SelectChannel(Some(server_id), channel) => {
-                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+            MessageEvent::SelectChannel(server_id, channel) => {
+                if let Some(server_id) = server_id
+                    && let Some(Some(server)) = self.servers.get_mut(*server_id)
+                {
                     server.select_channel(channel);
                 }
+                self.current_id = *server_id;
             }
             MessageEvent::PrivMsg(server_id, source, target, _)
             | MessageEvent::ActionMsg(server_id, source, target, _) => {

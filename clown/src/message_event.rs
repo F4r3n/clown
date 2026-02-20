@@ -3,7 +3,11 @@ use crate::message_irc::message_content::MessageContent;
 #[derive(PartialEq, Debug)]
 pub enum MessageEvent {
     MessageInput(String),
-    AddMessageView(Option<String>, MessageContent),
+    AddMessageView(
+        Option<usize>, /*server id */
+        Option<String>,
+        MessageContent,
+    ),
     PrivMsg(
         usize,  /*server id */
         String, /*source */

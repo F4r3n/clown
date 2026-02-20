@@ -101,4 +101,8 @@ impl Model {
     pub fn get_channels(&mut self, in_id: usize) -> impl Iterator<Item = &str> {
         self.stored_config.config.get_channels(in_id)
     }
+
+    pub fn get_server_count(&self) -> usize {
+        self.stored_config.config.servers.len()
+    }
 }

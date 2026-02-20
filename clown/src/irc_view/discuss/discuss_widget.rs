@@ -498,7 +498,6 @@ impl Draw for DiscussWidget {
         if self.redraw {
             self.redraw = false;
         }
-        tracing::debug!("Render {:?}", &self);
 
         self.area = area;
 
@@ -574,13 +573,16 @@ impl crate::component::EventHandler for DiscussWidget {
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
-            MessageEvent::AddMessageView(channel, in_message) => {
-                tracing::debug!("Has received a message {:?}", &channel);
+            MessageEvent::AddMessageView(server_id, channel, in_message) => {
                 if let Some(channel) = channel {
-                    self.add_line(None, channel, in_message.clone());
+                    self.add_line(
+                        server_id.or(self.current_server_id),
+                        channel,
+                        in_message.clone(),
+                    );
                 } else {
                     self.add_line(
-                        self.current_server_id,
+                        server_id.or(self.current_server_id),
                         &self.current_channel.clone(),
                         in_message.clone(),
                     );

@@ -5,7 +5,7 @@ pub mod irc_model;
 pub mod main_view;
 
 mod input;
-mod irc_session;
+pub mod session;
 mod tooltip_widget;
 mod topic_widget;
 mod users_widget;

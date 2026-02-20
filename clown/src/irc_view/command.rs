@@ -136,5 +136,5 @@ pub fn help() -> MessageEvent {
             .as_str(),
         );
     }
-    MessageEvent::AddMessageView(None, MessageContent::new_info(output))
+    MessageEvent::AddMessageView(None, None, MessageContent::new_info(output))
 }
