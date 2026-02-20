@@ -16,7 +16,7 @@ pub enum MessageEvent {
         String, /*target*/
         String, /*content*/
     ),
-    SelectChannel(usize /*server id */, String),
+    SelectChannel(Option<usize> /*server id */, String),
     UpdateUsers(
         usize,       /*server id */
         String,      /*channel*/

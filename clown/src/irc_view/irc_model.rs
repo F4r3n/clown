@@ -68,6 +68,18 @@ impl IrcModel {
         }
     }
 
+    #[cfg(test)]
+    pub fn new_single_server(in_length: usize, id: usize, nickname: String) -> Self {
+        let mut s = Self {
+            servers: std::iter::repeat_with(|| None).take(in_length).collect(),
+            current_id: None,
+        };
+
+        s.init_server(id, nickname);
+
+        s
+    }
+
     pub fn init_server(&mut self, in_id: usize, nickname: String) {
         if let Some(server) = self.servers.get_mut(in_id) {
             *server = Some(IrcServerModel::new_model(in_id, nickname))
@@ -78,6 +90,14 @@ impl IrcModel {
         self.current_id
             .and_then(|id| self.servers.get(id))
             .and_then(|v| v.as_ref())
+    }
+
+    pub fn get_server(&self, server_id: usize) -> Option<&IrcServerModel> {
+        if let Some(server) = self.servers.get(server_id) {
+            server.as_ref()
+        } else {
+            None
+        }
     }
 
     pub fn is_main_user(&self, server_id: usize, nick: &str) -> bool {
@@ -146,7 +166,7 @@ impl IrcModel {
                     }
                 }
             }
-            MessageEvent::SelectChannel(server_id, channel) => {
+            MessageEvent::SelectChannel(Some(server_id), channel) => {
                 if let Some(Some(server)) = self.servers.get_mut(*server_id) {
                     server.select_channel(channel);
                 }
@@ -512,7 +532,7 @@ mod tests {
 
         assert!(server(&m).has_unread_message("#rust"));
 
-        m.handle_action(&MessageEvent::SelectChannel(0, "#RUST".into()));
+        m.handle_action(&MessageEvent::SelectChannel(Some(0), "#RUST".into()));
 
         assert!(!server(&m).has_unread_message("#rust"));
     }
@@ -538,7 +558,7 @@ mod tests {
         setup_server(&mut m);
 
         m.handle_action(&MessageEvent::Join(0, "#Rust".into(), "Alice".into()));
-        m.handle_action(&MessageEvent::SelectChannel(0, "#General".into()));
+        m.handle_action(&MessageEvent::SelectChannel(Some(0), "#General".into()));
 
         m.handle_action(&MessageEvent::PrivMsg(
             0,

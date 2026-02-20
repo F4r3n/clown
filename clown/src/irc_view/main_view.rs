@@ -50,6 +50,7 @@ pub struct MainView<'a> {
     need_redraw: bool,
     has_focus: bool,
 
+    //TODO move them into their own struct
     log_instant: std::time::Instant,
 
     session: Option<IrcSession>,
@@ -70,7 +71,7 @@ impl MainView<'_> {
             Component::new("topic_view", topic_widget::TopicWidget::new());
         //list_components.push()
         let mut discuss_widget = discuss_widget::DiscussWidget::new();
-        discuss_widget.set_current_channel("Global");
+        discuss_widget.set_current_channel(None, "Global");
         let messages_display = Component::new("messages", discuss_widget);
         let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
 
@@ -389,8 +390,10 @@ impl MainView<'_> {
                                     channel.clone(),
                                     source.clone(),
                                 ));
-                                messages
-                                    .push_message(MessageEvent::SelectChannel(id, channel.clone()));
+                                messages.push_message(MessageEvent::SelectChannel(
+                                    Some(id),
+                                    channel.clone(),
+                                ));
                             } else {
                                 tracing::error!(error = %MessageError::MissingSource, "Join");
                             }
@@ -648,7 +651,6 @@ impl widget_view::WidgetView for MainView<'_> {
             | MessageEvent::Quit(id, ..)
             | MessageEvent::ReplaceUser(id, ..)
             | MessageEvent::PrivMsg(id, ..)
-            | MessageEvent::SelectChannel(id, ..)
             | MessageEvent::UpdateUsers(id, ..)
             | MessageEvent::SetTopic(id, ..) => {
                 if let Err(e) = self.log(model.get_connection_config(*id).as_ref(), None, &msg) {

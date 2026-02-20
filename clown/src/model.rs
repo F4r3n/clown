@@ -1,6 +1,4 @@
-use crate::message_irc::message_logger::MessageLogger;
-use crate::project_path::ProjectPath;
-use crate::{config::Config, message_event::MessageEvent};
+use crate::config::Config;
 use clown_core::{client::LoginConfig, conn::ConnectionConfig};
 use tokio::{sync::mpsc, task::JoinHandle};
 #[derive(Debug, Default, PartialEq, Eq)]

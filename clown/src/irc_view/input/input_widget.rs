@@ -102,6 +102,7 @@ impl crate::component::EventHandler for CInput {
             MessageEvent::SelectChannel(server_id, channel) => {
                 self.completion.current_channel = channel.to_string();
                 self.completion.server_id = *server_id;
+
                 None
             }
             MessageEvent::Join(server_id, channel, user) => {
