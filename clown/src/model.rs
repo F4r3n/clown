@@ -27,8 +27,8 @@ impl StoredConfig {
         self.config.save(&self.stored_name)
     }
 
-    pub fn set_nickname(&mut self, nickname: String) {
-        if let Some(server) = self.config.servers.first_mut() {
+    pub fn set_nickname(&mut self, server_id: usize, nickname: String) {
+        if let Some(server) = self.config.servers.get_mut(server_id) {
             server.login.nickname = nickname
         }
     }
@@ -60,8 +60,9 @@ impl Model {
         self.stored_config.save()
     }
 
-    pub fn set_nickname(&mut self, nickname: String) -> color_eyre::Result<()> {
-        self.stored_config.set_nickname(nickname.to_string());
+    pub fn set_nickname(&mut self, server_id: usize, nickname: String) -> color_eyre::Result<()> {
+        self.stored_config
+            .set_nickname(server_id, nickname.to_string());
         self.save()?;
         Ok(())
     }

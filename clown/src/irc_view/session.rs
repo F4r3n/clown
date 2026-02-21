@@ -45,6 +45,14 @@ impl Session {
         }
     }
 
+    pub fn send_command_all_server(&mut self, in_command: Command) {
+        for connection in self.connections.iter_mut() {
+            if let Some(connection) = connection {
+                let _ = connection.command_sender.send(in_command.clone());
+            }
+        }
+    }
+
     pub fn is_irc_finished(&self, in_id: usize) -> bool {
         if let Some(Some(connection)) = self.connections.get(in_id) {
             connection.task.is_finished()

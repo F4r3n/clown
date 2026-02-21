@@ -142,7 +142,7 @@ impl MainView<'_> {
                     0, /*TODO: command should return the id */
                 )),
                 command::ClientCommand::Quit(message) => {
-                    session.send_command_current_server(Command::Quit(message));
+                    session.send_command_all_server(Command::Quit(message));
 
                     model.running_state = RunningState::Done; //TODO: should not quit except if all are disconnected
                     None
@@ -153,7 +153,7 @@ impl MainView<'_> {
                     if let Some(id) = session.get_current_server_id()
                         && !session.is_connected(id)
                     {
-                        let _ = model.set_nickname(new_nick.clone());
+                        let _ = model.set_nickname(id, new_nick.clone());
                     }
 
                     None
@@ -347,7 +347,7 @@ impl MainView<'_> {
                             && let Some(nickname) = model.get_nickname(server_id)
                         {
                             if source.eq_ignore_ascii_case(nickname) {
-                                let _ = model.set_nickname(new_user.clone());
+                                let _ = model.set_nickname(server_id, new_user.clone());
                             }
                             messages.push_message(MessageEvent::ReplaceUser(
                                 server_id, source, new_user,
@@ -473,8 +473,11 @@ impl MainView<'_> {
             if let Some(nick) = model.get_nickname(id) {
                 session.init_irc_model(nick.to_string(), id);
             }
-            for channel in model.get_channels(id) {
-                session.send_command(id, clown_core::command::Command::Join(channel.to_string()));
+            if model.is_autojoin_by_id(id) {
+                for channel in model.get_channels(id) {
+                    session
+                        .send_command(id, clown_core::command::Command::Join(channel.to_string()));
+                }
             }
         }
     }

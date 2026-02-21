@@ -47,7 +47,7 @@ static COMMAND_NAME: phf::Map<&'static str, CommandName> = phf_map! {
         "ERROR" => CommandName::Error
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Command {
     /// Change your nickname.
     /// NICK <nickname>
