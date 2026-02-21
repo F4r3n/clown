@@ -88,19 +88,21 @@ impl UsersWidget {
         }
     }
 
-    fn get_section_id(&self, section: &str) -> Option<usize> {
+    fn get_section_id(&self, server_id: Option<usize>, section: &str) -> Option<usize> {
         self.list_sections
             .iter()
-            .find(|c| c.section_info.name.eq_ignore_ascii_case(section))
+            .find(|c| {
+                c.section_info.name.eq_ignore_ascii_case(section)
+                    && c.section_info.server_id == server_id
+            })
             .map(|c| c.section_info.id)
     }
 
     fn add_section(&mut self, server_id: Option<usize>, section: String) -> Option<usize> {
-        let index = if let Some(i) = self
-            .list_sections
-            .iter()
-            .position(|c| c.section_info.name.eq_ignore_ascii_case(&section))
-        {
+        let index = if let Some(i) = self.list_sections.iter().position(|c| {
+            c.section_info.server_id == server_id
+                && c.section_info.name.eq_ignore_ascii_case(&section)
+        }) {
             i
         } else {
             self.list_sections.push(Section::new(
@@ -145,17 +147,20 @@ impl UsersWidget {
     ) {
         let old = Self::sanitize_name(old);
         let new = Self::sanitize_name(new);
-        let global_section_id = self.get_global_section_id();
-
-        //not really performant, but not expecting a lot of changes
-        for section in self.list_sections.iter_mut() {
-            if irc_model.has_user_joined_channel(old, &section.section_info.name)
-                || section.section_info.id == global_section_id
-            {
-                for user in section.order_user.iter_mut() {
-                    if user.eq_ignore_ascii_case(old) {
-                        *user = new.to_string();
-                        break;
+        let global_section_id = self
+            .get_global_section(Some(irc_model.get_server_id()))
+            .map(|v| v.section_info.id);
+        if let Some(global_section_id) = global_section_id {
+            //not really performant, but not expecting a lot of changes
+            for section in self.list_sections.iter_mut() {
+                if irc_model.has_user_joined_channel(old, &section.section_info.name)
+                    || section.section_info.id == global_section_id
+                {
+                    for user in section.order_user.iter_mut() {
+                        if user.eq_ignore_ascii_case(old) {
+                            *user = new.to_string();
+                            break;
+                        }
                     }
                 }
             }
@@ -190,7 +195,7 @@ impl UsersWidget {
         }
     }
 
-    fn hightlight_user(&mut self, user: &str) {
+    fn hightlight_user(&mut self, server_id: Option<usize>, user: &str) {
         //Already selected
         if let Some(selected_name) = self.get_selected_name()
             && selected_name.eq_ignore_ascii_case(user)
@@ -198,7 +203,7 @@ impl UsersWidget {
             return;
         }
 
-        if let Some(id) = self.get_section_id(user)
+        if let Some(id) = self.get_section_id(server_id, user)
             && let Some(section) = self.list_sections.get_mut(id)
         {
             section.section_info.highlight = true;
@@ -225,7 +230,7 @@ impl UsersWidget {
     }
 
     fn add_user_with_section(&mut self, server_id: Option<usize>, section: &str, user: &str) {
-        if let Some(section_id) = self.get_section_id(section) {
+        if let Some(section_id) = self.get_section_id(server_id, section) {
             self.add_user(section_id, user);
         } else if let Some(section_id) = self.add_section(server_id, section.to_string()) {
             self.add_user(section_id, user);
@@ -239,19 +244,22 @@ impl UsersWidget {
         }
     }
 
-    fn get_global_section_id(&self) -> usize {
-        0
+    //The global section is the first right id
+    fn get_global_section(&self, server_id: Option<usize>) -> Option<&Section> {
+        self.list_sections
+            .iter()
+            .find(|v| v.section_info.server_id == server_id)
     }
 
-    fn add_user_global_section(&mut self, user: &str) {
-        if let Some(global_section) = self.list_sections.get(self.get_global_section_id())
-            && global_section.section_info.name.eq(user)
-        {
+    fn add_user_global_section(&mut self, server_id: Option<usize>, user: &str) {
+        if user.starts_with("#") {
             return;
         }
 
-        if !user.starts_with("#") {
-            self.add_user(self.get_global_section_id(), user);
+        if let Some(global_section) = self.get_global_section(server_id)
+            && !global_section.section_info.name.eq(user)
+        {
+            self.add_user(global_section.section_info.id, user);
         }
     }
 
@@ -459,8 +467,8 @@ impl crate::component::EventHandler for UsersWidget {
                 {
                     let target = irc_server.get_target(source, target);
 
-                    self.add_user_global_section(target);
-                    self.hightlight_user(target);
+                    self.add_user_global_section(Some(*server_id), target);
+                    self.hightlight_user(Some(*server_id), target);
                     self.need_redraw = true;
                 }
                 None
@@ -470,8 +478,11 @@ impl crate::component::EventHandler for UsersWidget {
                     && let Some(irc_server) = irc_model.get_server(*server_id)
                 {
                     if irc_server.is_main_user(user) {
-                        self.remove_all_users_section(self.get_section_id(channel));
-                    } else if let Some(channel_id) = self.get_section_id(channel) {
+                        self.remove_all_users_section(
+                            self.get_section_id(Some(*server_id), channel),
+                        );
+                    } else if let Some(channel_id) = self.get_section_id(Some(*server_id), channel)
+                    {
                         self.remove_user(channel_id, user);
                     }
                     self.need_redraw = true;
@@ -485,18 +496,17 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::Join(server_id, channel, user) => {
-                self.add_section(Some(*server_id), channel.to_string());
-                self.add_user_with_section(Some(*server_id), channel, user);
+                if let Some(id) = self.add_section(Some(*server_id), channel.to_string()) {
+                    self.add_user_with_section(Some(*server_id), channel, user);
 
-                if let Some(id) = self.get_section_id(channel) {
                     self.list_state.current_section = id;
+                    self.need_redraw = true;
                 }
-                self.need_redraw = true;
 
                 None
             }
             MessageEvent::SelectChannel(server_id, channel) => {
-                if let Some(id) = self.get_section_id(channel) {
+                if let Some(id) = self.get_section_id(*server_id, channel) {
                     self.list_state.current_section = id;
                 }
                 self.need_redraw = true;
