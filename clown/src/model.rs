@@ -91,14 +91,6 @@ impl Model {
         self.get_config().get_login_config(in_id)
     }
 
-    pub fn get_login_channels(&self, in_id: usize) -> Option<impl Iterator<Item = &str>> {
-        self.stored_config
-            .config
-            .servers
-            .get(in_id)
-            .map(|v| v.channels.list.iter().map(|v| v.as_str()))
-    }
-
     pub fn get_channels(&mut self, in_id: usize) -> impl Iterator<Item = &str> {
         self.stored_config.config.get_channels(in_id)
     }

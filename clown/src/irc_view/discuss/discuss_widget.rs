@@ -6,7 +6,6 @@ use crate::irc_view::color_user::nickname_color;
 use crate::message_irc::message_content::WordPos;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use ahash::AHashMap;
-use ahash::RandomState;
 use crossterm::event::KeyCode;
 use crossterm::event::MouseButton;
 use ratatui::widgets::Row;
@@ -16,7 +15,6 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-use std::hash::{BuildHasher, Hash, Hasher};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 struct Range {
@@ -25,17 +23,15 @@ struct Range {
 }
 
 #[derive(Debug, Default)]
-pub struct ChannelMessages {
-    messages: AHashMap<u64, Vec<MessageContent>>,
+pub struct ServerMessages {
+    messages: Vec<ChannelMessages>,
 }
 
-impl ChannelMessages {
-    fn calculate_hash(server_id: Option<usize>, channel: &str) -> u64 {
-        let hash_builder = RandomState::with_seed(1);
-        let mut hasher = hash_builder.build_hasher();
-        channel.hash(&mut hasher);
-        server_id.hash(&mut hasher);
-        hasher.finish()
+impl ServerMessages {
+    pub fn new() -> Self {
+        Self {
+            messages: vec![ChannelMessages::default()],
+        }
     }
 
     pub fn add_message(
@@ -44,23 +40,42 @@ impl ChannelMessages {
         channel: &str,
         in_message: MessageContent,
     ) {
-        self.messages
-            .entry(Self::calculate_hash(server_id, channel))
-            .or_default()
-            .push(in_message);
+        if let Some(server_group) = self.add_server_group(server_id) {
+            server_group.add_message(channel, in_message);
+        }
+    }
+
+    fn server_id_position(server_id: Option<usize>) -> usize {
+        server_id.map(|v| v.saturating_add(1)).unwrap_or(0)
+    }
+
+    fn add_server_group(&mut self, server_id: Option<usize>) -> Option<&mut ChannelMessages> {
+        let new_length = Self::server_id_position(server_id).saturating_add(1);
+        self.messages.resize_with(new_length, Default::default);
+
+        self.get_server_group_mut(server_id)
+    }
+
+    fn get_server_group_mut(&mut self, server_id: Option<usize>) -> Option<&mut ChannelMessages> {
+        self.messages.get_mut(Self::server_id_position(server_id))
+    }
+
+    fn get_server_group(&self, server_id: Option<usize>) -> Option<&ChannelMessages> {
+        self.messages.get(Self::server_id_position(server_id))
     }
 
     fn rename(&mut self, server_id: Option<usize>, old: &str, new: &str) {
-        if let Some(messages) = self.messages.remove(&Self::calculate_hash(server_id, old)) {
-            self.messages
-                .insert(Self::calculate_hash(server_id, new), messages);
+        if let Some(server_group) = self.get_server_group_mut(server_id) {
+            server_group.rename(old, new);
         }
     }
 
     pub fn has_messages(&self, server_id: Option<usize>, channel: &str) -> bool {
-        self.messages
-            .get(&Self::calculate_hash(server_id, channel))
-            .is_some_and(|c| !c.is_empty())
+        if let Some(server_group) = self.get_server_group(server_id) {
+            server_group.has_messages(channel)
+        } else {
+            false
+        }
     }
 
     pub fn get_messages(
@@ -68,7 +83,11 @@ impl ChannelMessages {
         server_id: Option<usize>,
         channel: &str,
     ) -> Option<&Vec<MessageContent>> {
-        self.messages.get(&Self::calculate_hash(server_id, channel))
+        if let Some(server_group) = self.get_server_group(server_id) {
+            server_group.get_messages(channel)
+        } else {
+            None
+        }
     }
 
     fn get_url_from_range(
@@ -77,11 +96,11 @@ impl ChannelMessages {
         channel: &str,
         range: &Range,
     ) -> Option<String> {
-        self.messages
-            .get(&Self::calculate_hash(server_id, channel))
-            .and_then(|messages| messages.get(range.line))
-            .and_then(|message| message.get_url_from_pos(&range.word_pos))
-            .map(|str| str.to_string())
+        if let Some(server_group) = self.get_server_group(server_id) {
+            server_group.get_url_from_range(channel, range)
+        } else {
+            None
+        }
     }
 
     fn get_word_pos(
@@ -91,8 +110,52 @@ impl ChannelMessages {
         index: usize,
         character_pos: usize,
     ) -> Option<Range> {
+        if let Some(server_group) = self.get_server_group(server_id) {
+            server_group.get_word_pos(channel, index, character_pos)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ChannelMessages {
+    messages: AHashMap<String, Vec<MessageContent>>,
+}
+
+impl ChannelMessages {
+    pub fn add_message(&mut self, channel: &str, in_message: MessageContent) {
         self.messages
-            .get(&Self::calculate_hash(server_id, channel))
+            .entry(channel.to_string())
+            .or_default()
+            .push(in_message);
+    }
+
+    fn rename(&mut self, old: &str, new: &str) {
+        if let Some(messages) = self.messages.remove(old) {
+            self.messages.insert(new.to_string(), messages);
+        }
+    }
+
+    pub fn has_messages(&self, channel: &str) -> bool {
+        self.messages.get(channel).is_some_and(|c| !c.is_empty())
+    }
+
+    pub fn get_messages(&self, channel: &str) -> Option<&Vec<MessageContent>> {
+        self.messages.get(channel)
+    }
+
+    fn get_url_from_range(&self, channel: &str, range: &Range) -> Option<String> {
+        self.messages
+            .get(channel)
+            .and_then(|messages| messages.get(range.line))
+            .and_then(|message| message.get_url_from_pos(&range.word_pos))
+            .map(|str| str.to_string())
+    }
+
+    fn get_word_pos(&self, channel: &str, index: usize, character_pos: usize) -> Option<Range> {
+        self.messages
+            .get(channel)
             .and_then(|messages| messages.get(index))
             .and_then(|message| message.get_word_pos(character_pos))
             .map(|w| Range {
@@ -125,7 +188,7 @@ pub struct DiscussWidget {
     follow_last: bool,
     area: Rect,
     content_width: usize,
-    messages: ChannelMessages,
+    messages: ServerMessages,
     current_channel: String,
     current_server_id: Option<usize>,
 
@@ -139,7 +202,7 @@ impl DiscussWidget {
         Self {
             current_channel: String::new(),
             current_server_id: None,
-            messages: ChannelMessages::default(),
+            messages: ServerMessages::new(),
             scroll_offset: 0,
             max_visible_height: 10,
             follow_last: true,

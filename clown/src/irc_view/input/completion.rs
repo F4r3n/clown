@@ -223,8 +223,10 @@ mod test {
 
     #[test]
     fn test_insert_uppercase() {
-        let mut comp = Completion::default();
-        comp.server_id = Some(0);
+        let mut comp = Completion {
+            server_id: Some(0),
+            ..Completion::default()
+        };
 
         comp.input_completion
             .add_users(0, "#test", &vec!["tata".to_string(), "Titi".to_string()]);

@@ -608,8 +608,8 @@ impl widget_view::WidgetView for MainView<'_> {
                 }
                 return; // Usually, we don't need to propagate raw input to children here
             }
+            #[allow(clippy::print_stdout)]
             MessageEvent::Bel => {
-                #[allow(clippy::print_stdout)]
                 println!("{}", 0x07 as char);
                 return;
             }
