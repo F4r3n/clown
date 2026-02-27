@@ -30,6 +30,7 @@ pub struct CInput {
 impl Draw for CInput {
     fn render(
         &mut self,
+        _model: &crate::model::Model,
         _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,

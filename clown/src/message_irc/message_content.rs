@@ -171,14 +171,14 @@ impl MessageContent {
     pub fn create_rows(
         &self,
         content_width: u16,
-        color_source: Option<&ratatui::style::Color>,
+        color_source: Option<ratatui::style::Color>,
         time_length: usize,
         nickname_length: usize,
     ) -> impl Iterator<Item = Row<'_>> {
         let mut visible_rows = Vec::new();
         let mut nickname_style = Style::default();
         if let Some(color_source) = color_source {
-            nickname_style = nickname_style.fg(*color_source);
+            nickname_style = nickname_style.fg(color_source);
         }
         if self.kind.eq(&MessageKind::Highlight) {
             nickname_style = nickname_style.bg(Color::Red).fg(Color::LightYellow);

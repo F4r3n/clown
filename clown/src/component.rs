@@ -1,12 +1,13 @@
-use crate::event_handler::Event;
 use crate::irc_view::irc_model;
 use crate::message_event::MessageEvent;
+use crate::{event_handler::Event, model::Model};
 use ratatui::{Frame, layout::Rect};
 use std::ops::{Deref, DerefMut};
 
 pub trait Draw {
     fn render(
         &mut self,
+        model: &Model,
         irc_model: Option<&irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,
@@ -69,13 +70,14 @@ impl<'a, T> Component<'a, T> {
 
     pub fn render(
         &mut self,
+        model: &Model,
         irc_model: Option<&irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,
     ) where
         T: Draw,
     {
-        self.inner.render(irc_model, frame, area);
+        self.inner.render(model, irc_model, frame, area);
     }
 
     pub fn to_child_mut<'b>(&'b mut self) -> Component<'b, Child<'b>>

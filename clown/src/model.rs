@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::{config::Config, irc_view::color_user::ColorGenerator};
 use clown_core::{client::LoginConfig, conn::ConnectionConfig};
 use tokio::{sync::mpsc, task::JoinHandle};
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -37,14 +37,20 @@ impl StoredConfig {
 pub struct Model {
     pub running_state: RunningState,
     stored_config: StoredConfig,
+
+    color_generator: crate::irc_view::color_user::ColorGenerator,
 }
 
 impl Model {
     pub fn new(config_name: String) -> Self {
         let config = Config::new(&config_name);
-
+        let mut color_generator = ColorGenerator::new(config.nickname_colors.seed);
+        for (input, color) in &config.nickname_colors.overrides {
+            color_generator.add_override(input.to_string(), color);
+        }
         Self {
             running_state: RunningState::Start,
+            color_generator,
             stored_config: StoredConfig {
                 config,
                 stored_name: config_name,
@@ -97,5 +103,9 @@ impl Model {
 
     pub fn get_server_count(&self) -> usize {
         self.stored_config.config.servers.len()
+    }
+
+    pub fn get_color(&self, input: &str) -> ratatui::style::Color {
+        self.color_generator.generate_color(input)
     }
 }

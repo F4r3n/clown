@@ -496,7 +496,7 @@ impl widget_view::WidgetView for MainView<'_> {
         }
         false
     }
-    fn view(&mut self, _model: &mut Model, session: &mut Session, frame: &mut Frame<'_>) {
+    fn view(&mut self, model: &mut Model, session: &mut Session, frame: &mut Frame<'_>) {
         if self.need_redraw {
             self.need_redraw = false;
         }
@@ -521,25 +521,26 @@ impl widget_view::WidgetView for MainView<'_> {
 
             if let Some(message_area) = top_layout.first() {
                 self.messages_display
-                    .render(Some(&session.model), frame, *message_area);
+                    .render(model, Some(&session.model), frame, *message_area);
                 self.tooltip_widget
-                    .render(Some(&session.model), frame, *message_area);
+                    .render(model, Some(&session.model), frame, *message_area);
             }
 
             if let Some(list_users) = top_layout.get(1) {
                 self.list_users_view
-                    .render(Some(&session.model), frame, *list_users);
+                    .render(model, Some(&session.model), frame, *list_users);
             }
         }
 
         // Render widgets
         if let Some(input_area) = main_layout.get(2) {
-            self.input.render(Some(&session.model), frame, *input_area);
+            self.input
+                .render(model, Some(&session.model), frame, *input_area);
         }
 
         if let Some(topic_area) = main_layout.first() {
             self.topic_view
-                .render(Some(&session.model), frame, *topic_area);
+                .render(model, Some(&session.model), frame, *topic_area);
         }
     }
 

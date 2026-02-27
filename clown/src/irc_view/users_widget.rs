@@ -13,7 +13,6 @@ struct RegisteredSection {
     name: String,
     id: usize,
     server_id: Option<usize>,
-    color: ratatui::style::Color,
     highlight: bool,
 }
 
@@ -21,7 +20,6 @@ impl RegisteredSection {
     pub fn new(name: String, id: usize, server_id: Option<usize>) -> Self {
         Self {
             server_id,
-            color: nickname_color(&name),
             name,
             id,
             highlight: false,
@@ -294,6 +292,7 @@ impl UsersWidget {
 impl Draw for UsersWidget {
     fn render(
         &mut self,
+        model: &crate::model::Model,
         irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
@@ -304,7 +303,7 @@ impl Draw for UsersWidget {
         self.area = area;
         if let Some(irc_model) = irc_model {
             self.list_state
-                .render(irc_model, &self.list_sections, frame, area);
+                .render(model, irc_model, &self.list_sections, frame, area);
         }
     }
 }
@@ -384,6 +383,7 @@ impl ListStateWidget {
 
     fn render(
         &mut self,
+        model: &crate::model::Model,
         irc_model: &crate::irc_view::irc_model::IrcModel,
         sections: &[Section],
         frame: &mut ratatui::Frame<'_>,
@@ -394,7 +394,7 @@ impl ListStateWidget {
         for (section_i, section) in sections.iter().enumerate() {
             let item = ListItem::from(Line::from(self.add_item(
                 0,
-                section.section_info.color,
+                model.get_color(&section.section_info.name),
                 &section.section_info.name,
                 section.section_info.highlight,
                 (self.current_section == section_i) && (self.current_selected == 0),
@@ -406,7 +406,7 @@ impl ListStateWidget {
                 for (i, user_name) in section.order_user.iter().enumerate() {
                     let spans = self.add_item(
                         1,
-                        nickname_color(user_name),
+                        model.get_color(&user_name),
                         user_name,
                         irc_server.has_unread_message(user_name),
                         (self.current_section == section_i) && (self.current_selected == (i + 1)),

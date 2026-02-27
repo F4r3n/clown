@@ -31,6 +31,7 @@ impl MessagePreview {
 impl Draw for MessagePreview {
     fn render(
         &mut self,
+        _model: &crate::model::Model,
         _irc_model: Option<&irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,
@@ -118,6 +119,7 @@ impl ToolTipDiscussWidget {
 impl Draw for ToolTipDiscussWidget {
     fn render(
         &mut self,
+        model: &crate::model::Model,
         irc_model: Option<&irc_model::IrcModel>,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
@@ -137,7 +139,7 @@ impl Draw for ToolTipDiscussWidget {
         self.area = area_to_render;
         if let Some(preview) = &mut self.preview {
             self.is_opened = true;
-            preview.render(irc_model, frame, area_to_render);
+            preview.render(model, irc_model, frame, area_to_render);
             self.need_redraw = preview.need_redraw();
         }
     }

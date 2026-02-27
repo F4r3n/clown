@@ -1,14 +1,65 @@
+use ahash::AHashMap;
 use palette::FromColor;
 use palette::{Oklch, Srgb};
 use ratatui::style::Color;
 
-fn hash_nickname(nickname: &str) -> u64 {
-    let state = ahash::RandomState::with_seeds(1, 2, 3, 4);
+pub struct ColorGenerator {
+    seed: u64,
+    overrides: ahash::AHashMap<String, Color>,
+}
+
+impl ColorGenerator {
+    pub fn new(seed: u64) -> Self {
+        Self {
+            seed,
+            overrides: AHashMap::new(),
+        }
+    }
+
+    fn parse_hex_color(input: &str) -> Option<Color> {
+        if !input.starts_with('#') || input.len() != 7 {
+            return None;
+        }
+        let r = u8::from_str_radix(input.get(1..3)?, 16).ok()?;
+        let g = u8::from_str_radix(input.get(3..5)?, 16).ok()?;
+        let b = u8::from_str_radix(input.get(5..7)?, 16).ok()?;
+        Some(Color::Rgb(r, g, b))
+    }
+
+    pub fn add_override(&mut self, input: String, color: &str) -> bool {
+        if let Some(c) = Self::parse_hex_color(color) {
+            self.overrides.insert(input, c);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn generate_color(&self, input: &str) -> Color {
+        self.overrides
+            .get(input)
+            .cloned()
+            .unwrap_or(self.nickname_color(input))
+    }
+
+    fn nickname_color(&self, nickname: &str) -> ratatui::style::Color {
+        let hash = hash_nickname(self.seed, nickname);
+        bright_distinct_color(hash)
+    }
+}
+
+fn hash_nickname(seed: u64, nickname: &str) -> u64 {
+    let state = ahash::RandomState::with_seeds(
+        seed.saturating_add(1),
+        seed.saturating_add(2),
+        seed.saturating_add(3),
+        seed.saturating_add(4),
+    );
     state.hash_one(nickname)
 }
 
 pub fn nickname_color(nickname: &str) -> ratatui::style::Color {
-    let hash = hash_nickname(nickname);
+    let hash = hash_nickname(0, nickname);
     bright_distinct_color(hash)
 }
 
@@ -145,7 +196,7 @@ mod tests {
         for i in 0..num_samples {
             // Simulate unique names
             let name = format!("user_{}", i);
-            let oklch = compute_color(hash_nickname(&name));
+            let oklch = compute_color(hash_nickname(0, &name));
             let h = oklch.hue.into_positive_degrees();
 
             let bucket_index = (h / (360.0 / num_buckets as f32)) as usize;

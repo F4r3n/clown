@@ -1,4 +1,3 @@
-use std::collections;
 use std::ops::Deref;
 use std::path::PathBuf;
 
@@ -7,7 +6,7 @@ use clown_core::conn::ConnectionConfig;
 
 use crate::project_path::ProjectPath;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
 pub struct Connection {
     pub address: String,
     pub port: u16,
@@ -39,7 +38,7 @@ pub struct Server {
 // COMPLETION
 //
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
 pub struct Completion {
     #[serde(default)]
     pub on_empty_input: CompletionBehavior,
@@ -48,7 +47,7 @@ pub struct Completion {
     pub in_message: CompletionBehavior,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
 pub struct CompletionBehavior {
     #[serde(default)]
     pub suffix: Option<String>,
@@ -58,22 +57,16 @@ pub struct CompletionBehavior {
 // COLORS
 //
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-pub struct Colors {
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
+pub struct NicknameColors {
     #[serde(default)]
-    pub nickname: Nickname,
+    pub seed: u64,
+
+    #[serde(default)]
+    pub overrides: ahash::HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-pub struct Nickname {
-    #[serde(default)]
-    pub seed: Vec<String>,
-
-    #[serde(default)]
-    pub overrides: collections::hash_map::HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct Topic {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -85,13 +78,13 @@ impl Default for Topic {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
 pub struct Discuss {
     #[serde(default)]
     pub left_bar: LeftBar,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct LeftBar {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -103,7 +96,7 @@ impl Default for LeftBar {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct Users {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -123,23 +116,23 @@ fn default_true() -> bool {
 // KEYBINDINGS
 //
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
 pub struct Keybindings {
     #[serde(default)]
     pub bind: Vec<Keybinding>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct Keybinding {
     pub action: Action,
     pub keys: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Action {}
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
 pub struct Meta {
     pub version: u16,
 }
@@ -147,13 +140,33 @@ pub struct Meta {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Config {
     pub servers: Vec<Server>,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub completion: Completion,
-    pub colors: Colors,
+
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub nickname_colors: NicknameColors,
+
+    #[serde(default, skip_serializing_if = "is_default")]
     pub discuss: Discuss,
+
+    #[serde(default, skip_serializing_if = "is_default")]
     pub users: Users,
+
+    #[serde(default, skip_serializing_if = "is_default")]
     pub topic: Topic,
+
+    #[serde(default, skip_serializing_if = "is_default")]
     pub keybindings: Keybindings,
+
+    #[serde(default, skip_serializing_if = "is_default")]
     pub meta: Meta,
+}
+
+fn is_default<T>(t: &T) -> bool
+where
+    T: Default + PartialEq,
+{
+    t == &T::default()
 }
 
 impl Default for Config {
@@ -176,7 +189,7 @@ impl Default for Config {
                 },
                 name: "IRC-Server".into(),
             }],
-            colors: Colors::default(),
+            nickname_colors: NicknameColors::default(),
             completion: Completion::default(),
             keybindings: Keybindings::default(),
             discuss: Discuss::default(),

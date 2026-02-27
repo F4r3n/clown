@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::component::Draw;
-use crate::irc_view::color_user::nickname_color;
 use crate::message_irc::message_content::WordPos;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use ahash::AHashMap;
@@ -193,7 +192,6 @@ pub struct DiscussWidget {
     current_server_id: Option<usize>,
 
     last_hovered: Option<Hovered>,
-    color_map: AHashMap<String, ratatui::style::Color>,
     redraw: bool,
 }
 
@@ -210,15 +208,11 @@ impl DiscussWidget {
             area: Rect::default(),
             content_width: 0,
             last_hovered: None,
-            color_map: AHashMap::new(),
             redraw: true,
         }
     }
 
     pub fn set_current_channel(&mut self, server_id: Option<usize>, channel: &str) {
-        self.color_map
-            .entry(channel.to_string())
-            .or_insert(nickname_color(channel));
         self.current_channel = channel.to_lowercase();
         self.current_server_id = server_id;
         self.scroll_offset = 0;
@@ -339,7 +333,7 @@ impl DiscussWidget {
         None
     }
 
-    fn collect_visible_rows<'a>(&'a mut self) -> Vec<Row<'a>> {
+    fn collect_visible_rows<'a>(&'a mut self, model: Option<&crate::model::Model>) -> Vec<Row<'a>> {
         let mut visible_rows = Vec::new();
         if self.content_width == 0 {
             return visible_rows;
@@ -387,11 +381,13 @@ impl DiscussWidget {
                     if rows_to_take == 0 && rows_remaining == 0 {
                         break;
                     }
-
+                    let color = line
+                        .get_source()
+                        .and_then(|s| model.map(|v| v.get_color(s)));
                     let rows = line
                         .create_rows(
                             self.content_width as u16,
-                            line.get_source().and_then(|s| self.color_map.get(s)),
+                            color,
                             TIME_LENGTH,
                             NICKNAME_LENGTH,
                         )
@@ -454,11 +450,6 @@ impl DiscussWidget {
         channel: &str,
         in_message: MessageContent,
     ) {
-        if let Some(source) = in_message.get_source() {
-            self.color_map
-                .entry(source.to_string())
-                .or_insert(nickname_color(source));
-        }
         let channel = channel.to_lowercase();
 
         self.messages.add_message(server_id, &channel, in_message);
@@ -554,6 +545,7 @@ impl DiscussWidget {
 impl Draw for DiscussWidget {
     fn render(
         &mut self,
+        model: &crate::model::Model,
         _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,
@@ -593,7 +585,7 @@ impl Draw for DiscussWidget {
             self.get_fake_total_lines()
                 .saturating_sub(self.scroll_offset),
         );
-        let visible_rows = self.collect_visible_rows();
+        let visible_rows = self.collect_visible_rows(Some(model));
         let table = Table::new(
             visible_rows,
             [
@@ -1127,22 +1119,22 @@ mod tests {
         );
 
         discuss.content_width = 10;
-        assert_eq!(discuss.collect_visible_rows().len(), 3);
+        assert_eq!(discuss.collect_visible_rows(None).len(), 3);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
-        assert_eq!(discuss.collect_visible_rows().len(), 6);
+        assert_eq!(discuss.collect_visible_rows(None).len(), 6);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows();
+        let rows = discuss.collect_visible_rows(None);
         assert_eq!(rows.len(), 2);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 1;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows();
+        let rows = discuss.collect_visible_rows(None);
         assert_eq!(rows.len(), 2);
     }
 }

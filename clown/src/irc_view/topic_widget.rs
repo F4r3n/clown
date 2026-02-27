@@ -19,6 +19,7 @@ pub struct TopicWidget {
 impl Draw for TopicWidget {
     fn render(
         &mut self,
+        _model: &crate::model::Model,
         irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,

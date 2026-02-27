@@ -1,4 +1,4 @@
-mod color_user;
+pub mod color_user;
 mod command;
 mod discuss;
 pub mod irc_model;
