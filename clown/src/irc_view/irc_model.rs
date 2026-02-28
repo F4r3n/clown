@@ -180,6 +180,11 @@ impl IrcModel {
                     server.received_message(source, target);
                 }
             }
+            MessageEvent::Notice(server_id, source, target, _) => {
+                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+                    server.received_message(source, target);
+                }
+            }
             _ => {}
         }
     }

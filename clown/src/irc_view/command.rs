@@ -1,5 +1,4 @@
 use crate::message_event::MessageEvent;
-use crate::message_irc::message_content::MessageContent;
 
 use strum::{EnumIter, EnumMessage, IntoEnumIterator, IntoStaticStr};
 
@@ -123,18 +122,28 @@ fn part(message: Option<&str>) -> ClientCommand {
         ClientCommand::Part(None, None)
     }
 }
-
 pub fn help() -> MessageEvent {
-    let mut output: String = "List of commands, type /command:\n".into();
+    use std::fmt::Write;
+
+    let mut output = String::from("List of commands, type /command:");
+
     for e in ClientCommand::iter() {
-        output.push_str(
-            format!(
-                "Command {}: {}\n",
-                e.get_message().unwrap_or_default(),
+        if let Some(message) = e.get_message()
+            && let Err(e) = write!(
+                &mut output,
+                "\nCommand {}: {}",
+                message,
                 e.get_detailed_message().unwrap_or_default()
             )
-            .as_str(),
-        );
+        {
+            tracing::error!("Cannot write help command: {}", e)
+        }
     }
-    MessageEvent::AddMessageView(None, None, MessageContent::new_info(output))
+
+    MessageEvent::AddMessageViewInfo(
+        None,
+        None,
+        crate::message_irc::message_content::MessageKind::Info,
+        output,
+    )
 }

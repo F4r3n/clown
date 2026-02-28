@@ -222,7 +222,8 @@ impl MessageLogger {
                     false,
                 )?;
             }
-            MessageEvent::PrivMsg(_, source, target, content) => {
+            MessageEvent::Notice(_, source, target, content)
+            | MessageEvent::PrivMsg(_, source, target, content) => {
                 self.write_to_target(
                     server_address,
                     Some(target),
@@ -230,7 +231,6 @@ impl MessageLogger {
                     false,
                 )?;
             }
-
             MessageEvent::ActionMsg(_, source, target, content) => {
                 self.write_to_target(
                     server_address,

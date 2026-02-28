@@ -13,7 +13,6 @@ use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
 use crate::message_event::MessageEvent;
-use crate::message_irc::message_content::MessageContent;
 use crate::message_irc::message_logger;
 use crate::message_irc::message_logger::MessageLogger;
 use crate::message_queue::MessageQueue;
@@ -211,13 +210,11 @@ impl MainView<'_> {
                     }
                 }
                 command::ClientCommand::Unknown(command_name) => {
-                    Some(MessageEvent::AddMessageView(
+                    Some(MessageEvent::AddMessageViewInfo(
                         None,
                         None,
-                        MessageContent::new_error(format!(
-                            "Unknown command {}",
-                            command_name.unwrap_or_default()
-                        )),
+                        crate::message_irc::message_content::MessageKind::Error,
+                        format!("Unknown command {}", command_name.unwrap_or_default()),
                     ))
                 }
             }
@@ -263,10 +260,11 @@ impl MainView<'_> {
         } else {
             let mut to_delete = vec![];
             for (server_id, msg) in session.pull_all_server_error() {
-                messages.push_message(MessageEvent::AddMessageView(
+                messages.push_message(MessageEvent::AddMessageViewInfo(
                     Some(server_id),
                     None,
-                    MessageContent::new_error(msg),
+                    crate::message_irc::message_content::MessageKind::Error,
+                    msg,
                 ));
                 to_delete.push(server_id);
 
@@ -358,11 +356,11 @@ impl MainView<'_> {
                     }
                     Command::Notice(target, message) => {
                         //Display a notice directly to the user current channel
-                        messages.push_message(MessageEvent::AddMessageView(
-                            Some(server_id),
-                            Some(target),
-                            MessageContent::new_notice(source, message),
-                        ));
+                        if let Some(source) = source {
+                            messages.push_message(MessageEvent::Notice(
+                                server_id, target, source, message,
+                            ));
+                        }
                     }
                     Command::Topic(channel, topic) => {
                         messages.push_message(MessageEvent::SetTopic(
@@ -420,10 +418,11 @@ impl MainView<'_> {
                             tracing::error!(error = %MessageError::MissingSource, "Welcome");
                         }
 
-                        messages.push_message(MessageEvent::AddMessageView(
+                        messages.push_message(MessageEvent::AddMessageViewInfo(
                             Some(server_id),
                             source.clone(),
-                            MessageContent::new(source, content),
+                            crate::message_irc::message_content::MessageKind::Normal,
+                            content,
                         ));
                     }
                     ResponseNumber::YourHost(content)
@@ -439,10 +438,11 @@ impl MainView<'_> {
                     | ResponseNumber::MOTDStart2(content)
                     | ResponseNumber::MOTDStart(content)
                     | ResponseNumber::EndOfMOTD(content) => {
-                        messages.push_message(MessageEvent::AddMessageView(
+                        messages.push_message(MessageEvent::AddMessageViewInfo(
                             Some(server_id),
                             source.clone(),
-                            MessageContent::new(source, content),
+                            crate::message_irc::message_content::MessageKind::Normal,
+                            content,
                         ));
                     }
                     ResponseNumber::NameReply(_symbol, channel, list_users) => {
@@ -456,10 +456,11 @@ impl MainView<'_> {
                             .push_message(MessageEvent::SetTopic(server_id, None, channel, topic));
                     }
                     ResponseNumber::Err(_, content) => {
-                        messages.push_message(MessageEvent::AddMessageView(
+                        messages.push_message(MessageEvent::AddMessageViewInfo(
                             Some(server_id),
                             None,
-                            MessageContent::new_error(content),
+                            crate::message_irc::message_content::MessageKind::Error,
+                            content,
                         ));
                     }
                     _ => {}
@@ -622,10 +623,11 @@ impl widget_view::WidgetView for MainView<'_> {
             }
             MessageEvent::Connect(server_id) => {
                 let addr = model.get_address(*server_id).unwrap_or("No address");
-                messages.push_message(MessageEvent::AddMessageView(
+                messages.push_message(MessageEvent::AddMessageViewInfo(
                     Some(*server_id),
                     None,
-                    MessageContent::new_info(format!("Try to connect to {}...", addr)),
+                    crate::message_irc::message_content::MessageKind::Info,
+                    format!("Try to connect to {}...", addr),
                 ));
 
                 if let Some(conn_cfg) = model.get_connection_config(*server_id)
@@ -637,10 +639,11 @@ impl widget_view::WidgetView for MainView<'_> {
                         tracing::error!(e);
                     }
                 } else {
-                    messages.push_message(MessageEvent::AddMessageView(
+                    messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(*server_id),
                         None,
-                        MessageContent::new_info(format!("Cannot connect to {}...", addr)),
+                        crate::message_irc::message_content::MessageKind::Error,
+                        format!("Cannot connect to {}...", addr),
                     ));
                 }
                 return;
@@ -649,10 +652,11 @@ impl widget_view::WidgetView for MainView<'_> {
                 if !session.is_irc_finished(*server_id) {
                     session.send_command(*server_id, clown_core::command::Command::Quit(None));
                 } else {
-                    messages.push_message(MessageEvent::AddMessageView(
+                    messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(*server_id),
                         None,
-                        MessageContent::new(None, "Disconnected".to_string()),
+                        crate::message_irc::message_content::MessageKind::Info,
+                        "Disconnected".to_string(),
                     ));
                 }
             }

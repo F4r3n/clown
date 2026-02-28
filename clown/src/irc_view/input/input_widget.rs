@@ -3,7 +3,7 @@ use super::history::InputHistory;
 use super::spell_checker::SpellChecker;
 use crate::irc_view::irc_model::IrcModel;
 use crate::message_event::MessageEvent;
-use crate::{component::Draw, message_irc::message_content::MessageContent};
+use crate::{component::Draw, message_irc::message_content::MessageKind};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
@@ -264,23 +264,26 @@ impl CInput {
                 match spell_checker {
                     Ok(spell_checker) => {
                         self.spell_checker = Some(spell_checker);
-                        Some(MessageEvent::AddMessageView(
+                        Some(MessageEvent::AddMessageViewInfo(
                             None,
                             None,
-                            MessageContent::new_info("Spell checker is ready".to_string()),
+                            MessageKind::Error,
+                            "Spell checker is ready".to_string(),
                         ))
                     }
-                    Err(e) => Some(MessageEvent::AddMessageView(
+                    Err(e) => Some(MessageEvent::AddMessageViewInfo(
                         None,
                         None,
-                        MessageContent::new_error(format!("Spell checker error: {}", e)),
+                        MessageKind::Error,
+                        format!("Spell checker error: {}", e),
                     )),
                 }
             } else {
-                Some(MessageEvent::AddMessageView(
+                Some(MessageEvent::AddMessageViewInfo(
                     None,
                     None,
-                    MessageContent::new_error("Error no spell checker retrieved".to_string()),
+                    MessageKind::Error,
+                    "Error no spell checker retrieved".to_string(),
                 ))
             }
         } else {

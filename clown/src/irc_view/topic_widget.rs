@@ -31,15 +31,14 @@ impl Draw for TopicWidget {
         if let Some(model) = irc_model.as_ref()
             && let Some(server_model) = model.get_current_server()
             && let Some(channel) = server_model.get_current_channel()
-        {
-            if let Some(topic) = self.topic_collection.get(&KeyServerChannel {
+            && let Some(topic) = self.topic_collection.get(&KeyServerChannel {
                 channel: channel.to_string(),
                 server_id: server_model.get_server_id(),
-            }) {
-                let text = Text::from(topic.clone());
-                let paragrapth = Paragraph::new(text);
-                frame.render_widget(paragrapth, area);
-            }
+            })
+        {
+            let text = Text::from(topic.clone());
+            let paragrapth = Paragraph::new(text);
+            frame.render_widget(paragrapth, area);
         }
     }
 }

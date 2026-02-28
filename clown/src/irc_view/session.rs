@@ -30,7 +30,7 @@ impl Session {
     pub fn reset_retry(&mut self) {
         self.retry = 5;
     }
-
+    //TODO: return message event
     pub fn send_command(&mut self, in_id: usize, in_command: Command) {
         if let Some(Some(connection)) = self.connections.get_mut(in_id) {
             let _ = connection.command_sender.send(in_command);
@@ -46,10 +46,8 @@ impl Session {
     }
 
     pub fn send_command_all_server(&mut self, in_command: Command) {
-        for connection in self.connections.iter_mut() {
-            if let Some(connection) = connection {
-                let _ = connection.command_sender.send(in_command.clone());
-            }
+        for connection in self.connections.iter_mut().flatten() {
+            let _ = connection.command_sender.send(in_command.clone());
         }
     }
 

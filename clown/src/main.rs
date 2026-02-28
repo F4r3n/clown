@@ -16,7 +16,7 @@ use clown::project_path::ProjectPath;
 use event_handler::Event;
 use event_handler::EventHandler;
 use message_event::MessageEvent;
-use message_irc::message_content::MessageContent;
+use message_irc::message_content::MessageKind;
 use message_queue::MessageQueue;
 use model::{Model, RunningState};
 use ratatui::Frame;
@@ -82,10 +82,11 @@ async fn main() -> color_eyre::Result<()> {
     let mut terminal = tui::init()?;
 
     let mut list_messages = message_queue::MessageQueue::new();
-    list_messages.push_message(MessageEvent::AddMessageView(
+    list_messages.push_message(MessageEvent::AddMessageViewInfo(
         None,
         None,
-        MessageContent::new_info("Use the command /help".to_string()),
+        MessageKind::Info,
+        "Use the command /help".to_string(),
     ));
 
     while model.running_state != RunningState::Done {

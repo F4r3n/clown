@@ -24,7 +24,7 @@ impl WordPos {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-enum MessageKind {
+pub enum MessageKind {
     Error,
     Info,
     Normal,
@@ -136,6 +136,15 @@ impl MessageContent {
             kind: MessageKind::Info,
             width_without_format: get_width_without_format(&content),
             content,
+        }
+    }
+
+    pub fn from_kind(kind: MessageKind, source: Option<String>, content: String) -> Option<Self> {
+        match kind {
+            MessageKind::Info => Some(Self::new_info(content)),
+            MessageKind::Error => Some(Self::new_error(content)),
+            MessageKind::Normal => Some(Self::new(source, content)),
+            _ => None,
         }
     }
 

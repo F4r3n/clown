@@ -58,11 +58,6 @@ fn hash_nickname(seed: u64, nickname: &str) -> u64 {
     state.hash_one(nickname)
 }
 
-pub fn nickname_color(nickname: &str) -> ratatui::style::Color {
-    let hash = hash_nickname(0, nickname);
-    bright_distinct_color(hash)
-}
-
 fn compute_color(index: u64) -> Oklch<f32> {
     let lower = index as u32;
     let lum_index: u16 = (lower >> 16) as u16;
@@ -99,8 +94,9 @@ mod tests {
 
     #[test]
     fn deterministic_for_same_name() {
-        let a1 = nickname_color("Alice");
-        let a2 = nickname_color("Alice");
+        let color_generator = ColorGenerator::new(1);
+        let a1 = color_generator.generate_color("Alice");
+        let a2 = color_generator.generate_color("Alice");
         assert_eq!(
             a1, a2,
             "Color should be deterministic for the same nickname"
@@ -109,9 +105,11 @@ mod tests {
 
     #[test]
     fn different_names_produce_different_colors() {
-        let a = nickname_color("Alice");
-        let b = nickname_color("Bob");
-        let c = nickname_color("Charlie");
+        let color_generator = ColorGenerator::new(1);
+
+        let a = color_generator.generate_color("Alice");
+        let b = color_generator.generate_color("Bob");
+        let c = color_generator.generate_color("Charlie");
         assert_ne!(a, b, "Different nicknames should give different colors");
         assert_ne!(a, c, "Different nicknames should give different colors");
         assert_ne!(b, c, "Different nicknames should give different colors");
@@ -119,7 +117,9 @@ mod tests {
 
     #[test]
     fn color_channels_are_in_valid_range() {
-        let color = nickname_color("Test");
+        let color_generator = ColorGenerator::new(1);
+
+        let color = color_generator.generate_color("Test");
         let (r, g, b) = color_to_tuple(color);
         for (name, v) in [("r", r), ("g", g), ("b", b)] {
             assert!(
@@ -133,13 +133,15 @@ mod tests {
 
     #[test]
     fn color_is_bright_for_dark_background() {
+        let color_generator = ColorGenerator::new(1);
+
         // Test a few nicknames and ensure brightness (luminance) is decent.
         for i in 0..26 {
             let c = char::from(b'a' + i);
             let mut name = String::new();
             name.push(c);
 
-            let (r, g, b) = color_to_tuple(nickname_color(&name));
+            let (r, g, b) = color_to_tuple(color_generator.generate_color(&name));
             //https://stackoverflow.com/questions/596216/formula-to-determine-perceived-brightness-of-rgb-color
             let brightness = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
             assert!(
@@ -169,7 +171,9 @@ mod tests {
         ];
 
         for name in nicknames {
-            let color = nickname_color(name);
+            let color_generator = ColorGenerator::new(1);
+
+            let color = color_generator.generate_color(name);
             let (r, g, b) = color_to_tuple(color);
 
             // Rec. 601 luma formula
@@ -224,9 +228,11 @@ mod tests {
 
     #[test]
     fn consistent_under_long_names() {
+        let color_generator = ColorGenerator::new(1);
+
         // Ensure long strings don't overflow or behave weirdly
         let long_name = "x".repeat(1000);
-        let color = nickname_color(&long_name);
+        let color = color_generator.generate_color(&long_name);
         let (r, g, b) = color_to_tuple(color);
         assert!(
             (0..=255).contains(&r) && (0..=255).contains(&g) && (0..=255).contains(&b),
@@ -236,14 +242,18 @@ mod tests {
 
     #[test]
     fn test_distinct_color() {
-        let color_a = nickname_color("guill");
-        let color_b = nickname_color("farine");
+        let color_generator = ColorGenerator::new(1);
+
+        let color_a = color_generator.generate_color("guill");
+        let color_b = color_generator.generate_color("farine");
 
         assert!(color_a != color_b);
     }
 
     fn print_colored_nickname(name: &str) {
-        let color = nickname_color(name);
+        let color_generator = ColorGenerator::new(1);
+
+        let color = color_generator.generate_color(name);
 
         // We match on the Ratatui color to extract RGB values
         if let ratatui::style::Color::Rgb(r, g, b) = color {
@@ -264,8 +274,10 @@ mod tests {
 
     #[test]
     fn test_distinct_color_() {
-        let color_a = nickname_color("guill");
-        let color_b = nickname_color("farine");
+        let color_generator = ColorGenerator::new(1);
+
+        let color_a = color_generator.generate_color("guill");
+        let color_b = color_generator.generate_color("farine");
 
         assert!(color_a != color_b);
         for i in 0..26 {

@@ -1,4 +1,4 @@
-use crate::{component::Draw, irc_view::color_user::nickname_color};
+use crate::component::Draw;
 
 use crossterm::event::KeyModifiers;
 use ratatui::{
@@ -304,7 +304,7 @@ impl Draw for UsersWidget {
         if let Some(irc_model) = irc_model {
             self.list_state
                 .render(model, irc_model, &self.list_sections, frame, area);
-        }
+        };
     }
 }
 //#channel
@@ -378,9 +378,10 @@ impl ListStateWidget {
         spans.push(Span::raw(format!("{:<width$}", " ", width = depth + 1)));
         spans.push(Span::styled(title, style));
         spans
-        //ListItem::from(Line::from(spans))
     }
 
+    //TODO: if there are a lot of users, currently no way to scroll
+    // Dont need to add all the uers to display if we dont show it
     fn render(
         &mut self,
         model: &crate::model::Model,
@@ -406,7 +407,7 @@ impl ListStateWidget {
                 for (i, user_name) in section.order_user.iter().enumerate() {
                     let spans = self.add_item(
                         1,
-                        model.get_color(&user_name),
+                        model.get_color(user_name),
                         user_name,
                         irc_server.has_unread_message(user_name),
                         (self.current_section == section_i) && (self.current_selected == (i + 1)),

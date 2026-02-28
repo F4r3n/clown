@@ -628,20 +628,25 @@ impl crate::component::EventHandler for DiscussWidget {
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
-            MessageEvent::AddMessageView(server_id, channel, in_message) => {
-                if let Some(channel) = channel {
-                    self.add_line(
-                        server_id.or(self.current_server_id),
-                        channel,
-                        in_message.clone(),
-                    );
-                } else {
-                    self.add_line(
-                        server_id.or(self.current_server_id),
-                        &self.current_channel.clone(),
-                        in_message.clone(),
-                    );
+            MessageEvent::AddMessageViewInfo(server_id, channel, kind, in_content) => {
+                for content in in_content.split('\n') {
+                    if let Some(message) = MessageContent::from_kind(
+                        kind.clone(),
+                        channel.clone(),
+                        content.to_string(),
+                    ) {
+                        if let Some(channel) = channel {
+                            self.add_line(server_id.or(self.current_server_id), channel, message);
+                        } else {
+                            self.add_line(
+                                server_id.or(self.current_server_id),
+                                &self.current_channel.clone(),
+                                message,
+                            );
+                        }
+                    }
                 }
+
                 None
             }
             MessageEvent::SetTopic(server_id, source, channel, content) => {
@@ -743,7 +748,21 @@ impl crate::component::EventHandler for DiscussWidget {
                     None
                 }
             }
+            MessageEvent::Notice(server_id, source, target, content) => {
+                if let Some(irc_model) = irc_model
+                    && let Some(irc_server) = irc_model.get_server(*server_id)
+                {
+                    let target = irc_server.get_target(source, target);
 
+                    self.add_line(
+                        Some(*server_id),
+                        target,
+                        MessageContent::new_notice(Some(source.clone()), content.clone()),
+                    );
+                }
+
+                None
+            }
             MessageEvent::ActionMsg(server_id, source, target, content) => {
                 if let Some(irc_model) = irc_model
                     && let Some(irc_server) = irc_model.get_server(*server_id)

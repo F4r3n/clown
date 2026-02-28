@@ -2,17 +2,6 @@ use std::borrow::Cow;
 use unicode_width::UnicodeWidthChar;
 
 pub fn wrapped_line_count(content: &str, width: usize) -> usize {
-    if width == 0 || content.is_empty() {
-        return 0;
-    }
-
-    content
-        .split('\n')
-        .map(|line| wrapped_line_count_single(line, width))
-        .sum()
-}
-
-fn wrapped_line_count_single(content: &str, width: usize) -> usize {
     if content.is_empty() {
         return 1; // empty line still counts
     }
@@ -74,27 +63,6 @@ fn wrapped_line_count_single(content: &str, width: usize) -> usize {
 }
 
 pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
-    if width == 0 {
-        return vec![];
-    }
-
-    let mut result = Vec::new();
-
-    for line in content.split('\n') {
-        let mut wrapped = wrap_single_line(line, width);
-
-        // Preserve empty lines from "\n"
-        if wrapped.is_empty() {
-            result.push(Cow::Borrowed(""));
-        } else {
-            result.append(&mut wrapped);
-        }
-    }
-
-    result
-}
-
-fn wrap_single_line<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
     if width == 0 {
         return vec![];
     }
@@ -204,6 +172,7 @@ fn wrap_single_line<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
 
     wrapped_lines
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
