@@ -7,27 +7,21 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
     }
 
     let mut total_lines = 0;
+    let mut chars = content.chars().peekable();
 
-    // Preserve existing paragraphs/newlines first
-    let line = content;
-
-    let mut chars = line.chars().peekable();
-    while let Some(_c) = chars.next_if(|c| c.is_whitespace()) {}
+    while chars.next_if(|c| c.is_whitespace() && *c != '\n').is_some() {}
 
     let mut current_width = 0;
     let mut has_content_on_current_line = false;
 
-    // Start the line count if there is any non-whitespace content on this line
-    if total_lines == 0 && chars.peek().is_some() {
+    if chars.peek().is_some() {
         total_lines = 1;
     }
 
     while let Some(c) = chars.next() {
         let char_width = c.width().unwrap_or(0);
 
-        // 1. Check if we are at a breakable point (space)
         if c.is_whitespace() {
-            // Accumulate space width only if a word preceded it
             if has_content_on_current_line {
                 current_width += char_width;
             }
@@ -36,34 +30,23 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
 
         let mut word_width = char_width;
 
-        // Look ahead to find the full word width (consuming chars from iterator)
         while let Some(next_c) = chars.peek() {
             if next_c.is_whitespace() {
                 break;
             }
-            let next_w = next_c.width().unwrap_or(0);
-            word_width += next_w;
-            chars.next(); // Consume the char
+            word_width += next_c.width().unwrap_or(0);
+            chars.next();
         }
 
-        // 2. Logic: Does this word fit on the current line?
         if current_width > 0 && current_width + word_width > width {
-            // WRAP: The new word overflows.
             total_lines += 1;
             current_width = 0;
         }
 
-        // Handle Long Words (Word is wider than width)
         if word_width > width {
-            // Calculate how many *additional* lines this word consumes after the current line.
-            // The current line is already accounted for (or was just incremented in step 2).
-
             let distinct_lines = word_width.div_ceil(width);
-            if distinct_lines > 0 {
-                total_lines += distinct_lines - 1;
-            }
+            total_lines += distinct_lines - 1;
 
-            // Set the column to the width of the final segment on the last line.
             current_width = word_width % width;
             if current_width == 0 {
                 current_width = width;
@@ -71,13 +54,12 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
 
             has_content_on_current_line = true;
         } else {
-            // Word fits (either on the existing line or a newly wrapped line)
             current_width += word_width;
             has_content_on_current_line = true;
         }
     }
 
-    total_lines
+    if total_lines == 0 { 1 } else { total_lines }
 }
 
 pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
@@ -190,6 +172,7 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
 
     wrapped_lines
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,25 +1,49 @@
-use crate::message_irc::message_content::MessageContent;
-
 #[derive(PartialEq, Debug)]
 pub enum MessageEvent {
     MessageInput(String),
-    AddMessageView(Option<String>, MessageContent),
+    AddMessageViewInfo(
+        Option<usize>, /*server id */
+        Option<String>,
+        crate::message_irc::message_content::MessageKind,
+        String,
+    ),
     PrivMsg(
+        usize,  /*server id */
+        String, /*source */
+        String, /*target*/
+        String, /*content*/
+    ),
+    Notice(
+        usize,  /*server id */
         String, /*source */
         String, /*target*/
         String, /*content*/
     ),
     ActionMsg(
+        usize,  /*server id */
         String, /*source */
         String, /*target*/
         String, /*content*/
     ),
-    SelectChannel(String),
-    UpdateUsers(String /*channel*/, Vec<String> /*list users */),
-    ReplaceUser(String /*old */, String /*new */),
-    Join(String /*channel*/, String /*user */),
-    JoinServer(String),
+    SelectChannel(Option<usize> /*server id */, String),
+    UpdateUsers(
+        usize,       /*server id */
+        String,      /*channel*/
+        Vec<String>, /*list users */
+    ),
+    ReplaceUser(
+        usize,  /*server id */
+        String, /*old */
+        String, /*new */
+    ),
+    Join(
+        usize,  /*server id */
+        String, /*channel*/
+        String, /*user */
+    ),
+    JoinServer(usize /*server id */, String),
     SetTopic(
+        usize,          /*server id */
         Option<String>, /*source*/
         String,         /*channel */
         String,         /*topic */
@@ -29,11 +53,19 @@ pub enum MessageEvent {
     #[allow(dead_code)]
     Hover(String), //currently not used, but the skeleton can be used anywhere
     PullIRC,
-    Connect,
-    DisConnect,
+    Connect(usize),
+    DisConnect(usize),
     OpenWeb(String),
     SpellChecker(Option<String>),
-    Part(String /*channel */, String /*user */),
-    Quit(String /*user*/, Option<String> /*reason*/),
+    Part(
+        usize,  /*server id */
+        String, /*channel */
+        String, /*user */
+    ),
+    Quit(
+        usize,          /*server id */
+        String,         /*user*/
+        Option<String>, /*reason*/
+    ),
     Bel,
 }

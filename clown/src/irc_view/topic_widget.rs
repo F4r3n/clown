@@ -5,24 +5,36 @@ use ratatui::widgets::Paragraph;
 
 use crate::component::{Draw, EventHandler};
 
+#[derive(Hash, PartialEq, Eq)]
+struct KeyServerChannel {
+    server_id: usize,
+    channel: String,
+}
+
 pub struct TopicWidget {
-    topic_collection: ahash::AHashMap<String, String>,
-    current_channel: Option<String>,
+    topic_collection: ahash::AHashMap<KeyServerChannel, String>,
     need_redraw: bool,
 }
 
 impl Draw for TopicWidget {
     fn render(
         &mut self,
-        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        _model: &crate::model::Model,
+        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
         if self.need_redraw {
             self.need_redraw = false;
         }
-        if let Some(channel) = self.current_channel.as_ref()
-            && let Some(topic) = self.topic_collection.get(channel)
+
+        if let Some(model) = irc_model.as_ref()
+            && let Some(server_model) = model.get_current_server()
+            && let Some(channel) = server_model.get_current_channel()
+            && let Some(topic) = self.topic_collection.get(&KeyServerChannel {
+                channel: channel.to_string(),
+                server_id: server_model.get_server_id(),
+            })
         {
             let text = Text::from(topic.clone());
             let paragrapth = Paragraph::new(text);
@@ -35,19 +47,18 @@ impl TopicWidget {
     pub fn new() -> Self {
         Self {
             topic_collection: AHashMap::new(),
-            current_channel: None,
             need_redraw: true,
         }
     }
 
-    fn update_topic(&mut self, channel: &str, content: &str) {
-        self.topic_collection
-            .insert(channel.to_string(), content.to_string());
-        self.need_redraw = true;
-    }
-
-    fn set_channel(&mut self, channel: String) {
-        self.current_channel = Some(channel);
+    fn update_topic(&mut self, server_id: usize, channel: &str, content: &str) {
+        self.topic_collection.insert(
+            KeyServerChannel {
+                channel: channel.to_string(),
+                server_id,
+            },
+            content.to_string(),
+        );
         self.need_redraw = true;
     }
 }
@@ -63,25 +74,13 @@ impl EventHandler for TopicWidget {
     }
     fn handle_actions(
         &mut self,
-        irc_model: &crate::irc_view::irc_model::IrcModel,
+        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
-            MessageEvent::SetTopic(_, channel, topic) => {
-                self.update_topic(channel, topic);
+            MessageEvent::SetTopic(server_id, _source, channel, topic) => {
+                self.update_topic(*server_id, channel, topic);
                 self.need_redraw = true;
-                None
-            }
-            MessageEvent::SelectChannel(channel) => {
-                self.set_channel(channel.to_string());
-                self.need_redraw = true;
-                None
-            }
-            MessageEvent::Join(channel, user) => {
-                if irc_model.is_main_user(user) {
-                    self.set_channel(channel.to_string());
-                    self.need_redraw = true;
-                }
 
                 None
             }

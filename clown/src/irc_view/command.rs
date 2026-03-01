@@ -1,10 +1,4 @@
-use crate::message_irc::message_content::MessageContent;
-use crate::{
-    message_event::MessageEvent,
-    model::{IRCConnection, Model},
-};
-use clown_core::client::Client;
-use tokio::sync::mpsc;
+use crate::message_event::MessageEvent;
 
 use strum::{EnumIter, EnumMessage, IntoEnumIterator, IntoStaticStr};
 
@@ -128,53 +122,28 @@ fn part(message: Option<&str>) -> ClientCommand {
         ClientCommand::Part(None, None)
     }
 }
-
 pub fn help() -> MessageEvent {
-    let mut output: String = "List of commands, type /command:\n".into();
+    use std::fmt::Write;
+
+    let mut output = String::from("List of commands, type /command:");
+
     for e in ClientCommand::iter() {
-        output.push_str(
-            format!(
-                "Command {}: {}\n",
-                e.get_message().unwrap_or_default(),
+        if let Some(message) = e.get_message()
+            && let Err(e) = write!(
+                &mut output,
+                "\nCommand {}: {}",
+                message,
                 e.get_detailed_message().unwrap_or_default()
             )
-            .as_str(),
-        );
-    }
-    MessageEvent::AddMessageView(None, MessageContent::new_info(output))
-}
-
-pub fn connect_irc(model: &mut Model) -> Option<MessageEvent> {
-    if !model.is_irc_finished() {
-        return Some(MessageEvent::AddMessageView(
-            None,
-            MessageContent::new_error("Already connected".to_string()),
-        ));
-    }
-    if let Some(connection_config) = model.get_connection_config() {
-        let login_config = &model.get_login_config();
-
-        let mut client = Client::new(login_config);
-        if let Some(reciever) = client.message_receiver() {
-            let command_sender = client.command_sender();
-
-            let (error_sender, error_receiver) = mpsc::channel(10);
-            if model.retry > 0 {
-                model.retry -= 1;
-                model.irc_connection = Some(IRCConnection {
-                    command_sender,
-                    error_receiver,
-                    _error_sender: error_sender.clone(),
-                    message_reciever: reciever,
-                    task: tokio::spawn(async move {
-                        if let Err(err) = client.launch(&connection_config).await {
-                            let _ = error_sender.send(format!("Connection error: {err}")).await;
-                        }
-                    }),
-                });
-            }
+        {
+            tracing::error!("Cannot write help command: {}", e)
         }
     }
 
-    None
+    MessageEvent::AddMessageViewInfo(
+        None,
+        None,
+        crate::message_irc::message_content::MessageKind::Info,
+        output,
+    )
 }

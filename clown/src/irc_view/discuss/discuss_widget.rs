@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::component::Draw;
-use crate::irc_view::color_user::nickname_color;
 use crate::message_irc::message_content::WordPos;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use ahash::AHashMap;
@@ -16,10 +15,106 @@ use ratatui::{
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 struct Range {
     line: usize,
     word_pos: WordPos,
+}
+
+#[derive(Debug, Default)]
+pub struct ServerMessages {
+    messages: Vec<ChannelMessages>,
+}
+
+impl ServerMessages {
+    pub fn new() -> Self {
+        Self {
+            messages: vec![ChannelMessages::default()],
+        }
+    }
+
+    pub fn add_message(
+        &mut self,
+        server_id: Option<usize>,
+        channel: &str,
+        in_message: MessageContent,
+    ) {
+        if let Some(server_group) = self.add_server_group(server_id) {
+            server_group.add_message(channel, in_message);
+        }
+    }
+
+    fn server_id_position(server_id: Option<usize>) -> usize {
+        server_id.map(|v| v.saturating_add(1)).unwrap_or(0)
+    }
+
+    fn add_server_group(&mut self, server_id: Option<usize>) -> Option<&mut ChannelMessages> {
+        let new_length = Self::server_id_position(server_id).saturating_add(1);
+        self.messages.resize_with(new_length, Default::default);
+
+        self.get_server_group_mut(server_id)
+    }
+
+    fn get_server_group_mut(&mut self, server_id: Option<usize>) -> Option<&mut ChannelMessages> {
+        self.messages.get_mut(Self::server_id_position(server_id))
+    }
+
+    fn get_server_group(&self, server_id: Option<usize>) -> Option<&ChannelMessages> {
+        self.messages.get(Self::server_id_position(server_id))
+    }
+
+    fn rename(&mut self, server_id: Option<usize>, old: &str, new: &str) {
+        if let Some(server_group) = self.get_server_group_mut(server_id) {
+            server_group.rename(old, new);
+        }
+    }
+
+    pub fn has_messages(&self, server_id: Option<usize>, channel: &str) -> bool {
+        if let Some(server_group) = self.get_server_group(server_id) {
+            server_group.has_messages(channel)
+        } else {
+            false
+        }
+    }
+
+    pub fn get_messages(
+        &self,
+        server_id: Option<usize>,
+        channel: &str,
+    ) -> Option<&Vec<MessageContent>> {
+        if let Some(server_group) = self.get_server_group(server_id) {
+            server_group.get_messages(channel)
+        } else {
+            None
+        }
+    }
+
+    fn get_url_from_range(
+        &self,
+        server_id: Option<usize>,
+        channel: &str,
+        range: &Range,
+    ) -> Option<String> {
+        if let Some(server_group) = self.get_server_group(server_id) {
+            server_group.get_url_from_range(channel, range)
+        } else {
+            None
+        }
+    }
+
+    fn get_word_pos(
+        &self,
+        server_id: Option<usize>,
+        channel: &str,
+        index: usize,
+        character_pos: usize,
+    ) -> Option<Range> {
+        if let Some(server_group) = self.get_server_group(server_id) {
+            server_group.get_word_pos(channel, index, character_pos)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -68,6 +163,8 @@ impl ChannelMessages {
             })
     }
 }
+
+#[derive(Debug)]
 struct Hovered {
     time: std::time::Instant,
     range: Range,
@@ -82,6 +179,7 @@ impl Hovered {
     }
 }
 
+#[derive(Debug)]
 pub struct DiscussWidget {
     vertical_scroll_state: ScrollbarState,
     scroll_offset: usize,
@@ -89,19 +187,20 @@ pub struct DiscussWidget {
     follow_last: bool,
     area: Rect,
     content_width: usize,
-    messages: ChannelMessages,
+    messages: ServerMessages,
     current_channel: String,
+    current_server_id: Option<usize>,
 
     last_hovered: Option<Hovered>,
-    color_map: AHashMap<String, ratatui::style::Color>,
     redraw: bool,
 }
 
 impl DiscussWidget {
-    pub fn new(current_channel: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            current_channel: current_channel.to_lowercase(),
-            messages: ChannelMessages::default(),
+            current_channel: String::new(),
+            current_server_id: None,
+            messages: ServerMessages::new(),
             scroll_offset: 0,
             max_visible_height: 10,
             follow_last: true,
@@ -109,16 +208,13 @@ impl DiscussWidget {
             area: Rect::default(),
             content_width: 0,
             last_hovered: None,
-            color_map: AHashMap::new(),
             redraw: true,
         }
     }
 
-    pub fn set_current_channel(&mut self, channel: &str) {
-        self.color_map
-            .entry(channel.to_string())
-            .or_insert(nickname_color(channel));
+    pub fn set_current_channel(&mut self, server_id: Option<usize>, channel: &str) {
         self.current_channel = channel.to_lowercase();
+        self.current_server_id = server_id;
         self.scroll_offset = 0;
         self.follow_last = true;
     }
@@ -128,8 +224,12 @@ impl DiscussWidget {
 
         if self.area.contains(mouse_position) {
             if let Some((index, character)) = self.get_current_line_index_character(row, col) {
-                self.messages
-                    .get_word_pos(&self.current_channel, index, character)
+                self.messages.get_word_pos(
+                    self.current_server_id,
+                    &self.current_channel,
+                    index,
+                    character,
+                )
             } else {
                 None
             }
@@ -158,7 +258,10 @@ impl DiscussWidget {
 
         let mut visible_rows_total = 0;
 
-        if let Some(messages) = self.messages.get_messages(&self.current_channel) {
+        if let Some(messages) = self
+            .messages
+            .get_messages(self.current_server_id, &self.current_channel)
+        {
             let message_count = messages.len();
 
             let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
@@ -230,13 +333,16 @@ impl DiscussWidget {
         None
     }
 
-    fn collect_visible_rows<'a>(&'a mut self) -> Vec<Row<'a>> {
+    fn collect_visible_rows<'a>(&'a mut self, model: Option<&crate::model::Model>) -> Vec<Row<'a>> {
         let mut visible_rows = Vec::new();
         if self.content_width == 0 {
             return visible_rows;
         }
 
-        if let Some(messages) = self.messages.get_messages(&self.current_channel) {
+        if let Some(messages) = self
+            .messages
+            .get_messages(self.current_server_id, &self.current_channel)
+        {
             let message_count = messages.len();
 
             let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
@@ -275,11 +381,13 @@ impl DiscussWidget {
                     if rows_to_take == 0 && rows_remaining == 0 {
                         break;
                     }
-
+                    let color = line
+                        .get_source()
+                        .and_then(|s| model.map(|v| v.get_color(s)));
                     let rows = line
                         .create_rows(
                             self.content_width as u16,
-                            line.get_source().and_then(|s| self.color_map.get(s)),
+                            color,
                             TIME_LENGTH,
                             NICKNAME_LENGTH,
                         )
@@ -307,7 +415,7 @@ impl DiscussWidget {
         }
 
         self.messages
-            .get_messages(&self.current_channel)
+            .get_messages(self.current_server_id, &self.current_channel)
             .map(|msgs| {
                 msgs.iter()
                     .map(|m| m.wrapped_line_count(self.content_width))
@@ -322,7 +430,7 @@ impl DiscussWidget {
         }
 
         self.messages
-            .get_messages(&self.current_channel)
+            .get_messages(self.current_server_id, &self.current_channel)
             .map(|msgs| {
                 msgs.iter()
                     .map(|m| m.get_message_width().div_ceil(self.content_width))
@@ -331,33 +439,48 @@ impl DiscussWidget {
             .unwrap_or(0)
     }
 
-    pub fn has_message(&self, channel: &str) -> bool {
+    pub fn has_message(&self, server_id: Option<usize>, channel: &str) -> bool {
         let channel = channel.to_lowercase();
-        self.messages.has_messages(&channel)
+        self.messages.has_messages(server_id, &channel)
     }
 
-    pub fn add_line(&mut self, channel: &str, in_message: MessageContent) {
-        if let Some(source) = in_message.get_source() {
-            self.color_map
-                .entry(source.to_string())
-                .or_insert(nickname_color(source));
+    fn add_line_scroll(&mut self) {
+        if self.follow_last {
+            self.scroll_offset = 0;
+        } else {
+            self.scroll_offset = self.scroll_offset.saturating_add(1);
         }
+    }
+
+    pub fn add_line(
+        &mut self,
+        server_id: Option<usize>,
+        channel: &str,
+        in_message: MessageContent,
+    ) {
         let channel = channel.to_lowercase();
 
-        self.messages.add_message(&channel, in_message);
+        self.messages.add_message(server_id, &channel, in_message);
         if channel.eq_ignore_ascii_case(&self.current_channel) {
-            if self.follow_last {
-                self.scroll_offset = 0;
-            } else {
-                self.scroll_offset = self.scroll_offset.saturating_add(1);
-            }
+            self.add_line_scroll();
         }
 
         self.redraw = true;
     }
 
+    pub fn add_line_current(&mut self, in_message: MessageContent) {
+        self.messages
+            .add_message(self.current_server_id, &self.current_channel, in_message);
+        self.add_line_scroll();
+
+        self.redraw = true;
+    }
+
     fn possible_scroll_up(&mut self, offset: usize) -> usize {
-        if let Some(messages) = self.messages.get_messages(&self.current_channel) {
+        if let Some(messages) = self
+            .messages
+            .get_messages(self.current_server_id, &self.current_channel)
+        {
             let mut total_rows = 0;
             for line in messages.iter().rev() {
                 total_rows += line.wrapped_line_count(self.content_width);
@@ -434,7 +557,8 @@ impl DiscussWidget {
 impl Draw for DiscussWidget {
     fn render(
         &mut self,
-        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        model: &crate::model::Model,
+        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,
     ) {
@@ -473,7 +597,7 @@ impl Draw for DiscussWidget {
             self.get_fake_total_lines()
                 .saturating_sub(self.scroll_offset),
         );
-        let visible_rows = self.collect_visible_rows();
+        let visible_rows = self.collect_visible_rows(Some(model));
         let table = Table::new(
             visible_rows,
             [
@@ -485,7 +609,6 @@ impl Draw for DiscussWidget {
         )
         .column_spacing(1)
         .style(text_style);
-
         if let Some(layout) = layout.first() {
             frame.render_widget(table, *layout)
         }
@@ -513,64 +636,88 @@ impl crate::component::EventHandler for DiscussWidget {
 
     fn handle_actions(
         &mut self,
-        irc_model: &crate::irc_view::irc_model::IrcModel,
+        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
-            MessageEvent::AddMessageView(channel, in_message) => {
-                if let Some(channel) = channel {
-                    self.add_line(channel, in_message.clone());
-                } else {
-                    self.add_line(&self.current_channel.clone(), in_message.clone());
+            MessageEvent::AddMessageViewInfo(server_id, channel, kind, in_content) => {
+                for content in in_content.split('\n') {
+                    if let Some(message) = MessageContent::from_kind(
+                        kind.clone(),
+                        channel.clone(),
+                        content.to_string(),
+                    ) {
+                        if let Some(server_id) = server_id {
+                            if channel.is_none()
+                                && let Some(irc_model) = irc_model
+                                && let Some(server_name) = irc_model.get_server_name(*server_id)
+                            {
+                                self.add_line(Some(*server_id), server_name, message);
+                            } else if let Some(channel) = channel {
+                                self.add_line(Some(*server_id), channel.as_str(), message);
+                            }
+                        } else if server_id.is_none() {
+                            self.add_line_current(message);
+                        }
+                    }
                 }
+
                 None
             }
-            MessageEvent::SetTopic(source, channel, content) => {
+            MessageEvent::SetTopic(server_id, source, channel, content) => {
                 if let Some(source) = source {
                     let data = format!(
                         "{} has changed topic for {} to \"{}\"",
                         source, channel, content
                     );
-                    self.add_line(channel, MessageContent::new_info(data));
+                    self.add_line(Some(*server_id), channel, MessageContent::new_info(data));
                 }
 
                 None
             }
-            MessageEvent::Quit(user, reason) => {
-                for channel in irc_model.get_all_joined_channel(user) {
-                    self.add_line(
-                        channel,
-                        MessageContent::new_info(
-                            reason
-                                .as_ref()
-                                .map(|v| format!("{} has quit: {}", user, v))
-                                .unwrap_or_else(|| format!("{} has quit", user)),
-                        ),
-                    );
-                }
+            MessageEvent::Quit(server_id, user, reason) => {
+                if let Some(irc_model) = irc_model
+                    && let Some(irc_server) = irc_model.get_server(*server_id)
+                {
+                    for channel in irc_server.get_all_joined_channel(user) {
+                        self.add_line(
+                            Some(*server_id),
+                            channel,
+                            MessageContent::new_info(
+                                reason
+                                    .as_ref()
+                                    .map(|v| format!("{} has quit: {}", user, v))
+                                    .unwrap_or_else(|| format!("{} has quit", user)),
+                            ),
+                        );
+                    }
 
-                if self.has_message(user) {
-                    self.add_line(
-                        user,
-                        MessageContent::new_info(
-                            reason
-                                .as_ref()
-                                .map(|v| format!("{} has quit: {}", user, v))
-                                .unwrap_or_else(|| format!("{} has quit", user)),
-                        ),
-                    );
+                    if self.has_message(Some(*server_id), user) {
+                        self.add_line(
+                            Some(*server_id),
+                            user,
+                            MessageContent::new_info(
+                                reason
+                                    .as_ref()
+                                    .map(|v| format!("{} has quit: {}", user, v))
+                                    .unwrap_or_else(|| format!("{} has quit", user)),
+                            ),
+                        );
+                    }
                 }
 
                 None
             }
 
-            MessageEvent::Part(channel, user) => {
+            MessageEvent::Part(server_id, channel, user) => {
                 self.add_line(
+                    Some(*server_id),
                     channel,
                     MessageContent::new_info(format!("{} has quit", user)),
                 );
-                if self.has_message(user) {
+                if self.has_message(Some(*server_id), user) {
                     self.add_line(
+                        Some(*server_id),
                         channel,
                         MessageContent::new_info(format!("{} has quit", user)),
                     );
@@ -578,83 +725,126 @@ impl crate::component::EventHandler for DiscussWidget {
 
                 None
             }
-            MessageEvent::PrivMsg(source, target, content) => {
-                let target = irc_model.get_target(source, target);
-
-                if source.eq_ignore_ascii_case(irc_model.get_current_nick())
-                    && !target.eq_ignore_ascii_case(irc_model.get_current_channel())
+            MessageEvent::PrivMsg(server_id, source, target, content) => {
+                if let Some(irc_model) = irc_model
+                    && let Some(irc_server) = irc_model.get_server(*server_id)
+                    && let Some(current_channel) = irc_server.get_current_channel()
                 {
+                    let target = irc_server.get_target(source, target);
+
+                    if source.eq_ignore_ascii_case(irc_server.get_current_nick())
+                        && !target.eq_ignore_ascii_case(current_channel)
+                    {
+                        self.add_line(
+                            Some(*server_id),
+                            current_channel,
+                            MessageContent::new_privmsg(target.to_string(), content.clone()),
+                        );
+                    }
+
+                    let is_highlight =
+                        self.should_highlight(irc_server.get_current_nick(), content);
+
                     self.add_line(
-                        irc_model.get_current_channel(),
-                        MessageContent::new_privmsg(target.to_string(), content.clone()),
+                        Some(*server_id),
+                        target,
+                        if is_highlight {
+                            MessageContent::new_highlight(Some(source.clone()), content.clone())
+                        } else {
+                            MessageContent::new_message(Some(source.clone()), content.clone())
+                        },
                     );
-                }
-
-                let is_highlight = self.should_highlight(irc_model.get_current_nick(), content);
-
-                self.add_line(
-                    target,
                     if is_highlight {
-                        MessageContent::new_highlight(Some(source.clone()), content.clone())
+                        Some(MessageEvent::Bel)
                     } else {
-                        MessageContent::new_message(Some(source.clone()), content.clone())
-                    },
-                );
-                if is_highlight {
-                    Some(MessageEvent::Bel)
+                        None
+                    }
                 } else {
                     None
                 }
             }
+            MessageEvent::Notice(server_id, source, target, content) => {
+                if let Some(irc_model) = irc_model
+                    && let Some(irc_server) = irc_model.get_server(*server_id)
+                {
+                    let target = irc_server.get_target(source, target);
 
-            MessageEvent::ActionMsg(source, target, content) => {
-                let target = irc_model.get_target(source, target);
-
-                self.add_line(
-                    target,
-                    MessageContent::new_action(source.clone(), content.clone()),
-                );
+                    self.add_line(
+                        Some(*server_id),
+                        target,
+                        MessageContent::new_notice(Some(source.clone()), content.clone()),
+                    );
+                }
 
                 None
             }
-            MessageEvent::JoinServer(server) => {
+            MessageEvent::ActionMsg(server_id, source, target, content) => {
+                if let Some(irc_model) = irc_model
+                    && let Some(irc_server) = irc_model.get_server(*server_id)
+                {
+                    let target = irc_server.get_target(source, target);
+
+                    self.add_line(
+                        Some(*server_id),
+                        target,
+                        MessageContent::new_action(source.clone(), content.clone()),
+                    );
+                }
+
+                None
+            }
+            MessageEvent::JoinServer(server_id, server) => {
                 self.add_line(
+                    Some(*server_id),
                     server,
                     MessageContent::new_info(format!("{} has joined", server)),
                 );
                 None
             }
-            MessageEvent::Join(channel, source) => {
-                let main = irc_model.is_main_user(source);
-                self.add_line(
-                    channel,
-                    if main {
-                        MessageContent::new_info(format!("You joined the channel {}", channel))
-                    } else {
-                        MessageContent::new_info(format!("{} has joined", source))
-                    },
-                );
-                None
-            }
-            MessageEvent::ReplaceUser(old, new) => {
-                for channel in irc_model.get_all_joined_channel(old) {
+            MessageEvent::Join(server_id, channel, source) => {
+                if let Some(irc_model) = irc_model
+                    && let Some(irc_server) = irc_model.get_server(*server_id)
+                {
+                    tracing::debug!("SOURCE: {} ", source);
+                    tracing::debug!("irc_server : {:?} ", &irc_server);
+
+                    let main = irc_server.is_main_user(source);
                     self.add_line(
+                        Some(*server_id),
                         channel,
-                        MessageContent::new_info(format!(
-                            "{} has changed their nickname to {}",
-                            &old, &new
-                        )),
+                        if main {
+                            MessageContent::new_info(format!("You joined the channel {}", channel))
+                        } else {
+                            MessageContent::new_info(format!("{} has joined", source))
+                        },
                     );
                 }
+                None
+            }
+            MessageEvent::ReplaceUser(server_id, old, new) => {
+                if let Some(irc_model) = irc_model
+                    && let Some(irc_server) = irc_model.get_server(*server_id)
+                {
+                    for channel in irc_server.get_all_joined_channel(old) {
+                        self.add_line(
+                            Some(*server_id),
+                            channel,
+                            MessageContent::new_info(format!(
+                                "{} has changed their nickname to {}",
+                                &old, &new
+                            )),
+                        );
+                    }
 
-                self.messages.rename(old, new);
-                if self.current_channel.eq_ignore_ascii_case(old) {
-                    self.current_channel = new.to_ascii_lowercase();
+                    self.messages.rename(Some(*server_id), old, new);
+                    if self.current_channel.eq_ignore_ascii_case(old) {
+                        self.current_channel = new.to_ascii_lowercase();
+                    }
                 }
                 None
             }
-            MessageEvent::SelectChannel(channel) => {
-                self.set_current_channel(channel);
+            MessageEvent::SelectChannel(server_id, channel) => {
+                self.set_current_channel(*server_id, channel);
                 None
             }
             _ => None,
@@ -683,7 +873,11 @@ impl crate::component::EventHandler for DiscussWidget {
                                 self.get_range_from_mouse(mouse_event.row, mouse_event.column)
                             {
                                 self.messages
-                                    .get_url_from_range(&self.current_channel, &range)
+                                    .get_url_from_range(
+                                        self.current_server_id,
+                                        &self.current_channel,
+                                        &range,
+                                    )
                                     .map(MessageEvent::OpenWeb)
                             } else {
                                 None
@@ -705,6 +899,7 @@ impl crate::component::EventHandler for DiscussWidget {
                                     > Duration::from_secs(2)
                                 {
                                     if let Some(url) = self.messages.get_url_from_range(
+                                        self.current_server_id,
                                         &self.current_channel,
                                         &last_hovered.range,
                                     ) {
@@ -763,10 +958,11 @@ impl crate::component::EventHandler for DiscussWidget {
                         if std::time::Instant::now().duration_since(last_hovered.time)
                             > Duration::from_secs(2)
                         {
-                            if let Some(url) = self
-                                .messages
-                                .get_url_from_range(&self.current_channel, &last_hovered.range)
-                            {
+                            if let Some(url) = self.messages.get_url_from_range(
+                                self.current_server_id,
+                                &self.current_channel,
+                                &last_hovered.range,
+                            ) {
                                 Some(MessageEvent::HoverURL(url))
                             } else {
                                 //Not an url, no need to wait for next round
@@ -795,24 +991,29 @@ impl crate::component::EventHandler for DiscussWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    const TEST_SERVER_ID: usize = 0;
     #[test]
     fn test_find_index() {
         pub const TEXT_START: usize = TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH;
 
-        let mut discuss = DiscussWidget::new("test");
+        let mut discuss = DiscussWidget::new();
+        discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
+
         discuss.content_width = 4;
         discuss.max_visible_height = 4;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "test",
             MessageContent::new_message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "test",
             MessageContent::new_message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "test",
             MessageContent::new_message(None, "HELLO".to_string()),
         );
@@ -870,18 +1071,21 @@ mod tests {
 
     #[test]
     fn test_total_lines() {
-        let mut discuss = DiscussWidget::new("");
+        let mut discuss = DiscussWidget::new();
         discuss.content_width = 10;
-
+        discuss.set_current_channel(Some(TEST_SERVER_ID), "");
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "",
             MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "",
             MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "",
             MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
         );
@@ -891,19 +1095,24 @@ mod tests {
 
     #[test]
     fn test_can_scroll_up() {
-        let mut discuss = DiscussWidget::new("");
+        let mut discuss = DiscussWidget::new();
+        discuss.set_current_channel(Some(TEST_SERVER_ID), "");
+
         discuss.content_width = 5;
         discuss.max_visible_height = 3;
 
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "",
             MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "",
             MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "",
             MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
         );
@@ -916,7 +1125,7 @@ mod tests {
     fn test_should_hightlight() {
         let current_nick = "nickname".to_string();
 
-        let discuss = DiscussWidget::new("test");
+        let discuss = DiscussWidget::new();
         assert!(discuss.should_highlight(&current_nick, "my nickname is "));
         assert!(!discuss.should_highlight(&current_nick, "my nicknameis "));
         assert!(discuss.should_highlight(&current_nick, "nickname"));
@@ -927,38 +1136,42 @@ mod tests {
 
     #[test]
     fn test_render_rows() {
-        let mut discuss = DiscussWidget::new("test");
+        let mut discuss = DiscussWidget::new();
+        discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
 
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "test",
             MessageContent::new_message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "test",
             MessageContent::new_message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            Some(TEST_SERVER_ID),
             "test",
             MessageContent::new_message(None, "HELLO".to_string()),
         );
 
         discuss.content_width = 10;
-        assert_eq!(discuss.collect_visible_rows().len(), 3);
+        assert_eq!(discuss.collect_visible_rows(None).len(), 3);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
-        assert_eq!(discuss.collect_visible_rows().len(), 6);
+        assert_eq!(discuss.collect_visible_rows(None).len(), 6);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows();
+        let rows = discuss.collect_visible_rows(None);
         assert_eq!(rows.len(), 2);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 1;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows();
+        let rows = discuss.collect_visible_rows(None);
         assert_eq!(rows.len(), 2);
     }
 }

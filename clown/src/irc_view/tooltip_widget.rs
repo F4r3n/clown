@@ -29,7 +29,13 @@ impl MessagePreview {
 }
 
 impl Draw for MessagePreview {
-    fn render(&mut self, _irc_model: &irc_model::IrcModel, frame: &mut Frame<'_>, area: Rect) {
+    fn render(
+        &mut self,
+        _model: &crate::model::Model,
+        _irc_model: Option<&irc_model::IrcModel>,
+        frame: &mut Frame<'_>,
+        area: Rect,
+    ) {
         frame.render_widget(ratatui::widgets::Clear, area);
         let block = Block::default()
             .borders(Borders::ALL)
@@ -113,7 +119,8 @@ impl ToolTipDiscussWidget {
 impl Draw for ToolTipDiscussWidget {
     fn render(
         &mut self,
-        irc_model: &irc_model::IrcModel,
+        model: &crate::model::Model,
+        irc_model: Option<&irc_model::IrcModel>,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -132,7 +139,7 @@ impl Draw for ToolTipDiscussWidget {
         self.area = area_to_render;
         if let Some(preview) = &mut self.preview {
             self.is_opened = true;
-            preview.render(irc_model, frame, area_to_render);
+            preview.render(model, irc_model, frame, area_to_render);
             self.need_redraw = preview.need_redraw();
         }
     }
@@ -147,7 +154,7 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
     }
     fn handle_actions(
         &mut self,
-        _irc_model: &irc_model::IrcModel,
+        _irc_model: Option<&irc_model::IrcModel>,
         event: &crate::message_event::MessageEvent,
     ) -> Option<crate::message_event::MessageEvent> {
         match event {

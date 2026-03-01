@@ -24,7 +24,7 @@ impl WordPos {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-enum MessageKind {
+pub enum MessageKind {
     Error,
     Info,
     Normal,
@@ -139,6 +139,15 @@ impl MessageContent {
         }
     }
 
+    pub fn from_kind(kind: MessageKind, source: Option<String>, content: String) -> Option<Self> {
+        match kind {
+            MessageKind::Info => Some(Self::new_info(content)),
+            MessageKind::Error => Some(Self::new_error(content)),
+            MessageKind::Normal => Some(Self::new(source, content)),
+            _ => None,
+        }
+    }
+
     pub fn get_word_pos(&self, character_pos: usize) -> Option<WordPos> {
         let text = self.content.as_str(); //Lets say the URL is in a RAW message
         let bytes = text.as_bytes();
@@ -171,14 +180,14 @@ impl MessageContent {
     pub fn create_rows(
         &self,
         content_width: u16,
-        color_source: Option<&ratatui::style::Color>,
+        color_source: Option<ratatui::style::Color>,
         time_length: usize,
         nickname_length: usize,
     ) -> impl Iterator<Item = Row<'_>> {
         let mut visible_rows = Vec::new();
         let mut nickname_style = Style::default();
         if let Some(color_source) = color_source {
-            nickname_style = nickname_style.fg(*color_source);
+            nickname_style = nickname_style.fg(color_source);
         }
         if self.kind.eq(&MessageKind::Highlight) {
             nickname_style = nickname_style.bg(Color::Red).fg(Color::LightYellow);

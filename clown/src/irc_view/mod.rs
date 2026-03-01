@@ -1,10 +1,11 @@
-mod color_user;
+pub mod color_user;
 mod command;
 mod discuss;
 pub mod irc_model;
 pub mod main_view;
 
 mod input;
+pub mod session;
 mod tooltip_widget;
 mod topic_widget;
 mod users_widget;

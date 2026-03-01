@@ -3,7 +3,7 @@ use super::history::InputHistory;
 use super::spell_checker::SpellChecker;
 use crate::irc_view::irc_model::IrcModel;
 use crate::message_event::MessageEvent;
-use crate::{component::Draw, message_irc::message_content::MessageContent};
+use crate::{component::Draw, message_irc::message_content::MessageKind};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
@@ -30,7 +30,8 @@ pub struct CInput {
 impl Draw for CInput {
     fn render(
         &mut self,
-        _irc_model: &crate::irc_view::irc_model::IrcModel,
+        _model: &crate::model::Model,
+        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         frame: &mut Frame<'_>,
         area: Rect,
     ) {
@@ -73,7 +74,7 @@ impl crate::component::EventHandler for CInput {
     }
     fn handle_actions(
         &mut self,
-        irc_model: &IrcModel,
+        irc_model: Option<&IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -89,30 +90,43 @@ impl crate::component::EventHandler for CInput {
                 }
                 None
             }
-            MessageEvent::UpdateUsers(channel, users) => {
-                self.completion.input_completion.add_users(channel, users);
+            MessageEvent::UpdateUsers(server_id, channel, users) => {
+                self.completion
+                    .input_completion
+                    .add_users(*server_id, channel, users);
                 None
             }
-            MessageEvent::ReplaceUser(old, new) => {
+            MessageEvent::ReplaceUser(_, old, new) => {
                 self.completion.input_completion.replace_user(old, new);
                 None
             }
-            MessageEvent::SelectChannel(channel) => {
+            MessageEvent::SelectChannel(server_id, channel) => {
                 self.completion.current_channel = channel.to_string();
-                None
-            }
-            MessageEvent::Join(channel, user) => {
-                self.completion.current_channel = channel.to_string();
-                self.completion.input_completion.add_user(channel, user);
+                self.completion.server_id = *server_id;
 
                 None
             }
-            MessageEvent::Part(channel, user) => {
-                if irc_model.is_main_user(user) {
-                    self.completion.input_completion.remove_channel(channel);
-                } else {
-                    self.completion.input_completion.disable_user(channel, user);
+            MessageEvent::Join(server_id, channel, user) => {
+                self.completion.current_channel = channel.to_string();
+                self.completion
+                    .input_completion
+                    .add_user(*server_id, channel, user);
+
+                None
+            }
+            MessageEvent::Part(server_id, channel, user) => {
+                if let Some(irc_model) = irc_model {
+                    if irc_model.is_main_user(*server_id, user) {
+                        self.completion
+                            .input_completion
+                            .remove_channel(*server_id, channel);
+                    } else {
+                        self.completion
+                            .input_completion
+                            .disable_user(*server_id, channel, user);
+                    }
                 }
+
                 None
             }
             _ => None,
@@ -250,20 +264,26 @@ impl CInput {
                 match spell_checker {
                     Ok(spell_checker) => {
                         self.spell_checker = Some(spell_checker);
-                        Some(MessageEvent::AddMessageView(
+                        Some(MessageEvent::AddMessageViewInfo(
                             None,
-                            MessageContent::new_info("Spell checker is ready".to_string()),
+                            None,
+                            MessageKind::Error,
+                            "Spell checker is ready".to_string(),
                         ))
                     }
-                    Err(e) => Some(MessageEvent::AddMessageView(
+                    Err(e) => Some(MessageEvent::AddMessageViewInfo(
                         None,
-                        MessageContent::new_error(format!("Spell checker error: {}", e)),
+                        None,
+                        MessageKind::Error,
+                        format!("Spell checker error: {}", e),
                     )),
                 }
             } else {
-                Some(MessageEvent::AddMessageView(
+                Some(MessageEvent::AddMessageViewInfo(
                     None,
-                    MessageContent::new_error("Error no spell checker retrieved".to_string()),
+                    None,
+                    MessageKind::Error,
+                    "Error no spell checker retrieved".to_string(),
                 ))
             }
         } else {

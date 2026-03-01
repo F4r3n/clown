@@ -2,12 +2,18 @@ use ahash::AHashMap;
 
 use super::trie::Trie;
 
+#[derive(Hash, PartialEq, Eq)]
+struct KeyServerChannel {
+    server_id: Option<usize>,
+    channel: String,
+}
+
 pub struct InputCompletion {
     //List commands
     commands: Trie,
 
     //Users per channel, can be changed a lot
-    channels: ahash::AHashMap<String, Trie>,
+    channels: ahash::AHashMap<KeyServerChannel, Trie>,
 }
 
 impl Default for InputCompletion {
@@ -24,10 +30,16 @@ impl InputCompletion {
         self.commands.add_word(item);
     }
 
-    pub fn add_users(&mut self, channel: &str, users: &Vec<String>) {
+    pub fn add_users(&mut self, server_id: usize, channel: &str, users: &Vec<String>) {
         let channel = Self::sanitize_key(channel);
 
-        let channel = self.channels.entry(channel).or_insert(Trie::new());
+        let channel = self
+            .channels
+            .entry(KeyServerChannel {
+                channel: channel.to_string(),
+                server_id: Some(server_id),
+            })
+            .or_insert(Trie::new());
         for user in users {
             channel.add_word(InputCompletion::sanitize_name(user));
         }
@@ -48,31 +60,48 @@ impl InputCompletion {
         }
     }
 
-    pub fn remove_channel(&mut self, channel: &str) {
+    pub fn remove_channel(&mut self, server_id: usize, channel: &str) {
         let channel = Self::sanitize_key(channel);
 
-        self.channels.remove(&channel);
+        self.channels.remove(&KeyServerChannel {
+            channel: channel.to_string(),
+            server_id: Some(server_id),
+        });
     }
 
-    pub fn disable_user(&mut self, channel: &str, user: &str) {
+    pub fn disable_user(&mut self, server_id: usize, channel: &str, user: &str) {
         let channel = Self::sanitize_key(channel);
 
-        if let Some(channel) = self.channels.get_mut(&channel) {
+        if let Some(channel) = self.channels.get_mut(&KeyServerChannel {
+            channel: channel.to_string(),
+            server_id: Some(server_id),
+        }) {
             channel.disable_word(user);
         }
     }
 
-    pub fn add_user(&mut self, channel: &str, user: &str) {
+    pub fn add_user(&mut self, server_id: usize, channel: &str, user: &str) {
         let channel = Self::sanitize_key(channel);
-        if let Some(channel) = self.channels.get_mut(&channel) {
+        if let Some(channel) = self.channels.get_mut(&KeyServerChannel {
+            channel: channel.to_string(),
+            server_id: Some(server_id),
+        }) {
             channel.add_word(user);
         }
     }
 
-    pub fn list(&self, channel: &str, start_word: &str) -> Option<Vec<String>> {
+    pub fn list(
+        &self,
+        server_id: Option<usize>,
+        channel: &str,
+        start_word: &str,
+    ) -> Option<Vec<String>> {
         let channel = Self::sanitize_key(channel);
 
-        if let Some(channel) = self.channels.get(&channel) {
+        if let Some(channel) = self.channels.get(&KeyServerChannel {
+            channel: channel.to_string(),
+            server_id,
+        }) {
             channel.list(start_word)
         } else {
             None
@@ -90,6 +119,7 @@ pub struct Completion {
     completion_start: Option<usize>,
     current_completion: Option<Vec<String>>,
     pub current_channel: String,
+    pub server_id: Option<usize>,
     current_index: Option<usize>,
 }
 
@@ -113,7 +143,9 @@ impl Completion {
             };
         } else {
             self.completion_start = Some(start);
-            self.current_completion = self.input_completion.list(&self.current_channel, slice);
+            self.current_completion =
+                self.input_completion
+                    .list(self.server_id, &self.current_channel, slice);
             self.current_index = if self
                 .current_completion
                 .as_ref()
@@ -166,8 +198,9 @@ mod test {
         comp.input_completion.add_command("help");
 
         comp.input_completion
-            .add_users("#test", &vec!["tata".to_string(), "titi".to_string()]);
+            .add_users(0, "#test", &vec!["tata".to_string(), "titi".to_string()]);
         comp.current_channel = "#test".to_string();
+        comp.server_id = Some(0);
         comp.set_completion(0, "t");
         assert_eq!(comp.get_next_completion(), Some((0, "titi".to_string())));
         assert_eq!(comp.get_next_completion(), Some((0, "tata".to_string())));
@@ -190,10 +223,13 @@ mod test {
 
     #[test]
     fn test_insert_uppercase() {
-        let mut comp = Completion::default();
+        let mut comp = Completion {
+            server_id: Some(0),
+            ..Completion::default()
+        };
 
         comp.input_completion
-            .add_users("#test", &vec!["tata".to_string(), "Titi".to_string()]);
+            .add_users(0, "#test", &vec!["tata".to_string(), "Titi".to_string()]);
         comp.current_channel = "#test".to_string();
         comp.set_completion(0, "t");
         assert_eq!(comp.get_next_completion(), Some((0, "Titi".to_string())));

@@ -1,18 +1,24 @@
-use crate::event_handler::Event;
 use crate::irc_view::irc_model;
 use crate::message_event::MessageEvent;
+use crate::{event_handler::Event, model::Model};
 use ratatui::{Frame, layout::Rect};
 use std::ops::{Deref, DerefMut};
 
 pub trait Draw {
-    fn render(&mut self, irc_model: &irc_model::IrcModel, frame: &mut Frame<'_>, area: Rect);
+    fn render(
+        &mut self,
+        model: &Model,
+        irc_model: Option<&irc_model::IrcModel>,
+        frame: &mut Frame<'_>,
+        area: Rect,
+    );
 }
 
 pub trait EventHandler {
     fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>;
     fn handle_actions(
         &mut self,
-        irc_model: &irc_model::IrcModel,
+        irc_model: Option<&irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent>;
     fn need_redraw(&self) -> bool;
@@ -53,7 +59,7 @@ impl<'a, T> Component<'a, T> {
 
     pub fn handle_actions(
         &mut self,
-        irc_model: &irc_model::IrcModel,
+        irc_model: Option<&irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent>
     where
@@ -62,11 +68,16 @@ impl<'a, T> Component<'a, T> {
         self.inner.handle_actions(irc_model, event)
     }
 
-    pub fn render(&mut self, irc_model: &irc_model::IrcModel, frame: &mut Frame<'_>, area: Rect)
-    where
+    pub fn render(
+        &mut self,
+        model: &Model,
+        irc_model: Option<&irc_model::IrcModel>,
+        frame: &mut Frame<'_>,
+        area: Rect,
+    ) where
         T: Draw,
     {
-        self.inner.render(irc_model, frame, area);
+        self.inner.render(model, irc_model, frame, area);
     }
 
     pub fn to_child_mut<'b>(&'b mut self) -> Component<'b, Child<'b>>
@@ -122,7 +133,7 @@ impl EventHandler for Child<'_> {
 
     fn handle_actions(
         &mut self,
-        irc_model: &irc_model::IrcModel,
+        irc_model: Option<&irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         self.deref_mut().handle_actions(irc_model, event)
