@@ -409,10 +409,8 @@ impl MainView<'_> {
                 },
                 Response::Rpl(reply) => match reply {
                     ResponseNumber::Welcome(content) => {
-                        server_to_init.push(server_id);
-                        //TODO: pass welcome message directly to the components
-                        //Create a new 'user' as IRC-Server
                         if let Some(source) = source.clone() {
+                            server_to_init.push((source.clone(), server_id));
                             messages.push_message(MessageEvent::JoinServer(server_id, source));
                         } else {
                             tracing::error!(error = %MessageError::MissingSource, "Welcome");
@@ -469,10 +467,10 @@ impl MainView<'_> {
             };
         }
 
-        for id in server_to_init {
+        for (server_name, id) in server_to_init {
             session.reset_retry();
             if let Some(nick) = model.get_nickname(id) {
-                session.init_irc_model(nick.to_string(), id);
+                session.init_irc_model(nick.to_string(), id, server_name);
             }
             if model.is_autojoin_by_id(id) {
                 for channel in model.get_channels(id) {

@@ -444,6 +444,14 @@ impl DiscussWidget {
         self.messages.has_messages(server_id, &channel)
     }
 
+    fn add_line_scroll(&mut self) {
+        if self.follow_last {
+            self.scroll_offset = 0;
+        } else {
+            self.scroll_offset = self.scroll_offset.saturating_add(1);
+        }
+    }
+
     pub fn add_line(
         &mut self,
         server_id: Option<usize>,
@@ -454,12 +462,16 @@ impl DiscussWidget {
 
         self.messages.add_message(server_id, &channel, in_message);
         if channel.eq_ignore_ascii_case(&self.current_channel) {
-            if self.follow_last {
-                self.scroll_offset = 0;
-            } else {
-                self.scroll_offset = self.scroll_offset.saturating_add(1);
-            }
+            self.add_line_scroll();
         }
+
+        self.redraw = true;
+    }
+
+    pub fn add_line_current(&mut self, in_message: MessageContent) {
+        self.messages
+            .add_message(self.current_server_id, &self.current_channel, in_message);
+        self.add_line_scroll();
 
         self.redraw = true;
     }
@@ -635,14 +647,17 @@ impl crate::component::EventHandler for DiscussWidget {
                         channel.clone(),
                         content.to_string(),
                     ) {
-                        if let Some(channel) = channel {
-                            self.add_line(server_id.or(self.current_server_id), channel, message);
-                        } else {
-                            self.add_line(
-                                server_id.or(self.current_server_id),
-                                &self.current_channel.clone(),
-                                message,
-                            );
+                        if let Some(server_id) = server_id {
+                            if channel.is_none()
+                                && let Some(irc_model) = irc_model
+                                && let Some(server_name) = irc_model.get_server_name(*server_id)
+                            {
+                                self.add_line(Some(*server_id), server_name, message);
+                            } else if let Some(channel) = channel {
+                                self.add_line(Some(*server_id), channel.as_str(), message);
+                            }
+                        } else if server_id.is_none() {
+                            self.add_line_current(message);
                         }
                     }
                 }
@@ -790,6 +805,9 @@ impl crate::component::EventHandler for DiscussWidget {
                 if let Some(irc_model) = irc_model
                     && let Some(irc_server) = irc_model.get_server(*server_id)
                 {
+                    tracing::debug!("SOURCE: {} ", source);
+                    tracing::debug!("irc_server : {:?} ", &irc_server);
+
                     let main = irc_server.is_main_user(source);
                     self.add_line(
                         Some(*server_id),

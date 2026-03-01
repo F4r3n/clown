@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use unicode_width::UnicodeWidthChar;
 
 pub fn wrapped_line_count(content: &str, width: usize) -> usize {
-    if content.is_empty() {
-        return 1; // empty line still counts
+    if width == 0 || content.is_empty() {
+        return 0;
     }
 
     let mut total_lines = 0;

@@ -68,21 +68,9 @@ impl IrcModel {
         }
     }
 
-    #[cfg(test)]
-    pub fn new_single_server(in_length: usize, id: usize, nickname: String) -> Self {
-        let mut s = Self {
-            servers: std::iter::repeat_with(|| None).take(in_length).collect(),
-            current_id: None,
-        };
-
-        s.init_server(id, nickname);
-
-        s
-    }
-
-    pub fn init_server(&mut self, in_id: usize, nickname: String) {
+    pub fn init_server(&mut self, in_id: usize, server_name: String, nickname: String) {
         if let Some(server) = self.servers.get_mut(in_id) {
-            *server = Some(IrcServerModel::new_model(in_id, nickname))
+            *server = Some(IrcServerModel::new_model(in_id, server_name, nickname))
         }
     }
 
@@ -90,6 +78,14 @@ impl IrcModel {
         self.current_id
             .and_then(|id| self.servers.get(id))
             .and_then(|v| v.as_ref())
+    }
+
+    pub fn get_server_name(&self, server_id: usize) -> Option<&str> {
+        if let Some(server) = self.servers.get(server_id) {
+            server.as_ref().map(|v| v.get_server_name())
+        } else {
+            None
+        }
     }
 
     pub fn get_server(&self, server_id: usize) -> Option<&IrcServerModel> {
@@ -188,6 +184,23 @@ impl IrcModel {
             _ => {}
         }
     }
+
+    #[cfg(test)]
+    pub fn new_single_server(
+        in_length: usize,
+        id: usize,
+        server_name: String,
+        nickname: String,
+    ) -> Self {
+        let mut s = Self {
+            servers: std::iter::repeat_with(|| None).take(in_length).collect(),
+            current_id: None,
+        };
+
+        s.init_server(id, server_name, nickname);
+
+        s
+    }
 }
 
 #[derive(Debug)]
@@ -200,10 +213,11 @@ pub struct IrcServerModel {
 
     current_nick: String,
     server_id: usize,
+    name: String,
 }
 
 impl IrcServerModel {
-    pub fn new_model(server_id: usize, nick_name: String) -> Self {
+    pub fn new_model(server_id: usize, server_name: String, nick_name: String) -> Self {
         let mut users = AHashMap::new();
         users.insert(
             Self::sanitize_name(&nick_name).to_lowercase(),
@@ -211,6 +225,7 @@ impl IrcServerModel {
         );
         Self {
             users,
+            name: server_name,
             server_id,
             list_channels: Vec::new(),
             current_channel: None,
@@ -220,6 +235,10 @@ impl IrcServerModel {
 
     pub fn get_current_channel(&self) -> Option<&str> {
         self.current_channel.as_deref()
+    }
+
+    pub fn get_server_name(&self) -> &str {
+        self.name.as_str()
     }
 
     pub fn get_current_nick(&self) -> &str {
@@ -430,7 +449,7 @@ mod tests {
     }
 
     fn setup_server(m: &mut IrcModel) {
-        m.init_server(0, "Me".into());
+        m.init_server(0, "TEST".into(), "Me".into());
         m.current_id = Some(0);
     }
 

@@ -642,6 +642,7 @@ mod tests {
         let irc_model = Some(crate::irc_view::irc_model::IrcModel::new_single_server(
             1,
             TEST_SERVER_ID,
+            "TEST".into(),
             user_name.to_string(),
         ));
 
@@ -712,7 +713,7 @@ mod tests {
         let channel = "#rust";
         let server_name = "IRC-Server";
         let mut irc_model = crate::irc_view::irc_model::IrcModel::new(1);
-        irc_model.init_server(0, user_name.to_string());
+        irc_model.init_server(0, "TEST".into(), user_name.to_string());
 
         let mut widget_test = WidgetTest {
             irc_model: Some(irc_model),
@@ -751,6 +752,7 @@ mod tests {
         let irc_model = Some(crate::irc_view::irc_model::IrcModel::new_single_server(
             1,
             TEST_SERVER_ID,
+            "TEST".into(),
             user_name.to_string(),
         ));
 

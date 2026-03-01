@@ -152,8 +152,8 @@ impl Session {
         })
     }
 
-    pub fn init_irc_model(&mut self, stored_nick: String, in_id: usize) {
-        self.model.init_server(in_id, stored_nick);
+    pub fn init_irc_model(&mut self, stored_nick: String, in_id: usize, server_name: String) {
+        self.model.init_server(in_id, server_name, stored_nick);
     }
 
     pub fn get_current_server_id(&self) -> Option<usize> {
