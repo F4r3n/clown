@@ -88,6 +88,18 @@ impl IrcModel {
         }
     }
 
+    pub fn get_server_name_from_channel<'a>(
+        &'a self,
+        server_id: usize,
+        channel: Option<&'a str>,
+    ) -> Option<&'a str> {
+        if channel.is_none() {
+            self.get_server_name(server_id)
+        } else {
+            channel
+        }
+    }
+
     pub fn get_server(&self, server_id: usize) -> Option<&IrcServerModel> {
         if let Some(server) = self.servers.get(server_id) {
             server.as_ref()

@@ -88,6 +88,7 @@ async fn main() -> color_eyre::Result<()> {
         MessageKind::Info,
         "Use the command /help".to_string(),
     ));
+    list_messages.push_message(MessageEvent::SettingsDidChange);
 
     while model.running_state != RunningState::Done {
         if let Some(event) = events.next().await {

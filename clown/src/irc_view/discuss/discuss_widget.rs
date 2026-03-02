@@ -636,6 +636,7 @@ impl crate::component::EventHandler for DiscussWidget {
 
     fn handle_actions(
         &mut self,
+        _model: &crate::model::Model,
         irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
@@ -648,15 +649,13 @@ impl crate::component::EventHandler for DiscussWidget {
                         content.to_string(),
                     ) {
                         if let Some(server_id) = server_id {
-                            if channel.is_none()
-                                && let Some(irc_model) = irc_model
-                                && let Some(server_name) = irc_model.get_server_name(*server_id)
+                            if let Some(irc_model) = irc_model
+                                && let Some(server_name) = irc_model
+                                    .get_server_name_from_channel(*server_id, channel.as_deref())
                             {
                                 self.add_line(Some(*server_id), server_name, message);
-                            } else if let Some(channel) = channel {
-                                self.add_line(Some(*server_id), channel.as_str(), message);
                             }
-                        } else if server_id.is_none() {
+                        } else {
                             self.add_line_current(message);
                         }
                     }
@@ -805,9 +804,6 @@ impl crate::component::EventHandler for DiscussWidget {
                 if let Some(irc_model) = irc_model
                     && let Some(irc_server) = irc_model.get_server(*server_id)
                 {
-                    tracing::debug!("SOURCE: {} ", source);
-                    tracing::debug!("irc_server : {:?} ", &irc_server);
-
                     let main = irc_server.is_main_user(source);
                     self.add_line(
                         Some(*server_id),

@@ -154,6 +154,7 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
     }
     fn handle_actions(
         &mut self,
+        _model: &crate::model::Model,
         _irc_model: Option<&irc_model::IrcModel>,
         event: &crate::message_event::MessageEvent,
     ) -> Option<crate::message_event::MessageEvent> {

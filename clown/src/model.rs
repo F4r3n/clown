@@ -17,6 +17,7 @@ pub struct IRCConnection {
     pub task: JoinHandle<()>,
 }
 
+#[derive(Default)]
 pub struct StoredConfig {
     config: Config,
     stored_name: String,
@@ -42,6 +43,15 @@ pub struct Model {
 }
 
 impl Model {
+    #[cfg(test)]
+    pub fn new_empty_config() -> Self {
+        Self {
+            running_state: RunningState::Start,
+            stored_config: StoredConfig::default(),
+            color_generator: ColorGenerator::new(0),
+        }
+    }
+
     pub fn new(config_name: String) -> Self {
         let config = Config::new(&config_name);
         let mut color_generator = ColorGenerator::new(config.nickname_colors.seed);
@@ -79,6 +89,17 @@ impl Model {
 
     pub fn get_address(&self, in_id: usize) -> Option<&str> {
         self.get_config().get_address(in_id)
+    }
+
+    pub fn get_completion_behaviour(&self) -> (Option<&str>, Option<&str>) {
+        (
+            self.get_config().completion.in_message.suffix.as_deref(),
+            self.get_config()
+                .completion
+                .on_empty_input
+                .suffix
+                .as_deref(),
+        )
     }
 
     pub fn is_autojoin_by_id(&self, in_id: usize) -> bool {

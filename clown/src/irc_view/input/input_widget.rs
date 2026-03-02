@@ -74,6 +74,7 @@ impl crate::component::EventHandler for CInput {
     }
     fn handle_actions(
         &mut self,
+        model: &crate::model::Model,
         irc_model: Option<&IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
@@ -103,6 +104,15 @@ impl crate::component::EventHandler for CInput {
             MessageEvent::SelectChannel(server_id, channel) => {
                 self.completion.current_channel = channel.to_string();
                 self.completion.server_id = *server_id;
+
+                None
+            }
+            MessageEvent::SettingsDidChange => {
+                let (empty, middle) = model.get_completion_behaviour();
+                self.completion.set_completion_behaviour(
+                    empty.map(|v| v.to_string()),
+                    middle.map(|v| v.to_string()),
+                );
 
                 None
             }
@@ -171,8 +181,11 @@ impl crate::component::EventHandler for CInput {
                             None
                         }
                         KeyCode::Tab => {
+                            let middle = self.input.find_previous_break(false).unwrap_or(0) > 0;
                             self.set_completion();
-                            if let Some((index, value)) = self.completion.get_next_completion() {
+                            if let Some((index, value)) =
+                                self.completion.get_next_completion(middle)
+                            {
                                 self.input.insert_completion(index, value);
                             }
                             None

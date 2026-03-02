@@ -121,9 +121,21 @@ pub struct Completion {
     pub current_channel: String,
     pub server_id: Option<usize>,
     current_index: Option<usize>,
+
+    on_empty_input_suffix: Option<String>,
+    in_message_suffix: Option<String>,
 }
 
 impl Completion {
+    pub fn set_completion_behaviour(
+        &mut self,
+        on_empty_input_suffix: Option<String>,
+        in_message_suffix: Option<String>,
+    ) {
+        self.on_empty_input_suffix = on_empty_input_suffix;
+        self.in_message_suffix = in_message_suffix;
+    }
+
     pub fn set_completion(&mut self, start: usize, slice: &str) {
         if self.completion_start.is_some() {
             return;
@@ -158,7 +170,7 @@ impl Completion {
         }
     }
 
-    pub fn get_next_completion(&mut self) -> Option<(usize, String)> {
+    pub fn get_next_completion(&mut self, is_first_word: bool) -> Option<(usize, String)> {
         self.current_index?;
         self.current_index = Some(
             self.current_index
@@ -175,7 +187,13 @@ impl Completion {
             && let Some(start) = self.completion_start
             && let Some(v) = list.get(self.current_index.unwrap_or(0))
         {
-            Some((start, v.to_string()))
+            let mut v = v.to_string();
+            if is_first_word && let Some(suffix) = self.on_empty_input_suffix.as_ref() {
+                v.push_str(suffix);
+            } else if let Some(suffix) = self.in_message_suffix.as_ref() {
+                v.push_str(suffix);
+            };
+            Some((start, v))
         } else {
             None
         }
@@ -194,31 +212,57 @@ mod test {
     #[test]
     fn test_insert() {
         let mut comp = Completion::default();
+
         comp.input_completion.add_command("quit");
         comp.input_completion.add_command("help");
 
         comp.input_completion
             .add_users(0, "#test", &vec!["tata".to_string(), "titi".to_string()]);
+
         comp.current_channel = "#test".to_string();
         comp.server_id = Some(0);
-        comp.set_completion(0, "t");
-        assert_eq!(comp.get_next_completion(), Some((0, "titi".to_string())));
-        assert_eq!(comp.get_next_completion(), Some((0, "tata".to_string())));
-        assert_eq!(comp.get_next_completion(), Some((0, "titi".to_string())));
 
+        // Normal user completion (not first word)
+        comp.set_completion(0, "t");
+
+        assert_eq!(
+            comp.get_next_completion(false),
+            Some((0, "titi".to_string()))
+        );
+        assert_eq!(
+            comp.get_next_completion(false),
+            Some((0, "tata".to_string()))
+        );
+        assert_eq!(
+            comp.get_next_completion(false),
+            Some((0, "titi".to_string()))
+        );
+
+        // No channel → no completion
         comp.current_channel = "".to_string();
         comp.reset();
         comp.set_completion(0, "t");
-        assert_eq!(comp.get_next_completion(), None);
+        assert_eq!(comp.get_next_completion(false), None);
 
+        // Command completion
         comp.reset();
         comp.set_completion(0, "/");
-        assert_eq!(comp.get_next_completion(), Some((1, "quit".to_string())));
-        assert_eq!(comp.get_next_completion(), Some((1, "help".to_string())));
+
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((1, "quit".to_string()))
+        );
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((1, "help".to_string()))
+        );
 
         comp.reset();
         comp.set_completion(0, "/h");
-        assert_eq!(comp.get_next_completion(), Some((1, "help".to_string())));
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((1, "help".to_string()))
+        );
     }
 
     #[test]
@@ -230,8 +274,48 @@ mod test {
 
         comp.input_completion
             .add_users(0, "#test", &vec!["tata".to_string(), "Titi".to_string()]);
+
         comp.current_channel = "#test".to_string();
+
         comp.set_completion(0, "t");
-        assert_eq!(comp.get_next_completion(), Some((0, "Titi".to_string())));
+
+        assert_eq!(
+            comp.get_next_completion(false),
+            Some((0, "Titi".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_completion_suffixes() {
+        let mut comp = Completion::default();
+
+        comp.set_completion_behaviour(
+            Some(": ".to_string()), // on_empty_input_suffix
+            Some(" ".to_string()),  // in_message_suffix
+        );
+
+        comp.input_completion
+            .add_users(0, "#test", &vec!["tata".to_string()]);
+
+        comp.current_channel = "#test".to_string();
+        comp.server_id = Some(0);
+
+        // First word completion → should use on_empty_input_suffix
+        comp.set_completion(0, "t");
+
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((0, "tata: ".to_string()))
+        );
+
+        comp.reset();
+
+        // In-message completion → should use in_message_suffix
+        comp.set_completion(5, "t");
+
+        assert_eq!(
+            comp.get_next_completion(false),
+            Some((5, "tata ".to_string()))
+        );
     }
 }

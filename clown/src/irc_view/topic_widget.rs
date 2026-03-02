@@ -74,6 +74,7 @@ impl EventHandler for TopicWidget {
     }
     fn handle_actions(
         &mut self,
+        _model: &crate::model::Model,
         _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {

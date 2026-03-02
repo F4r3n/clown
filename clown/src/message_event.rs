@@ -67,5 +67,6 @@ pub enum MessageEvent {
         String,         /*user*/
         Option<String>, /*reason*/
     ),
+    SettingsDidChange,
     Bel,
 }

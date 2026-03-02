@@ -18,6 +18,7 @@ pub trait EventHandler {
     fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>;
     fn handle_actions(
         &mut self,
+        model: &Model,
         irc_model: Option<&irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent>;
@@ -59,13 +60,14 @@ impl<'a, T> Component<'a, T> {
 
     pub fn handle_actions(
         &mut self,
+        model: &Model,
         irc_model: Option<&irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent>
     where
         T: EventHandler,
     {
-        self.inner.handle_actions(irc_model, event)
+        self.inner.handle_actions(model, irc_model, event)
     }
 
     pub fn render(
@@ -133,10 +135,11 @@ impl EventHandler for Child<'_> {
 
     fn handle_actions(
         &mut self,
+        model: &Model,
         irc_model: Option<&irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
-        self.deref_mut().handle_actions(irc_model, event)
+        self.deref_mut().handle_actions(model, irc_model, event)
     }
 
     fn need_redraw(&self) -> bool {

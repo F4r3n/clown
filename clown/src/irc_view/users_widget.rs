@@ -433,6 +433,7 @@ impl crate::component::EventHandler for UsersWidget {
     }
     fn handle_actions(
         &mut self,
+        _model: &crate::model::Model,
         irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
@@ -472,6 +473,17 @@ impl crate::component::EventHandler for UsersWidget {
                     self.highlight_user(Some(*server_id), target);
                     self.need_redraw = true;
                 }
+                None
+            }
+            MessageEvent::AddMessageViewInfo(server_id, channel, _, _) => {
+                if let Some(server_id) = server_id
+                    && let Some(irc_model) = irc_model
+                    && let Some(server_name) =
+                        irc_model.get_server_name_from_channel(*server_id, channel.as_deref())
+                {
+                    self.highlight_user(Some(*server_id), server_name);
+                }
+
                 None
             }
             MessageEvent::Part(server_id, channel, user) => {
@@ -569,8 +581,9 @@ mod tests {
 
     impl WidgetTest {
         fn handle_action(&mut self, action: &MessageEvent) {
+            let model = crate::model::Model::new_empty_config();
             self.users_widget
-                .handle_actions(self.irc_model.as_ref(), action);
+                .handle_actions(&model, self.irc_model.as_ref(), action);
             if let Some(irc_model) = self.irc_model.as_mut() {
                 irc_model.handle_action(action);
             }
