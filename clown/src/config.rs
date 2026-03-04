@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use clown_core::client::LoginConfig;
 use clown_core::conn::ConnectionConfig;
+use color_eyre::eyre::Ok;
 
 use crate::project_path::ProjectPath;
 
@@ -87,12 +88,17 @@ pub struct Discuss {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct LeftBar {
     #[serde(default = "default_true")]
-    pub enabled: bool,
+    pub time: bool,
+    #[serde(default = "default_true")]
+    pub nickname: bool,
 }
 
 impl Default for LeftBar {
     fn default() -> Self {
-        Self { enabled: true }
+        Self {
+            time: true,
+            nickname: true,
+        }
     }
 }
 
@@ -201,8 +207,8 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn new(config_name: &str) -> Self {
-        Self::read(config_name).unwrap_or_default()
+    pub fn new(config_name: &str) -> color_eyre::Result<Self> {
+        Self::read(config_name)
     }
 
     pub fn save(&self, config_name: &str) -> color_eyre::Result<()> {
@@ -224,11 +230,7 @@ impl Config {
     fn read(config_name: &str) -> color_eyre::Result<Self> {
         if let Some(config_path) = Self::config_path(config_name) {
             let content = std::fs::read_to_string(config_path)?;
-            if let Ok(config) = toml::from_str::<Config>(&content) {
-                Ok(config)
-            } else {
-                Ok(Self::default())
-            }
+            toml::from_str::<Config>(&content).map_err(|e| color_eyre::eyre::eyre!("{}", e))
         } else {
             Err(color_eyre::eyre::eyre!("Invalid config"))
         }

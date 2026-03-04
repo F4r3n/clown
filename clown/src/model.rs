@@ -1,4 +1,7 @@
-use crate::{config::Config, irc_view::color_user::ColorGenerator};
+use crate::{
+    config::{Config, Discuss},
+    irc_view::color_user::ColorGenerator,
+};
 use clown_core::{client::LoginConfig, conn::ConnectionConfig};
 use tokio::{sync::mpsc, task::JoinHandle};
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -43,7 +46,6 @@ pub struct Model {
 }
 
 impl Model {
-    #[cfg(test)]
     pub fn new_empty_config() -> Self {
         Self {
             running_state: RunningState::Start,
@@ -52,20 +54,20 @@ impl Model {
         }
     }
 
-    pub fn new(config_name: String) -> Self {
-        let config = Config::new(&config_name);
+    pub fn new(config_name: String) -> color_eyre::Result<Self> {
+        let config = Config::new(&config_name)?;
         let mut color_generator = ColorGenerator::new(config.nickname_colors.seed);
         for (input, color) in &config.nickname_colors.overrides {
             color_generator.add_override(input.to_string(), color);
         }
-        Self {
+        Ok(Self {
             running_state: RunningState::Start,
             color_generator,
             stored_config: StoredConfig {
                 config,
                 stored_name: config_name,
             },
-        }
+        })
     }
 
     fn get_config(&self) -> &Config {
@@ -128,5 +130,17 @@ impl Model {
 
     pub fn get_color(&self, input: &str) -> ratatui::style::Color {
         self.color_generator.generate_color(input)
+    }
+
+    pub fn is_topic_ui_enabled(&self) -> bool {
+        self.stored_config.config.topic.enabled
+    }
+
+    pub fn is_users_ui_enabled(&self) -> bool {
+        self.stored_config.config.users.enabled
+    }
+
+    pub fn get_discuss_config(&self) -> &Discuss {
+        &self.stored_config.config.discuss
     }
 }

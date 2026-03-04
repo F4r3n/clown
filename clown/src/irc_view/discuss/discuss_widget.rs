@@ -193,6 +193,8 @@ pub struct DiscussWidget {
 
     last_hovered: Option<Hovered>,
     redraw: bool,
+
+    time_size: usize,
 }
 
 impl DiscussWidget {
@@ -209,6 +211,7 @@ impl DiscussWidget {
             content_width: 0,
             last_hovered: None,
             redraw: true,
+            time_size: TIME_LENGTH,
         }
     }
 
@@ -388,7 +391,7 @@ impl DiscussWidget {
                         .create_rows(
                             self.content_width as u16,
                             color,
-                            TIME_LENGTH,
+                            self.time_size,
                             NICKNAME_LENGTH,
                         )
                         .skip(rows_to_skip_in_message)
@@ -585,7 +588,7 @@ impl Draw for DiscussWidget {
             .first()
             .map(|rect| {
                 rect.width
-                    .saturating_sub(TIME_LENGTH as u16)
+                    .saturating_sub(self.time_size as u16)
                     .saturating_sub(NICKNAME_LENGTH as u16)
                     .saturating_sub(SEPARATOR_LENGTH as u16)
                     .saturating_sub(4_u16)
@@ -597,14 +600,15 @@ impl Draw for DiscussWidget {
             self.get_fake_total_lines()
                 .saturating_sub(self.scroll_offset),
         );
+        let time_size = self.time_size;
         let visible_rows = self.collect_visible_rows(Some(model));
         let table = Table::new(
             visible_rows,
             [
-                Constraint::Length(TIME_LENGTH.saturating_add(1) as u16), // time
+                Constraint::Length(time_size.saturating_add(1) as u16), // time
                 Constraint::Length(NICKNAME_LENGTH.saturating_add(1) as u16), // nickname
-                Constraint::Length(1),                                    // separator
-                Constraint::Min(10),                                      // Content
+                Constraint::Length(1),                                  // separator
+                Constraint::Min(10),                                    // Content
             ],
         )
         .column_spacing(1)
@@ -636,7 +640,7 @@ impl crate::component::EventHandler for DiscussWidget {
 
     fn handle_actions(
         &mut self,
-        _model: &crate::model::Model,
+        model: &crate::model::Model,
         irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
@@ -814,6 +818,14 @@ impl crate::component::EventHandler for DiscussWidget {
                             MessageContent::new_info(format!("{} has joined", source))
                         },
                     );
+                }
+                None
+            }
+            MessageEvent::SettingsDidChange => {
+                if model.get_discuss_config().left_bar.time {
+                    self.time_size = TIME_LENGTH;
+                } else {
+                    self.time_size = 0;
                 }
                 None
             }

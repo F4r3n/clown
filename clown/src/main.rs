@@ -72,8 +72,21 @@ async fn main() -> color_eyre::Result<()> {
     let _guard = prepare_logs(args.debug)?;
     //info!("TEST");
     color_eyre::install()?;
+    let mut list_messages = message_queue::MessageQueue::new();
 
-    let mut model = model::Model::new(args.config_name);
+    let mut model = match model::Model::new(args.config_name) {
+        Ok(n) => n,
+        Err(e) => {
+            list_messages.push_message(MessageEvent::AddMessageViewInfo(
+                None,
+                None,
+                MessageKind::Error,
+                format!("Error to read config: {}", e),
+            ));
+            Model::new_empty_config()
+        }
+    };
+
     let mut session = Session::new(model.get_server_count());
     let mut current_view = Views::Main(main_view::MainView::new());
 
@@ -81,7 +94,6 @@ async fn main() -> color_eyre::Result<()> {
     EventHandler::enable_mouse_event()?;
     let mut terminal = tui::init()?;
 
-    let mut list_messages = message_queue::MessageQueue::new();
     list_messages.push_message(MessageEvent::AddMessageViewInfo(
         None,
         None,

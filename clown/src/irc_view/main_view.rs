@@ -503,7 +503,7 @@ impl widget_view::WidgetView for MainView<'_> {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1),       // Topic area
+                Constraint::Length(if model.is_topic_ui_enabled() { 1 } else { 0 }), // Topic area
                 Constraint::Percentage(100), // Messages area
                 Constraint::Length(2),       // Input area
             ])
@@ -514,7 +514,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 .direction(Direction::Horizontal)
                 .constraints([
                     Constraint::Percentage(100), // Messages
-                    Constraint::Min(15),         // List Users
+                    Constraint::Min(if model.is_users_ui_enabled() { 15 } else { 0 }), // List Users
                 ])
                 .split(*message_area_layout);
 
