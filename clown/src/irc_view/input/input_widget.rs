@@ -120,7 +120,7 @@ impl crate::component::EventHandler for CInput {
                 self.completion.current_channel = channel.to_string();
                 self.completion
                     .input_completion
-                    .add_user(*server_id, channel, user);
+                    .add_user(*server_id, channel, user.to_string());
 
                 None
             }
@@ -215,7 +215,8 @@ impl CInput {
         if let Some(start) = self.input.find_previous_break(false).or(Some(0))
             && let Some(slice) = self.input.get_slice_till_cursor(start)
         {
-            self.completion.set_completion(start, slice);
+            self.completion
+                .set_completion(start, slice, self.input.get_value());
         }
     }
 
@@ -304,9 +305,15 @@ impl CInput {
         }
     }
 
-    pub fn add_completion_command_list(&mut self, values: impl Iterator<Item = &'static str>) {
+    pub fn add_completion_command_list(&mut self, values: impl Iterator<Item = String>) {
         for c in values {
             self.completion.input_completion.add_command(c);
+        }
+    }
+
+    pub fn add_completion_config_list(&mut self, values: impl Iterator<Item = String>) {
+        for c in values {
+            self.completion.input_completion.add_config_field(c);
         }
     }
 }

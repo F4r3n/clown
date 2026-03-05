@@ -37,15 +37,15 @@ impl StoredConfig {
         }
     }
 
-    pub fn set_value(&mut self, path: &str, value: &str) -> color_eyre::eyre::Result<()> {
-        match self.config.set_value(path, value) {
+    pub fn set_value(&mut self, path: &str, value: String) -> color_eyre::eyre::Result<()> {
+        match self.config.set_value_from_root(path, value) {
             Ok(()) => self.save(),
             Err(e) => Err(e),
         }
     }
 
     pub fn get_value(&mut self, path: &str) -> color_eyre::eyre::Result<String> {
-        self.config.get_value(path)
+        self.config.get_value_from_root(path)
     }
 }
 
@@ -160,7 +160,7 @@ impl Model {
         &self.stored_config.config.discuss
     }
 
-    pub fn set_config_value(&mut self, path: &str, value: &str) -> color_eyre::eyre::Result<()> {
+    pub fn set_config_value(&mut self, path: &str, value: String) -> color_eyre::eyre::Result<()> {
         match self.stored_config.set_value(path, value) {
             Ok(()) => {
                 //TODO: be more granular

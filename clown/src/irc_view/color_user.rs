@@ -16,6 +16,15 @@ impl ColorGenerator {
         }
     }
 
+    pub fn is_color_valid(input: &str) -> color_eyre::Result<()> {
+        if Self::parse_hex_color(input).is_none() {
+            return Err(color_eyre::eyre::eyre!(
+                "The format color is invalid. Format expected #FFFFFF"
+            ));
+        }
+        Ok(())
+    }
+
     fn parse_hex_color(input: &str) -> Option<Color> {
         if !input.starts_with('#') || input.len() != 7 {
             return None;
@@ -49,12 +58,7 @@ impl ColorGenerator {
 }
 
 fn hash_nickname(seed: u64, nickname: &str) -> u64 {
-    let state = ahash::RandomState::with_seeds(
-        seed.saturating_add(1),
-        seed.saturating_add(2),
-        seed.saturating_add(3),
-        seed.saturating_add(4),
-    );
+    let state = ahash::RandomState::with_seeds(seed, 0, 0, 0);
     state.hash_one(nickname)
 }
 
