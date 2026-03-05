@@ -110,8 +110,8 @@ impl crate::component::EventHandler for CInput {
             MessageEvent::SettingsDidChange => {
                 let (empty, middle) = model.get_completion_behaviour();
                 self.completion.set_completion_behaviour(
-                    empty.map(|v| v.to_string()),
-                    middle.map(|v| v.to_string()),
+                    empty.map(|v| v.to_string()).unwrap_or_default(),
+                    middle.map(|v| v.to_string()).unwrap_or_default(),
                 );
 
                 None

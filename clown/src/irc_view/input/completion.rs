@@ -113,95 +113,91 @@ impl InputCompletion {
     }
 }
 
+#[derive(PartialEq, Eq)]
+enum CompletionKind {
+    Command,
+    Nickname,
+}
+
+struct CompletionState {
+    list: Vec<String>,
+    kind: CompletionKind,
+    start_character_pos: usize,
+    index_list: usize,
+}
+
 #[derive(Default)]
 pub struct Completion {
     pub input_completion: InputCompletion,
-    completion_start: Option<usize>,
-    current_completion: Option<Vec<String>>,
+    state: Option<CompletionState>,
     pub current_channel: String,
     pub server_id: Option<usize>,
-    current_index: Option<usize>,
-
-    on_empty_input_suffix: Option<String>,
-    in_message_suffix: Option<String>,
+    on_empty_input_suffix: String,
+    in_message_suffix: String,
 }
 
 impl Completion {
     pub fn set_completion_behaviour(
         &mut self,
-        on_empty_input_suffix: Option<String>,
-        in_message_suffix: Option<String>,
+        on_empty_input_suffix: String,
+        in_message_suffix: String,
     ) {
         self.on_empty_input_suffix = on_empty_input_suffix;
         self.in_message_suffix = in_message_suffix;
     }
 
     pub fn set_completion(&mut self, start: usize, slice: &str) {
-        if self.completion_start.is_some() {
+        if self.state.is_some() {
             return;
         }
 
-        if let Some(end) = slice.strip_prefix("/") {
-            self.completion_start = Some(start.saturating_add(1));
-            self.current_completion = self.input_completion.list_command(end);
-            self.current_index = if self
-                .current_completion
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
-            {
-                Some(0)
-            } else {
-                None
-            };
-        } else {
-            self.completion_start = Some(start);
-            self.current_completion =
-                self.input_completion
-                    .list(self.server_id, &self.current_channel, slice);
-            self.current_index = if self
-                .current_completion
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
-            {
-                Some(0)
-            } else {
-                None
-            };
+        if let Some(end) = slice.strip_prefix("/")
+            && let Some(list) = self.input_completion.list_command(end)
+        {
+            self.state = Some(CompletionState {
+                list,
+                kind: CompletionKind::Command,
+                start_character_pos: start.saturating_add(1),
+                index_list: 0,
+            });
+        } else if let Some(list) =
+            self.input_completion
+                .list(self.server_id, &self.current_channel, slice)
+        {
+            self.state = Some(CompletionState {
+                list,
+                kind: CompletionKind::Nickname,
+                start_character_pos: start,
+                index_list: 0,
+            });
         }
     }
 
     pub fn get_next_completion(&mut self, is_first_word: bool) -> Option<(usize, String)> {
-        self.current_index?;
-        self.current_index = Some(
-            self.current_index
-                .as_mut()
-                .map_or(0, |v| v.saturating_add(1))
-                % self
-                    .current_completion
-                    .as_ref()
-                    .map(|v| v.len())
-                    .unwrap_or(1),
-        );
+        if let Some(state) = self.state.as_mut() {
+            state.index_list = state.index_list.saturating_add(1) % state.list.len();
 
-        if let Some(list) = self.current_completion.as_ref()
-            && let Some(start) = self.completion_start
-            && let Some(v) = list.get(self.current_index.unwrap_or(0))
-        {
-            let mut v = v.to_string();
-            if is_first_word && let Some(suffix) = self.on_empty_input_suffix.as_ref() {
-                v.push_str(suffix);
-            } else if let Some(suffix) = self.in_message_suffix.as_ref() {
-                v.push_str(suffix);
-            };
-            Some((start, v))
+            if let Some(v) = state.list.get(state.index_list) {
+                let mut v = v.to_string();
+                if state.kind != CompletionKind::Command {
+                    if is_first_word {
+                        v.push_str(self.on_empty_input_suffix.as_str());
+                    } else {
+                        v.push_str(self.in_message_suffix.as_ref());
+                    };
+                }
+
+                Some((state.start_character_pos, v))
+            } else {
+                None
+            }
         } else {
             None
         }
     }
 
     pub fn reset(&mut self) {
-        self.completion_start = None;
-        self.current_completion = None;
+        self.state = None;
     }
 }
 
@@ -290,8 +286,8 @@ mod test {
         let mut comp = Completion::default();
 
         comp.set_completion_behaviour(
-            Some(": ".to_string()), // on_empty_input_suffix
-            Some(" ".to_string()),  // in_message_suffix
+            ": ".to_string(), // on_empty_input_suffix
+            " ".to_string(),  // in_message_suffix
         );
 
         comp.input_completion
