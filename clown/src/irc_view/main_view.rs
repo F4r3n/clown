@@ -209,6 +209,44 @@ impl MainView<'_> {
                         None
                     }
                 }
+                command::ClientCommand::Config(config_command_type, path, value) => {
+                    match config_command_type {
+                        command::ConfigCommand::Get => match model.get_config_value(&path) {
+                            Ok(result) => Some(MessageEvent::AddMessageViewInfo(
+                                None,
+                                None,
+                                crate::message_irc::message_content::MessageKind::Info,
+                                format!("{} {}", path, result),
+                            )),
+                            Err(e) => Some(MessageEvent::AddMessageViewInfo(
+                                None,
+                                None,
+                                crate::message_irc::message_content::MessageKind::Error,
+                                format!("{} {}", path, e),
+                            )),
+                        },
+                        command::ConfigCommand::Add | command::ConfigCommand::Set => {
+                            if let Some(value) = value {
+                                match model.set_config_value(&path, &value) {
+                                    Ok(_) => Some(MessageEvent::SettingsDidChange),
+                                    Err(e) => Some(MessageEvent::AddMessageViewInfo(
+                                        None,
+                                        None,
+                                        crate::message_irc::message_content::MessageKind::Error,
+                                        format!("{} {}", path, e),
+                                    )),
+                                }
+                            } else {
+                                Some(MessageEvent::AddMessageViewInfo(
+                                    None,
+                                    None,
+                                    crate::message_irc::message_content::MessageKind::Error,
+                                    "No values to set".to_string(),
+                                ))
+                            }
+                        }
+                    }
+                }
                 command::ClientCommand::Unknown(command_name) => {
                     Some(MessageEvent::AddMessageViewInfo(
                         None,

@@ -36,6 +36,17 @@ impl StoredConfig {
             server.login.nickname = nickname
         }
     }
+
+    pub fn set_value(&mut self, path: &str, value: &str) -> color_eyre::eyre::Result<()> {
+        match self.config.set_value(path, value) {
+            Ok(()) => self.save(),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn get_value(&mut self, path: &str) -> color_eyre::eyre::Result<String> {
+        self.config.get_value(path)
+    }
 }
 
 pub struct Model {
@@ -54,15 +65,20 @@ impl Model {
         }
     }
 
-    pub fn new(config_name: String) -> color_eyre::Result<Self> {
-        let config = Config::new(&config_name)?;
+    fn load_color(config: &Config) -> ColorGenerator {
         let mut color_generator = ColorGenerator::new(config.nickname_colors.seed);
         for (input, color) in &config.nickname_colors.overrides {
             color_generator.add_override(input.to_string(), color);
         }
+        color_generator
+    }
+
+    pub fn new(config_name: String) -> color_eyre::Result<Self> {
+        let config = Config::new(&config_name)?;
+
         Ok(Self {
             running_state: RunningState::Start,
-            color_generator,
+            color_generator: Self::load_color(&config),
             stored_config: StoredConfig {
                 config,
                 stored_name: config_name,
@@ -142,5 +158,20 @@ impl Model {
 
     pub fn get_discuss_config(&self) -> &Discuss {
         &self.stored_config.config.discuss
+    }
+
+    pub fn set_config_value(&mut self, path: &str, value: &str) -> color_eyre::eyre::Result<()> {
+        match self.stored_config.set_value(path, value) {
+            Ok(()) => {
+                //TODO: be more granular
+                self.color_generator = Self::load_color(&self.stored_config.config);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn get_config_value(&mut self, path: &str) -> color_eyre::eyre::Result<String> {
+        self.stored_config.get_value(path)
     }
 }

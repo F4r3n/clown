@@ -211,9 +211,79 @@ impl Config {
         Self::read(config_name)
     }
 
+    fn set_value_from_root(
+        &mut self,
+        root: &mut toml::Value,
+        path: &str,
+        new_value: toml::Value,
+    ) -> color_eyre::Result<()> {
+        let mut parts = path.split('.').peekable();
+        let mut current = root;
+
+        while let Some(key) = parts.next() {
+            if parts.peek().is_none() {
+                // last key
+                if let toml::Value::Table(table) = current {
+                    table.insert(key.to_string(), new_value);
+                    return Ok(());
+                } else {
+                    return Err(color_eyre::eyre::eyre!("Path does not point to table"));
+                }
+            }
+
+            current = current
+                .get_mut(key)
+                .ok_or_else(|| color_eyre::eyre::eyre!("Invalid path"))?;
+        }
+
+        Ok(())
+    }
+
+    fn get_value_from_root(&self, root: &toml::Value, path: &str) -> color_eyre::Result<String> {
+        let mut current = root;
+
+        for key in path.split('.') {
+            current = current
+                .get(key)
+                .ok_or_else(|| color_eyre::eyre::eyre!("Invalid path"))?;
+        }
+
+        Ok(current.to_string())
+    }
+
+    pub fn get_value(&self, path: &str) -> color_eyre::Result<String> {
+        let root = toml::Value::try_from(self)?;
+        self.get_value_from_root(&root, path)
+    }
+
+    pub fn set_value(&mut self, path: &str, value: &str) -> color_eyre::Result<()> {
+        let mut root = toml::Value::try_from(&self)?;
+        let new_value = Self::parse_value(value)?;
+        match self.set_value_from_root(&mut root, path, new_value) {
+            std::result::Result::Ok(()) => {
+                *self = root.try_into()?;
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    fn parse_value(input: &str) -> color_eyre::eyre::Result<toml::Value> {
+        match input.parse::<toml::Value>() {
+            std::result::Result::Ok(toml::Value::Table(mut table)) => {
+                if let Some(value) = table.remove("value") {
+                    Ok(value)
+                } else {
+                    Err(color_eyre::eyre::eyre!("Cannot parse"))
+                }
+            }
+            std::result::Result::Ok(v) => Ok(v),
+            std::result::Result::Err(e) => Err(color_eyre::eyre::eyre!("Cannot parse {}", e)),
+        }
+    }
+
     pub fn save(&self, config_name: &str) -> color_eyre::Result<()> {
         let result = toml::to_string(self)?;
-
         let config_path =
             Self::config_path(config_name).ok_or(color_eyre::eyre::Error::msg("Invalid Path"))?;
         if let Some(parent) = config_path.parent() {
