@@ -47,6 +47,7 @@ pub enum ClientCommand {
         detailed_message = "To set the topic of the channel"
     )]
     Topic(String),
+    #[strum(message = "config", detailed_message = "To set/get the config")]
     Config(
         ConfigCommand,
         String,         /*Theme*/

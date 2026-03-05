@@ -1,6 +1,7 @@
 use self::command::help;
 use crate::component::Child;
 use crate::component::Component;
+use crate::config::Config;
 use crate::event_handler::Event;
 use crate::irc_view::command;
 use crate::irc_view::command::ClientCommand;
@@ -60,8 +61,14 @@ impl MainView<'_> {
     pub fn new() -> Self {
         let mut cinput = input_widget::CInput::default();
         cinput.add_completion_command_list(
-            ClientCommand::iter().map(|v| v.get_message().unwrap_or("")),
+            ClientCommand::iter().map(|v| v.get_message().unwrap_or("").to_string()),
         );
+
+        //TODO: it uses the default config, should use the default and the current
+        // servers.1. may exist and it wont be suggested
+        //
+        let fields = Config::list_fields();
+        cinput.add_completion_config_list(fields.into_iter());
 
         let input = Component::new("input", cinput);
         let list_users_view: Component<'_, users_widget::UsersWidget> =
@@ -227,7 +234,7 @@ impl MainView<'_> {
                         },
                         command::ConfigCommand::Add | command::ConfigCommand::Set => {
                             if let Some(value) = value {
-                                match model.set_config_value(&path, &value) {
+                                match model.set_config_value(&path, value) {
                                     Ok(_) => Some(MessageEvent::SettingsDidChange),
                                     Err(e) => Some(MessageEvent::AddMessageViewInfo(
                                         None,

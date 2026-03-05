@@ -12,6 +12,9 @@ pub struct InputCompletion {
     //List commands
     commands: Trie,
 
+    //List config
+    config: Trie,
+
     //Users per channel, can be changed a lot
     channels: ahash::AHashMap<KeyServerChannel, Trie>,
 }
@@ -20,14 +23,19 @@ impl Default for InputCompletion {
     fn default() -> Self {
         Self {
             commands: Trie::new(),
+            config: Trie::new(),
             channels: AHashMap::default(),
         }
     }
 }
 
 impl InputCompletion {
-    pub fn add_command(&mut self, item: &str) {
+    pub fn add_command(&mut self, item: String) {
         self.commands.add_word(item);
+    }
+
+    pub fn add_config_field(&mut self, item: String) {
+        self.config.add_word(item);
     }
 
     pub fn add_users(&mut self, server_id: usize, channel: &str, users: &Vec<String>) {
@@ -41,7 +49,7 @@ impl InputCompletion {
             })
             .or_insert(Trie::new());
         for user in users {
-            channel.add_word(InputCompletion::sanitize_name(user));
+            channel.add_word(Self::sanitize_name(user).to_string());
         }
     }
 
@@ -56,7 +64,7 @@ impl InputCompletion {
     pub fn replace_user(&mut self, old: &str, new: &str) {
         for (_, trie) in self.channels.iter_mut() {
             trie.disable_word(old);
-            trie.add_word(new);
+            trie.add_word(new.to_string());
         }
     }
 
@@ -80,7 +88,7 @@ impl InputCompletion {
         }
     }
 
-    pub fn add_user(&mut self, server_id: usize, channel: &str, user: &str) {
+    pub fn add_user(&mut self, server_id: usize, channel: &str, user: String) {
         let channel = Self::sanitize_key(channel);
         if let Some(channel) = self.channels.get_mut(&KeyServerChannel {
             channel: channel.to_string(),
@@ -111,97 +119,112 @@ impl InputCompletion {
     pub fn list_command(&self, start_word: &str) -> Option<Vec<String>> {
         self.commands.list(start_word)
     }
+
+    pub fn list_config(&self, start_word: &str) -> Option<Vec<String>> {
+        self.config.list(start_word)
+    }
+}
+
+#[derive(PartialEq, Eq)]
+enum CompletionKind {
+    Command,
+    Config,
+    Nickname,
+}
+
+struct CompletionState {
+    list: Vec<String>,
+    kind: CompletionKind,
+    start_character_pos: usize,
+    index_list: usize,
 }
 
 #[derive(Default)]
 pub struct Completion {
     pub input_completion: InputCompletion,
-    completion_start: Option<usize>,
-    current_completion: Option<Vec<String>>,
+    state: Option<CompletionState>,
     pub current_channel: String,
     pub server_id: Option<usize>,
-    current_index: Option<usize>,
-
-    on_empty_input_suffix: Option<String>,
-    in_message_suffix: Option<String>,
+    on_empty_input_suffix: String,
+    in_message_suffix: String,
 }
 
 impl Completion {
     pub fn set_completion_behaviour(
         &mut self,
-        on_empty_input_suffix: Option<String>,
-        in_message_suffix: Option<String>,
+        on_empty_input_suffix: String,
+        in_message_suffix: String,
     ) {
         self.on_empty_input_suffix = on_empty_input_suffix;
         self.in_message_suffix = in_message_suffix;
     }
 
-    pub fn set_completion(&mut self, start: usize, slice: &str) {
-        if self.completion_start.is_some() {
+    pub fn set_completion(&mut self, start: usize, slice: &str, full_phrase: &str) {
+        if self.state.is_some() {
             return;
         }
 
-        if let Some(end) = slice.strip_prefix("/") {
-            self.completion_start = Some(start.saturating_add(1));
-            self.current_completion = self.input_completion.list_command(end);
-            self.current_index = if self
-                .current_completion
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
+        if let Some(end) = full_phrase.strip_prefix("/") {
+            let mut parts = end.split_whitespace();
+            if let Some(part) = parts.next()
+                && part.eq("config")
+                && matches!(parts.next(), Some("get") | Some("set"))
+                && let Some(list) = self
+                    .input_completion
+                    .list_config(parts.next().unwrap_or_default())
             {
-                Some(0)
-            } else {
-                None
-            };
-        } else {
-            self.completion_start = Some(start);
-            self.current_completion =
-                self.input_completion
-                    .list(self.server_id, &self.current_channel, slice);
-            self.current_index = if self
-                .current_completion
-                .as_ref()
-                .is_some_and(|v| !v.is_empty())
-            {
-                Some(0)
-            } else {
-                None
-            };
+                self.state = Some(CompletionState {
+                    list,
+                    kind: CompletionKind::Config,
+                    start_character_pos: start.saturating_add(full_phrase.len() - end.len() - 1),
+                    index_list: 0,
+                });
+            } else if let Some(list) = self.input_completion.list_command(end) {
+                self.state = Some(CompletionState {
+                    list,
+                    kind: CompletionKind::Command,
+                    start_character_pos: start.saturating_add(1),
+                    index_list: 0,
+                });
+            }
+        } else if let Some(list) =
+            self.input_completion
+                .list(self.server_id, &self.current_channel, slice)
+        {
+            self.state = Some(CompletionState {
+                list,
+                kind: CompletionKind::Nickname,
+                start_character_pos: start,
+                index_list: 0,
+            });
         }
     }
 
     pub fn get_next_completion(&mut self, is_first_word: bool) -> Option<(usize, String)> {
-        self.current_index?;
-        self.current_index = Some(
-            self.current_index
-                .as_mut()
-                .map_or(0, |v| v.saturating_add(1))
-                % self
-                    .current_completion
-                    .as_ref()
-                    .map(|v| v.len())
-                    .unwrap_or(1),
-        );
+        if let Some(state) = self.state.as_mut() {
+            state.index_list = state.index_list.saturating_add(1) % state.list.len();
 
-        if let Some(list) = self.current_completion.as_ref()
-            && let Some(start) = self.completion_start
-            && let Some(v) = list.get(self.current_index.unwrap_or(0))
-        {
-            let mut v = v.to_string();
-            if is_first_word && let Some(suffix) = self.on_empty_input_suffix.as_ref() {
-                v.push_str(suffix);
-            } else if let Some(suffix) = self.in_message_suffix.as_ref() {
-                v.push_str(suffix);
-            };
-            Some((start, v))
+            if let Some(v) = state.list.get(state.index_list) {
+                let mut v = v.to_string();
+                if state.kind == CompletionKind::Nickname {
+                    if is_first_word {
+                        v.push_str(self.on_empty_input_suffix.as_str());
+                    } else {
+                        v.push_str(self.in_message_suffix.as_ref());
+                    };
+                }
+
+                Some((state.start_character_pos, v))
+            } else {
+                None
+            }
         } else {
             None
         }
     }
 
     pub fn reset(&mut self) {
-        self.completion_start = None;
-        self.current_completion = None;
+        self.state = None;
     }
 }
 
@@ -213,8 +236,8 @@ mod test {
     fn test_insert() {
         let mut comp = Completion::default();
 
-        comp.input_completion.add_command("quit");
-        comp.input_completion.add_command("help");
+        comp.input_completion.add_command("quit".into());
+        comp.input_completion.add_command("help".into());
 
         comp.input_completion
             .add_users(0, "#test", &vec!["tata".to_string(), "titi".to_string()]);
@@ -223,7 +246,7 @@ mod test {
         comp.server_id = Some(0);
 
         // Normal user completion (not first word)
-        comp.set_completion(0, "t");
+        comp.set_completion(0, "t", "t");
 
         assert_eq!(
             comp.get_next_completion(false),
@@ -241,12 +264,12 @@ mod test {
         // No channel → no completion
         comp.current_channel = "".to_string();
         comp.reset();
-        comp.set_completion(0, "t");
+        comp.set_completion(0, "t", "t");
         assert_eq!(comp.get_next_completion(false), None);
 
         // Command completion
         comp.reset();
-        comp.set_completion(0, "/");
+        comp.set_completion(0, "/", "/");
 
         assert_eq!(
             comp.get_next_completion(true),
@@ -258,10 +281,31 @@ mod test {
         );
 
         comp.reset();
-        comp.set_completion(0, "/h");
+        comp.set_completion(0, "/h", "/h");
         assert_eq!(
             comp.get_next_completion(true),
             Some((1, "help".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_insert_config() {
+        let mut comp = Completion::default();
+
+        comp.input_completion.add_command("/quit".into());
+        comp.input_completion.add_command("/help".into());
+        comp.input_completion.add_command("/config".into());
+
+        comp.input_completion
+            .add_config_field("nickname_colors.seed".into());
+
+        comp.current_channel = "#test".to_string();
+        comp.server_id = Some(0);
+
+        comp.set_completion(0, "n", "/config set n");
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((0, "nickname_colors.seed".to_string()))
         );
     }
 
@@ -277,7 +321,7 @@ mod test {
 
         comp.current_channel = "#test".to_string();
 
-        comp.set_completion(0, "t");
+        comp.set_completion(0, "t", "t");
 
         assert_eq!(
             comp.get_next_completion(false),
@@ -290,8 +334,8 @@ mod test {
         let mut comp = Completion::default();
 
         comp.set_completion_behaviour(
-            Some(": ".to_string()), // on_empty_input_suffix
-            Some(" ".to_string()),  // in_message_suffix
+            ": ".to_string(), // on_empty_input_suffix
+            " ".to_string(),  // in_message_suffix
         );
 
         comp.input_completion
@@ -301,7 +345,7 @@ mod test {
         comp.server_id = Some(0);
 
         // First word completion → should use on_empty_input_suffix
-        comp.set_completion(0, "t");
+        comp.set_completion(0, "t", "t");
 
         assert_eq!(
             comp.get_next_completion(true),
@@ -311,7 +355,7 @@ mod test {
         comp.reset();
 
         // In-message completion → should use in_message_suffix
-        comp.set_completion(5, "t");
+        comp.set_completion(5, "t", "t");
 
         assert_eq!(
             comp.get_next_completion(false),

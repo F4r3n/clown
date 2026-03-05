@@ -100,16 +100,16 @@ impl Trie {
         }
     }
 
-    pub fn add_word(&mut self, word: &str) {
+    pub fn add_word(&mut self, word: String) {
         let mut current_node = &mut self.root;
         let new_id = self.words.len();
-        self.words.push(word.to_string());
         let lower = word.to_lowercase();
         let mut chars = lower.chars().peekable();
 
         while let Some(next) = chars.next() {
             current_node = current_node.insert_node(next, chars.peek().is_none().then_some(new_id));
         }
+        self.words.push(word);
     }
 
     fn navigate_word_mut<F>(&mut self, word: &str, apply: F)
@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn test_insert_single_word() {
         let mut trie = Trie::new();
-        trie.add_word("cat");
+        trie.add_word("cat".into());
 
         assert!(trie.check_word("cat")); // full word
         assert!(!trie.check_word("ca")); // prefix only
@@ -192,9 +192,9 @@ mod tests {
     #[test]
     fn test_list() {
         let mut trie = Trie::new();
-        trie.add_word("cat");
-        trie.add_word("CaravAne");
-        trie.add_word("dog");
+        trie.add_word("cat".into());
+        trie.add_word("CaravAne".into());
+        trie.add_word("dog".into());
 
         let result = vec!["CaravAne".to_string(), "cat".to_string()];
 
@@ -210,10 +210,10 @@ mod tests {
     #[test]
     fn test_insert_multiple_words() {
         let mut trie = Trie::new();
-        trie.add_word("cat");
-        trie.add_word("car");
-        trie.add_word("cart");
-        trie.add_word("dog");
+        trie.add_word("cat".into());
+        trie.add_word("car".into());
+        trie.add_word("cart".into());
+        trie.add_word("dog".into());
 
         assert!(trie.check_word("cat"));
         assert!(trie.check_word("car"));
@@ -229,9 +229,9 @@ mod tests {
     #[test]
     fn test_prefix_chain() {
         let mut trie = Trie::new();
-        trie.add_word("a");
-        trie.add_word("ab");
-        trie.add_word("abc");
+        trie.add_word("a".into());
+        trie.add_word("ab".into());
+        trie.add_word("abc".into());
 
         assert!(trie.check_word("a"));
         assert!(trie.check_word("ab"));
@@ -244,8 +244,8 @@ mod tests {
     #[test]
     fn test_shared_prefixes_and_end_word_flags() {
         let mut trie = Trie::new();
-        trie.add_word("car");
-        trie.add_word("card");
+        trie.add_word("car".into());
+        trie.add_word("card".into());
 
         assert!(trie.check_word("car"));
         assert!(trie.check_word("card"));
@@ -257,8 +257,8 @@ mod tests {
     #[test]
     fn test_not_existing_words() {
         let mut trie = Trie::new();
-        trie.add_word("rust");
-        trie.add_word("ruby");
+        trie.add_word("rust".into());
+        trie.add_word("ruby".into());
 
         assert!(trie.check_word("rust"));
         assert!(trie.check_word("ruby"));
@@ -274,7 +274,7 @@ mod tests {
 
         assert!(!trie.check_word("")); // empty string is never a word
 
-        trie.add_word("a");
+        trie.add_word("a".into());
         assert!(!trie.check_word("")); // still false
     }
 
@@ -283,9 +283,9 @@ mod tests {
         let mut trie = Trie::new();
 
         // Add some Japanese words
-        trie.add_word("ねこ");
-        trie.add_word("いぬ");
-        trie.add_word("こんにちは");
+        trie.add_word("ねこ".into());
+        trie.add_word("いぬ".into());
+        trie.add_word("こんにちは".into());
 
         // Full words should return true
         assert!(trie.check_word("ねこ"));
@@ -306,8 +306,8 @@ mod tests {
     fn test_japanese_shared_prefixes() {
         let mut trie = Trie::new();
 
-        trie.add_word("かみ"); // kami
-        trie.add_word("かみさま"); // kamisama
+        trie.add_word("かみ".into()); // kami
+        trie.add_word("かみさま".into()); // kamisama
 
         assert!(trie.check_word("かみ"));
         assert!(trie.check_word("かみさま"));
@@ -321,8 +321,8 @@ mod tests {
     fn test_mixed_japanese_and_english() {
         let mut trie = Trie::new();
 
-        trie.add_word("rust");
-        trie.add_word("ルスト"); // Rust in katakana
+        trie.add_word("rust".into());
+        trie.add_word("ルスト".into()); // Rust in katakana
 
         assert!(trie.check_word("rust"));
         assert!(trie.check_word("ルスト"));
@@ -335,11 +335,11 @@ mod tests {
     fn test_disable_enable() {
         let mut trie = Trie::new();
 
-        trie.add_word("rust");
+        trie.add_word("rust".into());
         trie.disable_word("rust");
 
         assert!(!trie.check_word("rust"));
-        trie.add_word("rust");
+        trie.add_word("rust".into());
         assert!(trie.check_word("rust"));
     }
 }
