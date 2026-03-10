@@ -6,6 +6,8 @@ An IRC client written in Rust, with the goal to be memory and cpu light.
 
 * run in Terminal
 * multiple channel
+* multi servers
+* logs
 * completion
 * preview when hovering message
 * scroll with mouse/keyboard
@@ -16,7 +18,7 @@ An IRC client written in Rust, with the goal to be memory and cpu light.
 ```bash
 git clone https://github.com/F4r3n/clown.git
 cd clown
-cargo build --release
+cargo build --profile dist
 ```
 
 ## Config
@@ -24,17 +26,32 @@ cargo build --release
 In Roaming/share/clown/config/clown.toml
 
 ```toml
-[connection_config]
-address = "localhost"
+[[servers]]
+name = "Share"
+
+[servers.connection]
+address = "irc.address.io"
 port = 6697
 
-[login_config]
-nickname = "nickname"
+[servers.login]
+nickname = "f4r3n"
 password = "password"
-channel = "#rust-spam"
 
-[client_config]
+[servers.channels]
+list = ["#rust_test"]
 auto_join = true
+
+[completion.on_empty_input]
+suffix = ": "
+
+[completion.in_message]
+suffix = " "
+
+[nickname_colors]
+seed = 18
+
+[nickname_colors.overrides]
+f4r3n = "#FFFFFF"         
 ```
 
 ![clown](images/clown.png)
