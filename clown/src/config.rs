@@ -755,13 +755,12 @@ impl RemoteConfig for Config {
             Some("discuss") => self.discuss.set_value(path, value),
             Some("users") => self.users.set_value(path, value),
             Some("topic") => self.topic.set_value(path, value),
-            Some("meta") => match path.next().as_ref().map(AsRef::as_ref) {
-                Some("version") => {
-                    self.meta.version = value.parse::<u16>()?;
-                    Ok(())
-                }
-                _ => Err(color_eyre::eyre::eyre!("Invalid path")),
-            },
+            Some("meta") =>
+            //Meta cannot be set
+            {
+                Err(color_eyre::eyre::eyre!("Invalid path, impossible to set"))
+            }
+
             Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
             _ => Err(color_eyre::eyre::eyre!("Invalid path")),
         }
@@ -800,8 +799,8 @@ impl Config {
         Self::read(config_name)
     }
 
-    pub fn list_fields() -> Vec<String> {
-        Self::default().get_paths("")
+    pub fn list_fields(&self) -> Vec<String> {
+        self.get_paths("")
     }
 
     pub fn get_value_from_root(&self, path: &str) -> color_eyre::Result<String> {
@@ -959,7 +958,7 @@ mod tests {
     #[test]
     fn test_list_fields_contains_known_paths() {
         let config = sample_config();
-        let fields = Config::list_fields();
+        let fields = config.list_fields();
 
         assert!(
             fields.contains(&".servers.0.connection.address".to_string())

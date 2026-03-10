@@ -108,6 +108,7 @@ impl crate::component::EventHandler for CInput {
                 None
             }
             MessageEvent::SettingsDidChange => {
+                self.set_completion_config_list(model.list_fields_config().into_iter());
                 let (empty, middle) = model.get_completion_behaviour();
                 self.completion.set_completion_behaviour(
                     empty.map(|v| v.to_string()).unwrap_or_default(),
@@ -311,7 +312,8 @@ impl CInput {
         }
     }
 
-    pub fn add_completion_config_list(&mut self, values: impl Iterator<Item = String>) {
+    pub fn set_completion_config_list(&mut self, values: impl Iterator<Item = String>) {
+        self.completion.input_completion.clear_config();
         for c in values {
             self.completion.input_completion.add_config_field(c);
         }

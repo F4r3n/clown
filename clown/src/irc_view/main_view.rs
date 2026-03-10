@@ -53,7 +53,6 @@ pub struct MainView<'a> {
     //TODO move them into their own struct
     log_instant: std::time::Instant,
 
-    //session: Option<Session>,
     logger: message_logger::MessageLogger,
 }
 
@@ -63,12 +62,6 @@ impl MainView<'_> {
         cinput.add_completion_command_list(
             ClientCommand::iter().map(|v| v.get_message().unwrap_or("").to_string()),
         );
-
-        //TODO: it uses the default config, should use the default and the current
-        // servers.1. may exist and it wont be suggested
-        //
-        let fields = Config::list_fields();
-        cinput.add_completion_config_list(fields.into_iter());
 
         let input = Component::new("input", cinput);
         let list_users_view: Component<'_, users_widget::UsersWidget> =

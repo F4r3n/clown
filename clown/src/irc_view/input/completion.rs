@@ -38,6 +38,10 @@ impl InputCompletion {
         self.config.add_word(item);
     }
 
+    pub fn clear_config(&mut self) {
+        self.config = Trie::new();
+    }
+
     pub fn add_users(&mut self, server_id: usize, channel: &str, users: &Vec<String>) {
         let channel = Self::sanitize_key(channel);
 

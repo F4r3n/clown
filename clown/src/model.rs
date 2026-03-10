@@ -47,6 +47,10 @@ impl StoredConfig {
     pub fn get_value(&mut self, path: &str) -> color_eyre::eyre::Result<String> {
         self.config.get_value_from_root(path)
     }
+
+    pub fn list_fields(&self) -> Vec<String> {
+        self.config.list_fields()
+    }
 }
 
 pub struct Model {
@@ -88,6 +92,10 @@ impl Model {
 
     fn get_config(&self) -> &Config {
         &self.stored_config.config
+    }
+
+    pub fn list_fields_config(&self) -> Vec<String> {
+        self.stored_config.list_fields()
     }
 
     pub fn save(&self) -> color_eyre::Result<()> {
