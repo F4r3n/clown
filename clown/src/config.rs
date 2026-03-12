@@ -276,8 +276,12 @@ impl RemoteConfig for Completion {
         I::Item: AsRef<str>,
     {
         match path.next().as_ref().map(AsRef::as_ref) {
-            Some("on_empty_input") | Some("in_message") => {
-                self.set_value(path, value)?;
+            Some("on_empty_input") => {
+                self.on_empty_input.set_value(path, value)?;
+                Ok(())
+            }
+            Some("in_message") => {
+                self.in_message.set_value(path, value)?;
                 Ok(())
             }
             Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
