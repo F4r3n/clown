@@ -199,6 +199,12 @@ pub fn wrap_spans<'a>(
     }
 
     let spans = to_spans(content, start_style);
+    if spans.len() == 1
+        && let Some(first_span) = spans.first()
+        && first_span.content.width() < width
+    {
+        return vec![WrappedLine { spans }];
+    }
     let mut lines: Vec<WrappedLine<'a>> = vec![WrappedLine::default()];
     let mut current_width = 0usize;
 
@@ -208,7 +214,7 @@ pub fn wrap_spans<'a>(
 
         while !remaining.is_empty() {
             let (mut word, rest) = next_word(remaining);
-            let mut word_width = word.chars().map(|c| c.width().unwrap_or(0)).sum::<usize>();
+            let mut word_width = word.width();
 
             // If word doesn't fit on current line
             if current_width > 0 && current_width + word_width > width {
@@ -219,7 +225,7 @@ pub fn wrap_spans<'a>(
                 let trimmed = word.trim_start();
                 if trimmed.len() != word.len() {
                     word = trimmed;
-                    word_width = word.chars().map(|c| c.width().unwrap_or(0)).sum::<usize>();
+                    word_width = word.width();
                 }
             }
 
