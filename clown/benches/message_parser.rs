@@ -1,4 +1,6 @@
-use clown::message_irc::message_parser::{get_width_without_format, is_string_plain, to_spans};
+use clown::message_irc::message_parser::{
+    get_width_without_format, is_string_plain, to_spans, wrap_spans,
+};
 use clown::message_irc::textwrapper::{wrap_content, wrapped_line_count};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
@@ -20,6 +22,11 @@ fn bench_wrap_line_count(message: &str, width: usize) -> anyhow::Result<()> {
 
 fn bench_wrap_text(message: &str, width: usize) -> anyhow::Result<()> {
     wrap_content(message, width);
+    Ok(())
+}
+
+fn bench_wrap_spans(message: &str, width: usize) -> anyhow::Result<()> {
+    wrap_spans(message, width, None);
     Ok(())
 }
 
@@ -50,6 +57,28 @@ fn criterion_benchmark(c: &mut Criterion) {
                 "Lorem Ipsum is simply \x038,4Hi! text of the printing and \x038,4Hi! industry.
             Lorem Ipsum has \x038,4Hi! the industry's standard \x038,4Hi! text ever since the 1500s",
             ))
+        });
+
+    });
+
+    c.bench_function("wrap spans", |b| {
+        b.iter(|| {
+            bench_wrap_spans(black_box(
+                "Lorem Ipsum is simply dummy text of the printing and typesetting industry.",
+            ), black_box(80))
+        });
+        b.iter(|| {
+            bench_wrap_spans(black_box(
+                "Lorem Ipsum is simply \x038,4Hi! text of the printing and \x038,4Hi! industry.
+            Lorem Ipsum has \x038,4Hi! the industry's standard \x038,4Hi! text ever since the 1500s",
+            ), black_box(30))
+        });
+
+        b.iter(|| {
+            bench_wrap_spans(black_box(
+                "Lorem Ipsum is simply \x038,4Hi! text of the printing and \x038,4Hi! industry.
+            Lorem Ipsum has \x038,4Hi! the industry's standard \x038,4Hi! text ever since the 1500s",
+            ), black_box(30))
         });
 
     });

@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
@@ -43,73 +41,76 @@ fn toggle_modifier(mut style: Style, current: &mut Modifier, toggled: Modifier) 
     style
 }
 
-pub fn to_raw<'a>(content: &'a str) -> impl Iterator<Item = &'a str> + 'a {
-    let bytes = content.as_bytes();
-    let mut i = 0;
-    let mut start_i = 0;
-    let mut plain_emitted = false;
+pub fn strip_irc_formatting(content: &str) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut iter = content.char_indices().peekable();
 
-    std::iter::from_fn(move || {
-        // fast-path
-        if is_string_plain(content) {
-            if plain_emitted {
-                return None;
-            }
-            plain_emitted = true;
-            return Some(content);
-        }
-
-        while i < bytes.len() {
-            match bytes.get(i) {
-                Some(0x02) | Some(0x1D) | Some(0x1E) | Some(0x1F) | Some(0x0F) => {
-                    let out = &content[start_i..i];
-                    i += 1;
-                    start_i = i;
-                    return Some(out);
+    while let Some((_, c)) = iter.next() {
+        match c {
+            '\x02' | '\x1D' | '\x0F' | '\x1F' | '\x1E' => {}
+            '\x03' => {
+                // Skip up to 2 digits
+                let mut count = 0;
+                while count < 2
+                    && iter
+                        .peek()
+                        .map(|(_, c)| c.is_ascii_digit())
+                        .unwrap_or(false)
+                {
+                    iter.next();
+                    count += 1;
                 }
-                Some(0x03) => {
-                    let out = &content[start_i..i];
-                    i += 1;
-                    // color parsing…
-                    start_i = i;
-                    return Some(out);
+                // Skip optional ,NN background
+                if iter.peek().map(|(_, c)| *c == ',').unwrap_or(false) {
+                    iter.next(); // consume ','
+                    let mut count = 0;
+                    while count < 2
+                        && iter
+                            .peek()
+                            .map(|(_, c)| c.is_ascii_digit())
+                            .unwrap_or(false)
+                    {
+                        iter.next();
+                        count += 1;
+                    }
                 }
-                _ => i += 1,
             }
+            _ => out.push(c),
         }
+    }
 
-        if start_i < i {
-            let out = &content[start_i..i];
-            start_i = i;
-            Some(out)
-        } else {
-            None
-        }
-    })
+    out
 }
 
-pub fn to_spans<'a>(content: impl Into<Cow<'a, str>>, start_style: Option<Style>) -> Vec<Span<'a>> {
+pub fn strip_irc_formatting_cow(content: &str) -> std::borrow::Cow<'_, str> {
+    if is_string_plain(content) {
+        std::borrow::Cow::Borrowed(content) // zero allocation
+    } else {
+        std::borrow::Cow::Owned(strip_irc_formatting(content))
+    }
+}
+
+pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a>> {
+    if content.is_empty() {
+        return vec![];
+    }
+
     let mut style = start_style.unwrap_or_default();
     let mut colors = [style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
-    let content = content.into();
-    if is_string_plain(&content) {
-        return vec![Span::from(content.to_string()).style(style.fg(colors[0]).bg(colors[1]))];
+    if is_string_plain(content) {
+        return vec![Span::from(content).style(style.fg(colors[0]).bg(colors[1]))];
     }
     let mut modifier = style.add_modifier & style.sub_modifier;
-
     let mut spans = Vec::new();
     let mut setting_style = false;
     let mut style_buffer = String::new();
-
     let mut index_color = 0;
     let mut start_index = 0;
-
     for (i, c) in content.char_indices() {
         if c == '\x03' {
             if start_index != i {
                 spans.push(
-                    Span::from(content[start_index..i].to_string())
-                        .style(style.fg(colors[0]).bg(colors[1])),
+                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
                 );
             }
             setting_style = true;
@@ -127,40 +128,45 @@ pub fn to_spans<'a>(content: impl Into<Cow<'a, str>>, start_style: Option<Style>
             style_buffer.clear();
             start_index = i;
         } else if c == '\x02' {
-            spans.push(
-                Span::from(content[start_index..i].to_string())
-                    .style(style.fg(colors[0]).bg(colors[1])),
-            );
-            start_index = i;
+            if start_index != i {
+                spans.push(
+                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                );
+            }
+            start_index = i + 1;
             style = toggle_modifier(style, &mut modifier, Modifier::BOLD);
         } else if c == '\x1D' {
-            spans.push(
-                Span::from(content[start_index..i].to_string())
-                    .style(style.fg(colors[0]).bg(colors[1])),
-            );
+            if start_index != i {
+                spans.push(
+                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                );
+            }
             start_index = i + 1;
             style = toggle_modifier(style, &mut modifier, Modifier::ITALIC);
         } else if c == '\x0F' {
-            spans.push(
-                Span::from(content[start_index..i].to_string())
-                    .style(style.fg(colors[0]).bg(colors[1])),
-            );
+            if start_index != i {
+                spans.push(
+                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                );
+            }
             start_index = i + 1;
             style = start_style.unwrap_or_default();
             colors = [style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
             style_buffer.clear();
         } else if c == '\x1F' {
-            spans.push(
-                Span::from(content[start_index..i].to_string())
-                    .style(style.fg(colors[0]).bg(colors[1])),
-            );
-            start_index = i;
+            if start_index != i {
+                spans.push(
+                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                );
+            }
+            start_index = i + 1;
             style = toggle_modifier(style, &mut modifier, Modifier::UNDERLINED);
         } else if c == '\x1E' {
-            spans.push(
-                Span::from(content[start_index..i].to_string())
-                    .style(style.fg(colors[0]).bg(colors[1])),
-            );
+            if start_index != i {
+                spans.push(
+                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                );
+            }
             start_index = i + 1;
             style = toggle_modifier(style, &mut modifier, Modifier::CROSSED_OUT);
         } else if setting_style {
@@ -172,11 +178,106 @@ pub fn to_spans<'a>(content: impl Into<Cow<'a, str>>, start_style: Option<Style>
         }
     }
     if start_index < content.len() {
-        spans.push(
-            Span::from(content[start_index..].to_string()).style(style.fg(colors[0]).bg(colors[1])),
-        );
+        spans.push(Span::from(&content[start_index..]).style(style.fg(colors[0]).bg(colors[1])));
     }
     spans
+}
+
+#[derive(Default)]
+pub struct WrappedLine<'a> {
+    pub spans: Vec<Span<'a>>,
+}
+
+use unicode_width::UnicodeWidthChar;
+pub fn wrap_spans<'a>(
+    content: &'a str,
+    width: usize,
+    start_style: Option<Style>,
+) -> Vec<WrappedLine<'a>> {
+    if width == 0 {
+        return vec![];
+    }
+
+    let spans = to_spans(content, start_style);
+    let mut lines: Vec<WrappedLine<'a>> = vec![WrappedLine::default()];
+    let mut current_width = 0usize;
+
+    for span in spans {
+        let style = span.style;
+        let mut remaining = span.content.as_ref();
+
+        while !remaining.is_empty() {
+            let (mut word, rest) = next_word(remaining);
+            let mut word_width = word.chars().map(|c| c.width().unwrap_or(0)).sum::<usize>();
+
+            // If word doesn't fit on current line
+            if current_width > 0 && current_width + word_width > width {
+                lines.push(WrappedLine::default());
+                current_width = 0;
+
+                // standard wrapping: ignore leading whitespace on a new line
+                let trimmed = word.trim_start();
+                if trimmed.len() != word.len() {
+                    word = trimmed;
+                    word_width = word.chars().map(|c| c.width().unwrap_or(0)).sum::<usize>();
+                }
+            }
+
+            if word_width > width {
+                // Force-split logic for words longer than the total width
+                let mut temp_start = 0;
+                let mut temp_w = 0;
+                for (i, c) in word.char_indices() {
+                    let cw = c.width().unwrap_or(0);
+                    if temp_w + cw > width && temp_w > 0 {
+                        let chunk = &word[temp_start..i];
+                        if let Some(last) = lines.last_mut() {
+                            last.spans.push(Span::styled(chunk.to_owned(), style));
+                        }
+
+                        lines.push(WrappedLine::default());
+                        temp_start = i;
+                        temp_w = 0;
+                    }
+                    temp_w += cw;
+                }
+                let chunk = &word[temp_start..];
+                if !chunk.is_empty() {
+                    if let Some(last) = lines.last_mut() {
+                        last.spans.push(Span::styled(chunk.to_owned(), style));
+                    }
+
+                    current_width = temp_w;
+                }
+            } else if !word.is_empty() {
+                if let Some(last) = lines.last_mut() {
+                    last.spans.push(Span::styled(word.to_owned(), style));
+                }
+
+                current_width += word_width;
+            }
+
+            remaining = rest;
+        }
+    }
+
+    // Clean up trailing empty line if the last word fit exactly
+    if lines.last().map(|l| l.spans.is_empty()).unwrap_or(false) && lines.len() > 1 {
+        lines.pop();
+    }
+
+    lines
+}
+
+fn next_word(s: &str) -> (&str, &str) {
+    // Include leading whitespace with the word
+    let trimmed = s.trim_start();
+    let leading = &s[..s.len() - trimmed.len()];
+    let end = trimmed
+        .find(|c: char| c.is_whitespace())
+        .unwrap_or(trimmed.len());
+    let word_end = leading.len() + end;
+    (&s[..word_end], &s[word_end..])
 }
 
 pub fn get_width_without_format(content: &str) -> usize {
@@ -388,5 +489,88 @@ mod tests {
     fn test_multiple_formats() {
         let input = "\x0312H\x02e\x1Dl\x1El\x037o\x0F!";
         assert_eq!(get_width_without_format(input), 6);
+    }
+
+    #[test]
+    fn test_color_limit_and_trailing_digits() {
+        // \x03 followed by more than 2 digits should only consume 2
+        let input = "\x031234Text";
+        let spans = to_spans(input, None);
+        // Color should be 12 (Light Blue), and "34Text" should be the content
+        assert_eq!(spans[0].content, "34Text");
+        assert_eq!(spans[0].style.fg.unwrap_or_default(), Color::LightBlue);
+    }
+
+    #[test]
+    fn test_background_only_invalid() {
+        // IRC usually requires a foreground before a comma-background
+        // This tests if your parser handles a comma after a reset or without digits correctly
+        let input = "\x03,04Oops";
+        let spans = to_spans(input, None);
+        // Depending on your parser logic, this might either be plain text starting with ","
+        // or it should handle it gracefully.
+        // Current logic skips ',' if index_color == 0.
+        assert!(spans[0].content.contains("Oops"));
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let input = "";
+        let spans = to_spans(input, None);
+        assert!(spans.is_empty());
+    }
+
+    #[test]
+    fn test_modifier_toggle_persistence() {
+        // Bold on, Color Red, Bold off.
+        // "Red" should be Bold+Red, "Still Red" should be Red only.
+        let input = "\x02\x034Red\x02Still Red";
+        let spans = to_spans(input, None);
+        assert_eq!(spans.len(), 2);
+
+        // First span: Bold + Red
+        assert!(spans[0].style.add_modifier.contains(Modifier::BOLD));
+        assert_eq!(spans[0].style.fg.unwrap_or_default(), Color::Red);
+
+        // Second span: Red but NOT Bold
+        assert!(!spans[1].style.add_modifier.contains(Modifier::BOLD));
+        assert_eq!(spans[1].style.fg.unwrap_or_default(), Color::Red);
+    }
+
+    #[test]
+    fn test_wrap_exact_width() {
+        let input = "AAAA BBBB";
+        let width = 4;
+        let wrapped = wrap_spans(input, width, None);
+
+        // Should result in two lines
+        assert_eq!(wrapped.len(), 2);
+        assert_eq!(wrapped[0].spans[0].content, "AAAA");
+        // Depending on next_word, the space might be leading the second line
+        assert!(wrapped[1].spans[0].content.contains("BBBB"));
+    }
+
+    #[test]
+    fn test_wrap_force_split_wide_char() {
+        // Testing force-split on a 0-width or wide character if applicable
+        let input = "🚀🚀🚀🚀"; // Emoji are often width 2
+        let width = 4;
+        let wrapped = wrap_spans(input, width, None);
+
+        // Each 🚀 is width 2. Two should fit per line.
+        assert_eq!(wrapped.len(), 2);
+    }
+
+    #[test]
+    fn test_global_reset() {
+        let input = "\x02\x1F\x034Heavy Red\x0FPlain";
+        let spans = to_spans(input, None);
+        assert_eq!(spans.len(), 2);
+
+        assert_eq!(spans[1].content, "Plain");
+        assert_eq!(
+            spans[1].style,
+            Style::new().fg(Color::Reset).bg(Color::Reset)
+        );
     }
 }

@@ -3,6 +3,7 @@ use std::time::Duration;
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::component::Draw;
 use crate::message_irc::message_content::WordPos;
+use crate::message_irc::textwrapper::wrap_content;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use ahash::AHashMap;
 use crossterm::event::KeyCode;
@@ -302,7 +303,8 @@ impl DiscussWidget {
                         break;
                     }
 
-                    let mut rows = line.get_wrapped_line(self.content_width);
+                    let stripped = line.stripped_formatting();
+                    let mut rows = wrap_content(&stripped, self.content_width);
                     let mut char_skipped: usize = 0;
                     if let Some(rows) = rows.get(..rows_to_skip_in_message) {
                         char_skipped = rows.iter().map(|v| v.chars().count()).sum();
@@ -754,7 +756,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         if is_highlight {
                             MessageContent::new_highlight(Some(source.clone()), content.clone())
                         } else {
-                            MessageContent::new_message(Some(source.clone()), content.clone())
+                            MessageContent::new(Some(source.clone()), content.clone())
                         },
                     );
                     if is_highlight {
@@ -1013,17 +1015,17 @@ mod tests {
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new_message(None, "HELLO".to_string()),
+            MessageContent::new(None, "HELLO".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new_message(None, "HELLO".to_string()),
+            MessageContent::new(None, "HELLO".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new_message(None, "HELLO".to_string()),
+            MessageContent::new(None, "HELLO".to_string()),
         );
         discuss.scroll_offset = 0;
 
@@ -1150,17 +1152,17 @@ mod tests {
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new_message(None, "HELLO".to_string()),
+            MessageContent::new(None, "HELLO".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new_message(None, "HELLO".to_string()),
+            MessageContent::new(None, "HELLO".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new_message(None, "HELLO".to_string()),
+            MessageContent::new(None, "HELLO".to_string()),
         );
 
         discuss.content_width = 10;
