@@ -1,7 +1,6 @@
 use self::command::help;
 use crate::component::Child;
 use crate::component::Component;
-use crate::config::Config;
 use crate::event_handler::Event;
 use crate::irc_view::command;
 use crate::irc_view::command::ClientCommand;
@@ -143,12 +142,16 @@ impl MainView<'_> {
                 command::ClientCommand::Quit(message) => {
                     session.send_command_all_server(Command::Quit(message));
 
-                    model.running_state = RunningState::Done; //TODO: should not quit except if all are disconnected
+                    model.running_state = RunningState::Done;
                     None
                 }
                 command::ClientCommand::Help => Some(help()),
                 command::ClientCommand::Nick(new_nick) => {
-                    session.send_command_current_server(Command::Nick(new_nick.clone()));
+                    if let Err(e) =
+                        session.send_command_current_server(Command::Nick(new_nick.clone()))
+                    {
+                        return Some(MessageEvent::from_error(e));
+                    }
                     if let Some(id) = session.get_current_server_id()
                         && !session.is_connected(id)
                     {
@@ -158,7 +161,9 @@ impl MainView<'_> {
                     None
                 }
                 command::ClientCommand::Topic(topic) => {
-                    session.send_command_topic(topic);
+                    if let Err(e) = session.send_command_topic(topic) {
+                        return Some(MessageEvent::from_error(e));
+                    }
 
                     None
                 }
@@ -166,17 +171,23 @@ impl MainView<'_> {
                     Some(MessageEvent::SpellChecker(language))
                 }
                 command::ClientCommand::Join(channel) => {
-                    session.send_command_join(channel);
+                    if let Err(e) = session.send_command_join(channel) {
+                        return Some(MessageEvent::from_error(e));
+                    }
 
                     None
                 }
                 command::ClientCommand::Part(channel, reason) => {
-                    session.send_command_part(channel, reason);
+                    if let Err(e) = session.send_command_part(channel, reason) {
+                        return Some(MessageEvent::from_error(e));
+                    }
 
                     None
                 }
                 command::ClientCommand::Action(content) => {
-                    session.send_command_action(content.to_string());
+                    if let Err(e) = session.send_command_action(content.to_string()) {
+                        return Some(MessageEvent::from_error(e));
+                    }
                     if let Some(status) = session.get_current_status()
                         && let Some(status_channel) = status.channel
                     {
@@ -191,10 +202,11 @@ impl MainView<'_> {
                     }
                 }
                 command::ClientCommand::PrivMSG(channel, content) => {
-                    session.send_command_current_server(clown_core::command::Command::PrivMsg(
-                        channel.clone(),
-                        content.clone(),
-                    ));
+                    if let Err(e) = session.send_command_current_server(
+                        clown_core::command::Command::PrivMsg(channel.clone(), content.clone()),
+                    ) {
+                        return Some(MessageEvent::from_error(e));
+                    }
 
                     if let Some(status) = session.get_current_status()
                         && let Some(status_channel) = status.channel
@@ -272,11 +284,12 @@ impl MainView<'_> {
             } else {
                 None
             };
-            if let Some(channel) = channel {
-                session.send_command_current_server(clown_core::command::Command::PrivMsg(
-                    channel,
-                    content.to_string(),
-                ));
+            if let Some(channel) = channel
+                && let Err(e) = session.send_command_current_server(
+                    clown_core::command::Command::PrivMsg(channel, content.to_string()),
+                )
+            {
+                return Some(MessageEvent::from_error(e));
             }
 
             result
@@ -482,7 +495,6 @@ impl MainView<'_> {
                         ));
                     }
                     ResponseNumber::NameReply(_symbol, channel, list_users) => {
-                        //info!("{} {} {:?}", symbol, channel, list_users);
                         messages.push_message(MessageEvent::UpdateUsers(
                             server_id, channel, list_users,
                         ));
@@ -512,8 +524,11 @@ impl MainView<'_> {
             }
             if model.is_autojoin_by_id(id) {
                 for channel in model.get_channels(id) {
-                    session
-                        .send_command(id, clown_core::command::Command::Join(channel.to_string()));
+                    if let Err(e) = session
+                        .send_command(id, clown_core::command::Command::Join(channel.to_string()))
+                    {
+                        messages.push_message(e.into());
+                    }
                 }
             }
         }
@@ -686,7 +701,11 @@ impl widget_view::WidgetView for MainView<'_> {
             }
             MessageEvent::DisConnect(server_id) => {
                 if !session.is_irc_finished(*server_id) {
-                    session.send_command(*server_id, clown_core::command::Command::Quit(None));
+                    if let Err(e) =
+                        session.send_command(*server_id, clown_core::command::Command::Quit(None))
+                    {
+                        messages.push_message(e.into());
+                    }
                 } else {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(*server_id),

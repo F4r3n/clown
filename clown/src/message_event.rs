@@ -70,3 +70,24 @@ pub enum MessageEvent {
     SettingsDidChange,
     Bel,
 }
+
+impl MessageEvent {
+    /// Helper to convert any compatible error into a MessageEvent
+    pub fn from_error<E>(err: E) -> Self
+    where
+        E: Into<MessageEvent>,
+    {
+        err.into()
+    }
+}
+
+impl From<color_eyre::eyre::Report> for MessageEvent {
+    fn from(value: color_eyre::eyre::Report) -> Self {
+        MessageEvent::AddMessageViewInfo(
+            None,
+            None,
+            crate::message_irc::message_content::MessageKind::Error,
+            format!("{}", value),
+        )
+    }
+}

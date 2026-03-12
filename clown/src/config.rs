@@ -36,8 +36,8 @@ impl RemoteConfig for Connection {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("address") => Ok(self.address.to_string()),
             Some("port") => Ok(self.port.to_string()),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("[Connection]: Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("[Connection]: Invalid path"),
         }
     }
 
@@ -55,8 +55,8 @@ impl RemoteConfig for Connection {
                 self.port = value.parse::<u16>()?;
                 Ok(())
             }
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("[Connection]: Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("[Connection]: Invalid path"),
         }
     }
 
@@ -87,8 +87,8 @@ impl RemoteConfig for Login {
             Some("real_name") => Ok(self.real_name.clone().unwrap_or_default()),
             Some("username") => Ok(self.username.clone().unwrap_or_default()),
             Some("password") => Ok(self.password.clone().unwrap_or_default()),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("[Login]: Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("[Login]: Invalid path"),
         }
     }
 
@@ -114,8 +114,8 @@ impl RemoteConfig for Login {
                 self.password = Some(value);
                 Ok(())
             }
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -142,8 +142,8 @@ impl RemoteConfig for Channels {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("list") => Ok(self.list.join(",")),
             Some("auto_join") => Ok(self.auto_join.to_string()),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -164,8 +164,8 @@ impl RemoteConfig for Channels {
                 self.auto_join = value.parse::<bool>()?;
                 Ok(())
             }
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -195,8 +195,8 @@ impl RemoteConfig for Server {
             Some("connection") => self.connection.get_value(path),
             Some("login") => self.login.get_value(path),
             Some("channels") => self.channels.get_value(path),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -222,7 +222,7 @@ impl RemoteConfig for Server {
                 self.channels.set_value(path, value)?;
                 Ok(())
             }
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -265,8 +265,8 @@ impl RemoteConfig for Completion {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("on_empty_input") => self.on_empty_input.get_value(path),
             Some("in_message") => self.in_message.get_value(path),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -280,8 +280,8 @@ impl RemoteConfig for Completion {
                 self.set_value(path, value)?;
                 Ok(())
             }
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -315,8 +315,8 @@ impl RemoteConfig for CompletionBehavior {
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("suffix") => Ok(self.suffix.clone().unwrap_or_default()),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -330,8 +330,8 @@ impl RemoteConfig for CompletionBehavior {
                 self.suffix = Some(value);
                 Ok(())
             }
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -368,11 +368,11 @@ impl RemoteConfig for NicknameColors {
                 {
                     Ok(value.to_string())
                 } else {
-                    Err(color_eyre::eyre::eyre!("Name invalid"))
+                    color_eyre::eyre::bail!("Name invalid")
                 }
             }
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -395,8 +395,8 @@ impl RemoteConfig for NicknameColors {
                 }
                 Err(e) => Err(e),
             },
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -425,8 +425,8 @@ impl RemoteConfig for Topic {
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("enabled") => Ok(self.enabled.to_string()),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -440,8 +440,8 @@ impl RemoteConfig for Topic {
                 self.enabled = value.parse::<bool>()?;
                 Ok(())
             }
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -473,8 +473,8 @@ impl RemoteConfig for Discuss {
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("left_bar") => self.left_bar.get_value(path),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -485,8 +485,8 @@ impl RemoteConfig for Discuss {
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("left_bar") => self.left_bar.set_value(path, value),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -520,8 +520,8 @@ impl RemoteConfig for LeftBar {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("time") => Ok(self.time.to_string()),
             Some("nickname") => Ok(self.nickname.to_string()),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -539,8 +539,8 @@ impl RemoteConfig for LeftBar {
                 self.nickname = value.parse::<bool>()?;
                 Ok(())
             }
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -574,8 +574,8 @@ impl RemoteConfig for Users {
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("enabled") => Ok(self.enabled.to_string()),
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -589,8 +589,8 @@ impl RemoteConfig for Users {
                 self.enabled = value.parse::<bool>()?;
                 Ok(())
             }
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -725,10 +725,10 @@ impl RemoteConfig for Config {
             Some("topic") => self.topic.get_value(path),
             Some("meta") => match path.next().as_ref().map(AsRef::as_ref) {
                 Some("version") => Ok(self.meta.version.to_string()),
-                _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+                _ => color_eyre::eyre::bail!("Invalid path"),
             },
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -758,11 +758,11 @@ impl RemoteConfig for Config {
             Some("meta") =>
             //Meta cannot be set
             {
-                Err(color_eyre::eyre::eyre!("Invalid path, impossible to set"))
+                color_eyre::eyre::bail!("Invalid path, impossible to set")
             }
 
-            Some(p) => Err(color_eyre::eyre::eyre!("Invalid path {p}")),
-            _ => Err(color_eyre::eyre::eyre!("Invalid path")),
+            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
+            _ => color_eyre::eyre::bail!("Invalid path"),
         }
     }
 
@@ -828,10 +828,10 @@ impl Config {
 
     fn read(config_name: &str) -> color_eyre::Result<Self> {
         if let Some(config_path) = Self::config_path(config_name) {
-            let content = std::fs::read_to_string(config_path)?;
-            toml::from_str::<Config>(&content).map_err(|e| color_eyre::eyre::eyre!("{}", e))
+            let content = std::fs::read(config_path)?;
+            toml::from_slice::<Config>(&content).map_err(|e| color_eyre::eyre::eyre!("{}", e))
         } else {
-            Err(color_eyre::eyre::eyre!("Invalid config"))
+            color_eyre::eyre::bail!("Invalid config")
         }
     }
 

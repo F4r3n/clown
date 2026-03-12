@@ -30,18 +30,28 @@ impl Session {
     pub fn reset_retry(&mut self) {
         self.retry = 5;
     }
-    //TODO: return message event
-    pub fn send_command(&mut self, in_id: usize, in_command: Command) {
+
+    pub fn send_command(&mut self, in_id: usize, in_command: Command) -> color_eyre::Result<()> {
         if let Some(Some(connection)) = self.connections.get_mut(in_id) {
-            let _ = connection.command_sender.send(in_command);
+            connection
+                .command_sender
+                .send(in_command)
+                .map_err(Into::into)
+        } else {
+            color_eyre::eyre::bail!("connection {in_id} not found")
         }
     }
 
-    pub fn send_command_current_server(&mut self, in_command: Command) {
+    pub fn send_command_current_server(&mut self, in_command: Command) -> color_eyre::Result<()> {
         if let Some(current_id) = self.model.current_id
             && let Some(Some(connection)) = self.connections.get_mut(current_id)
         {
-            let _ = connection.command_sender.send(in_command);
+            connection
+                .command_sender
+                .send(in_command)
+                .map_err(Into::into)
+        } else {
+            color_eyre::eyre::bail!("Not connected")
         }
     }
 
@@ -104,35 +114,41 @@ impl Session {
         }
     }
 
-    pub fn send_command_topic(&mut self, topic: String) {
+    pub fn send_command_topic(&mut self, topic: String) -> color_eyre::Result<()> {
         if let Some(irc_model) = self.get_current_irc_server_model()
             && let Some(channel) = irc_model.get_current_channel()
         {
-            self.send_command_current_server(Command::Topic(channel.to_string(), topic));
+            self.send_command_current_server(Command::Topic(channel.to_string(), topic))
+        } else {
+            color_eyre::eyre::bail!("Not connected")
         }
     }
 
-    pub fn send_command_join(&mut self, server: String) {
-        self.send_command_current_server(Command::Join(server));
+    pub fn send_command_join(&mut self, server: String) -> color_eyre::Result<()> {
+        self.send_command_current_server(Command::Join(server))
     }
 
-    pub fn send_command_part(&mut self, channel: Option<String>, reason: Option<String>) {
+    pub fn send_command_part(
+        &mut self,
+        channel: Option<String>,
+        reason: Option<String>,
+    ) -> color_eyre::Result<()> {
         let Some(irc_model) = self.get_current_irc_server_model() else {
-            return;
+            return Ok(());
         };
 
         let channel = match channel {
             Some(c) => c,
             None => match irc_model.get_current_channel() {
                 Some(c) => c.to_string(),
-                None => return, // no channel to part
+                None => return Ok(()), // no channel to part
             },
         };
 
-        self.send_command_current_server(Command::Part(channel, reason));
+        self.send_command_current_server(Command::Part(channel, reason))
     }
 
-    pub fn send_command_action(&mut self, content: String) {
+    pub fn send_command_action(&mut self, content: String) -> color_eyre::Result<()> {
         if let Some(irc_model) = self.get_current_irc_server_model()
             && let Some(channel) = irc_model.get_current_channel()
         {
@@ -140,7 +156,9 @@ impl Session {
             self.send_command_current_server(clown_core::command::Command::PrivMsg(
                 channel.to_string(),
                 format!("\x01ACTION {}\x01", content.clone()),
-            ));
+            ))
+        } else {
+            color_eyre::eyre::bail!("Not connected")
         }
     }
 
