@@ -778,7 +778,6 @@ impl RemoteConfig for Config {
             "discuss",
             "users",
             "topic",
-            "meta",
         ]
         .iter()
         .map(|v| v.to_string())
@@ -887,6 +886,8 @@ impl Config {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
@@ -942,10 +943,7 @@ mod tests {
     #[test]
     fn test_set_value_from_root() {
         let mut config = sample_config();
-        println!(
-            "{:?}",
-            config.set_value_from_root("servers.0.connection.address", "irc.new.net".into())
-        );
+
         config
             .set_value_from_root("servers.0.connection.address", "irc.new.net".into())
             .unwrap();

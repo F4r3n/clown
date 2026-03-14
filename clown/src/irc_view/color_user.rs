@@ -85,6 +85,9 @@ pub fn bright_distinct_color(index: u64) -> Color {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
     use ratatui::style::Color;
@@ -147,7 +150,7 @@ mod tests {
 
             let (r, g, b) = color_to_tuple(color_generator.generate_color(&name));
             //https://stackoverflow.com/questions/596216/formula-to-determine-perceived-brightness-of-rgb-color
-            let brightness = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
+            let brightness = 0.299 * f32::from(r) + 0.587 * f32::from(g) + 0.114 * f32::from(b);
             assert!(
                 brightness > 40.0,
                 "Color for '{}' ({r},{g},{b}) too dark (brightness={brightness})",
@@ -181,7 +184,7 @@ mod tests {
             let (r, g, b) = color_to_tuple(color);
 
             // Rec. 601 luma formula
-            let brightness = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
+            let brightness = 0.299 * f32::from(r) + 0.587 * f32::from(g) + 0.114 * f32::from(b);
 
             assert!(
                 brightness > 40.0,
@@ -254,6 +257,7 @@ mod tests {
         assert!(color_a != color_b);
     }
 
+    #[allow(clippy::print_stdout)]
     fn print_colored_nickname(name: &str) {
         let color_generator = ColorGenerator::new(1);
 

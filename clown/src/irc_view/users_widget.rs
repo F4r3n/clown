@@ -589,6 +589,9 @@ impl crate::component::EventHandler for UsersWidget {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
     use crate::{component::EventHandler, irc_view::irc_model::IrcModel};
@@ -637,6 +640,7 @@ mod tests {
             self.handle_action(&action);
         }
 
+        #[allow(dead_code)]
         fn next_section(&mut self) -> Option<String> {
             let previous_selected = self.users_widget.list_state.selected();
             let number_sections = self.users_widget.nb_sections();
@@ -811,11 +815,10 @@ mod tests {
         let action = MessageEvent::ReplaceUser(TEST_SERVER_ID, "a".to_string(), "c".to_string());
         widget_test.handle_action(&action);
 
-        assert_eq!(
+        assert!(
             widget_test.users_widget.list_sections[1]
                 .order_user
                 .contains(&"c".to_string()),
-            true
         );
 
         let action = MessageEvent::Part(TEST_SERVER_ID, channel.to_string(), "c".to_string());

@@ -247,6 +247,9 @@ impl MessageLogger {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)]
+#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
     use std::fs;

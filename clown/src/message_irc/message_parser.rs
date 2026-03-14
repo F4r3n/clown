@@ -350,6 +350,8 @@ pub fn is_string_plain(content: &str) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use unicode_width::UnicodeWidthStr;
 
@@ -437,7 +439,7 @@ mod tests {
         assert_eq!(get_width_without_format(input), 17);
         let spans = to_spans(input, None);
         assert_eq!(spans.len(), 15);
-        let (text, fg, bg) = span_data(spans.last().unwrap());
+        let (text, _fg, _bg) = span_data(spans.last().unwrap());
         assert_eq!(text, "r");
     }
 
@@ -478,7 +480,6 @@ mod tests {
     #[test]
     fn test_unicode() {
         let input = " ﾟ";
-        println!("{:?}", input);
         assert_eq!(input.width(), 1);
         // A + unicode(7) + B = 9
         assert_eq!(get_width_without_format(input), 1);

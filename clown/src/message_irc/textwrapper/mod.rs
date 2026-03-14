@@ -174,6 +174,9 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
     use std::borrow::Cow;
