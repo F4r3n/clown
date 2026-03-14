@@ -85,9 +85,6 @@ pub fn bright_distinct_color(index: u64) -> Color {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::indexing_slicing)]
-#[allow(clippy::panic)]
 mod tests {
     use super::*;
     use ratatui::style::Color;

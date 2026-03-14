@@ -207,8 +207,6 @@ impl DictAffix {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use std::io::Cursor;

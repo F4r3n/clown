@@ -350,8 +350,6 @@ pub fn is_string_plain(content: &str) -> bool {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::indexing_slicing)]
 mod tests {
     use unicode_width::UnicodeWidthStr;
 

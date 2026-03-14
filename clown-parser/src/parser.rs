@@ -41,8 +41,6 @@ pub fn parse_trailing(input: &[u8]) -> IResult<&[u8], std::option::Option<&[u8]>
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::panic)]
 mod tests {
     use super::*;
 

@@ -504,8 +504,6 @@ impl InputWidget {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::indexing_slicing)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;

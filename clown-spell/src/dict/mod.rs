@@ -96,7 +96,6 @@ impl Dictionary {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod dict_tests {
     use super::*;
     use std::io::BufReader;

@@ -146,8 +146,6 @@ pub async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::panic)]
 mod tests {
     use super::*;
     use httpmock::prelude::*;

@@ -182,7 +182,6 @@ pub fn help() -> MessageEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[allow(clippy::unwrap_used)]
     #[test]
     fn next_word() {
         let (word, rest) = get_next_word("/connect").unwrap();
