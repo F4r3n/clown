@@ -259,6 +259,27 @@ impl MainView<'_> {
                         }
                     }
                 }
+                command::ClientCommand::CloseBuffer(channel) => {
+                    let status = session.get_current_status();
+
+                    let server_id = status.as_ref().map(|s| s.server_id);
+
+                    let channel =
+                        channel.or_else(|| status.and_then(|s| s.channel.map(str::to_string)));
+
+                    if let Some(channel) = channel {
+                        if channel.starts_with('#')
+                            && let Err(e) = session.send_command_part(Some(channel.clone()), None)
+                        {
+                            return Some(MessageEvent::from_error(e));
+                        }
+
+                        Some(MessageEvent::CloseBuffer(server_id, channel))
+                    } else {
+                        None
+                    }
+                }
+
                 command::ClientCommand::Unknown(command_name) => {
                     Some(MessageEvent::AddMessageViewInfo(
                         None,

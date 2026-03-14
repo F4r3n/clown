@@ -42,13 +42,7 @@ impl Section {
     }
 
     fn set_user_position(&mut self, user: &str) {
-        if let Some(id) = self
-            .order_user
-            .iter()
-            .position(|v| v.eq_ignore_ascii_case(user))
-        {
-            self.order_user.remove(id);
-        }
+        self.remove_user(user);
         self.order_user.push(user.to_string());
     }
 
@@ -100,14 +94,14 @@ impl UsersWidget {
         }) {
             i
         } else {
-            self.list_sections.push(Section::new(
-                section.to_string(),
-                self.list_section_pool_id,
-                server_id,
-            ));
+            let id = self.list_section_pool_id;
+
+            self.list_sections
+                .push(Section::new(section, id, server_id));
+
             self.list_section_pool_id = self.list_section_pool_id.saturating_add(1);
 
-            self.list_sections.len().saturating_sub(1)
+            id
         }
     }
 
@@ -258,6 +252,28 @@ impl UsersWidget {
 
         if let Some(global_section_index) = self.get_global_section_index(server_id) {
             self.add_user(global_section_index, user);
+        }
+    }
+
+    fn close_channel_buffer(&mut self, server_id: Option<usize>, section: &str) {
+        if let Some(section_index) = self.get_section_index(server_id, section) {
+            self.list_sections.remove(section_index);
+        }
+    }
+
+    fn close_user_buffer(&mut self, server_id: Option<usize>, user: &str) {
+        if let Some(global_section_index) = self.get_global_section_index(server_id)
+            && let Some(section) = self.list_sections.get_mut(global_section_index)
+        {
+            section.remove_user(user);
+        }
+    }
+
+    fn close_buffer(&mut self, server_id: Option<usize>, name: &str) {
+        if name.starts_with("#") {
+            self.close_channel_buffer(server_id, name);
+        } else {
+            self.close_user_buffer(server_id, name);
         }
     }
 
@@ -517,6 +533,11 @@ impl crate::component::EventHandler for UsersWidget {
                 if let Some(index) = self.get_section_index(*server_id, channel) {
                     self.list_state.current_section = index;
                 }
+                self.need_redraw = true;
+                None
+            }
+            MessageEvent::CloseBuffer(server_id, name) => {
+                self.close_buffer(*server_id, name);
                 self.need_redraw = true;
                 None
             }
@@ -815,5 +836,32 @@ mod tests {
 
         assert_eq!(users_widget.list_sections.len(), 1);
         assert_eq!(users_widget.list_sections[0].section_info.name, "#rust");
+    }
+
+    #[test]
+    fn test_close_buffer_logic() {
+        let mut widget = UsersWidget::new();
+
+        // 1. Add a channel and a user
+        widget.handle_actions(
+            &crate::model::Model::new_empty_config(),
+            None,
+            &MessageEvent::Join(TEST_SERVER_ID, "#rust".to_string(), "alice".to_string()),
+        );
+
+        assert_eq!(widget.nb_sections(), 1);
+
+        // 2. Close the channel buffer
+        widget.handle_actions(
+            &crate::model::Model::new_empty_config(),
+            None,
+            &MessageEvent::CloseBuffer(Some(TEST_SERVER_ID), "#rust".to_string()),
+        );
+
+        assert_eq!(
+            widget.nb_sections(),
+            0,
+            "Section should be removed after closing channel buffer"
+        );
     }
 }

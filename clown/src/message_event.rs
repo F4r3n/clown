@@ -69,6 +69,7 @@ pub enum MessageEvent {
     ),
     SettingsDidChange,
     Bel,
+    CloseBuffer(Option<usize> /*server id */, String /*name */),
 }
 
 impl MessageEvent {

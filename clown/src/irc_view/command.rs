@@ -53,22 +53,27 @@ pub enum ClientCommand {
         String,         /*Theme*/
         Option<String>, /*Value */
     ),
-
+    #[strum(message = "close", detailed_message = "To close a buffer")]
+    CloseBuffer(Option<String> /*buffer name, if not current*/),
     Unknown(Option<String>),
 }
 
+fn get_next_word(in_content: &str) -> Option<(&str, Option<&str>)> {
+    let content = in_content.trim_ascii_start();
+    if content.is_empty() {
+        return None;
+    }
+    let result = content.find(|v: char| v.is_ascii_whitespace());
+    if let Some(pos) = result {
+        Some((&content[..pos], Some(content[pos..].trim_ascii_start())))
+    } else {
+        Some((content, None))
+    }
+}
+
 pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
-    if let Some(next) = in_content.trim().strip_prefix('/') {
-        if let Some((command, args)) = next
-            .find(' ')
-            .map(|v| {
-                Some((
-                    &next[..v],
-                    Some(&next[v.saturating_add(1).min(next.len() - 1)..]),
-                ))
-            })
-            .unwrap_or(Some((next, None)))
-        {
+    if let Some(next) = in_content.trim_ascii_start().strip_prefix('/') {
+        if let Some((command, args)) = get_next_word(next) {
             match command.to_lowercase().as_str() {
                 "connect" => Some(ClientCommand::Connect),
                 "quit" => Some(ClientCommand::Quit(args.map(|v| v.to_string()))),
@@ -93,58 +98,8 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
                 "config" => args.map_or(Some(ClientCommand::Unknown(None)), |v| {
                     config_command(v).or(Some(ClientCommand::Unknown(None)))
                 }),
+                "close" => Some(ClientCommand::CloseBuffer(args.map(|v| v.to_string()))),
                 _ => Some(ClientCommand::Unknown(Some(command.to_string()))),
-            }
-        } else {
-            Some(ClientCommand::Unknown(None))
-        }
-    } else {
-        None
-    }
-}
-
-fn config_command(message: &str) -> Option<ClientCommand> {
-    if let Some((config_type, Some(content))) = message
-        .find(' ')
-        .map(|v| {
-            Some((
-                &message[..v],
-                message.get(v.saturating_add(1).min(message.len() - 1)..),
-            ))
-        })
-        .unwrap_or(Some((message, None)))
-    {
-        let config_command_type = match config_type {
-            "get" => Some(ConfigCommand::Get),
-            "set" => Some(ConfigCommand::Set),
-            "add" => Some(ConfigCommand::Add),
-            _ => None,
-        };
-
-        if config_command_type.is_none() {
-            Some(ClientCommand::Config(
-                ConfigCommand::Get,
-                content.to_string(),
-                None,
-            ))
-        } else if let Some(config_command_type) = config_command_type {
-            if let Some((theme, value)) = content.find(' ').map(|v| {
-                (
-                    &content[..v],
-                    content.get(v.saturating_add(1).min(content.len() - 1)..),
-                )
-            }) {
-                Some(ClientCommand::Config(
-                    config_command_type,
-                    theme.to_string(),
-                    value.map(|v| v.to_string()),
-                ))
-            } else {
-                Some(ClientCommand::Config(
-                    config_command_type,
-                    content.to_string(),
-                    None,
-                ))
             }
         } else {
             None
@@ -154,17 +109,33 @@ fn config_command(message: &str) -> Option<ClientCommand> {
     }
 }
 
-fn privmsg(message: &str) -> Option<ClientCommand> {
-    if let Some((channel, content)) = message
-        .find(' ')
-        .map(|v| {
-            Some((
-                &message[..v],
-                message.get(v.saturating_add(1).min(message.len() - 1)..),
+fn config_command(message: &str) -> Option<ClientCommand> {
+    if let Some((config_type, content)) = get_next_word(message) {
+        let config_command_type = match config_type {
+            "get" => ConfigCommand::Get,
+            "set" => ConfigCommand::Set,
+            "add" => ConfigCommand::Add,
+            _ => ConfigCommand::Get,
+        };
+
+        if let Some(content) = content
+            && let Some((theme, value)) = get_next_word(content)
+        {
+            Some(ClientCommand::Config(
+                config_command_type,
+                theme.to_string(),
+                value.map(|v| v.to_string()),
             ))
-        })
-        .unwrap_or(Some((message, None)))
-    {
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+fn privmsg(message: &str) -> Option<ClientCommand> {
+    if let Some((channel, content)) = get_next_word(message) {
         content.map(|v| ClientCommand::PrivMSG(channel.to_string(), v.to_string()))
     } else {
         None
@@ -173,16 +144,7 @@ fn privmsg(message: &str) -> Option<ClientCommand> {
 
 fn part(message: Option<&str>) -> ClientCommand {
     if let Some(message) = message {
-        if let Some((channel, reason)) = message
-            .find(' ')
-            .map(|v| {
-                Some((
-                    &message[..v],
-                    Some(&message[v.saturating_add(1).min(message.len() - 1)..]),
-                ))
-            })
-            .unwrap_or(Some((message, None)))
-        {
+        if let Some((channel, reason)) = get_next_word(message) {
             ClientCommand::Part(Some(channel.to_string()), reason.map(|v| v.to_string()))
         } else {
             ClientCommand::Part(Some(message.to_string()), None)
@@ -220,6 +182,17 @@ pub fn help() -> MessageEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(clippy::unwrap_used)]
+    #[test]
+    fn next_word() {
+        let (word, rest) = get_next_word("/connect").unwrap();
+        assert_eq!(word, "/connect");
+        assert_eq!(rest, None);
+
+        let (word, rest) = get_next_word("/connect test hey").unwrap();
+        assert_eq!(word, "/connect");
+        assert_eq!(rest, Some("test hey"));
+    }
 
     #[test]
     fn parse_connect() {
