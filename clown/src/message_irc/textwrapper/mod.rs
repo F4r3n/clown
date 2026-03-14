@@ -9,7 +9,7 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
     let mut total_lines = 0;
     let mut chars = content.chars().peekable();
 
-    while chars.next_if(|c| c.is_whitespace() && *c != '\n').is_some() {}
+    while chars.next_if(|c| c.is_whitespace()).is_some() {}
 
     let mut current_width = 0;
     let mut has_content_on_current_line = false;

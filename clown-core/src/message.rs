@@ -49,6 +49,8 @@ impl ServerMessage {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::panic)]
 mod tests {
     use clown_parser::message::create_message;
 

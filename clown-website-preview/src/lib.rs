@@ -146,6 +146,8 @@ pub async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
     use httpmock::prelude::*;
@@ -270,6 +272,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore] // ignored by default
+    #[allow(clippy::print_stdout)]
     async fn test_get_url_preview_real_url() {
         let url = "https://github.com";
 

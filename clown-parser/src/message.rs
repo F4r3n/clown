@@ -128,6 +128,8 @@ pub fn create_message(buf: &[u8]) -> Result<Message, ParsingError> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
     use crate::source::SourceKind;

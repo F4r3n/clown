@@ -207,6 +207,8 @@ impl DictAffix {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use std::io::Cursor;
@@ -285,8 +287,8 @@ SFX B ing ed .*
 
         let parsed = DictAffix::parse_prefix_suffix(&mut lines).unwrap();
 
-        assert!(parsed.get("A").is_some());
-        assert!(parsed.get("B").is_some());
+        assert!(parsed.contains_key("A"));
+        assert!(parsed.contains_key("B"));
 
         let rule_a = &parsed.get("A").unwrap()[0];
         assert_eq!(rule_a.kind, AffixType::Prefix);
@@ -309,7 +311,6 @@ PFX A re pre .*
 ";
 
         let dict = DictAffix::try_build(Cursor::new(affix_data)).unwrap();
-        dbg!(&dict);
         let results: Vec<String> = dict.apply_rules("restart", "A").collect();
         assert_eq!(results, vec!["prestart"]);
     }

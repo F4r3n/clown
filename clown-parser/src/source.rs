@@ -132,6 +132,8 @@ pub fn parse_source(buf: &[u8]) -> (&[u8], Option<Source<'_>>) {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
 

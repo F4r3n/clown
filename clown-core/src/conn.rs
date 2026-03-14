@@ -268,6 +268,7 @@ pub mod test {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
 
     use tokio::io::BufReader;
