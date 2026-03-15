@@ -207,19 +207,9 @@ impl MainView<'_> {
                     ) {
                         return Some(MessageEvent::from_error(e));
                     }
-
-                    if let Some(status) = session.get_current_status()
-                        && let Some(status_channel) = status.channel
-                    {
-                        Some(MessageEvent::PrivMsg(
-                            status.server_id,
-                            status.nickname.to_string(),
-                            status_channel.to_string(),
-                            content,
-                        ))
-                    } else {
-                        None
-                    }
+                    session.get_current_status().map(|v| {
+                        MessageEvent::PrivMsg(v.server_id, v.nickname.to_string(), channel, content)
+                    })
                 }
                 command::ClientCommand::Config(config_command_type, path, value) => {
                     match config_command_type {
