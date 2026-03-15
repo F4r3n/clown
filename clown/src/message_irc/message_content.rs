@@ -1,7 +1,5 @@
-use crate::message_irc::message_parser::{
-    WrappedLine, get_width_without_format, strip_irc_formatting_cow, wrap_spans,
-};
-use crate::message_irc::textwrapper::wrapped_line_count;
+use crate::message_irc::message_parser::{get_width_without_format, strip_irc_formatting_cow};
+use crate::message_irc::textwrapper::{WrappedLine, wrap_spans, wrapped_line_count};
 use chrono::{DateTime, Local};
 use ratatui::{
     style::{Color, Style},

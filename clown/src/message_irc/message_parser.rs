@@ -183,109 +183,6 @@ pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a
     spans
 }
 
-#[derive(Default)]
-pub struct WrappedLine<'a> {
-    pub spans: Vec<Span<'a>>,
-}
-
-use unicode_width::UnicodeWidthChar;
-pub fn wrap_spans<'a>(
-    content: &'a str,
-    width: usize,
-    start_style: Option<Style>,
-) -> Vec<WrappedLine<'a>> {
-    if width == 0 {
-        return vec![];
-    }
-
-    let spans = to_spans(content, start_style);
-    if spans.len() == 1
-        && let Some(first_span) = spans.first()
-        && first_span.content.width() < width
-    {
-        return vec![WrappedLine { spans }];
-    }
-    let mut lines: Vec<WrappedLine<'a>> = vec![WrappedLine::default()];
-    let mut current_width = 0usize;
-
-    for span in spans {
-        let style = span.style;
-        let mut remaining = span.content.as_ref();
-
-        while !remaining.is_empty() {
-            let (mut word, rest) = next_word(remaining);
-            let mut word_width = word.width();
-
-            // If word doesn't fit on current line
-            if current_width > 0 && current_width + word_width > width {
-                lines.push(WrappedLine::default());
-                current_width = 0;
-
-                // standard wrapping: ignore leading whitespace on a new line
-                let trimmed = word.trim_start();
-                if trimmed.len() != word.len() {
-                    word = trimmed;
-                    word_width = word.width();
-                }
-            }
-
-            if word_width > width {
-                // Force-split logic for words longer than the total width
-                let mut temp_start = 0;
-                let mut temp_w = 0;
-                for (i, c) in word.char_indices() {
-                    let cw = c.width().unwrap_or(0);
-                    if temp_w + cw > width && temp_w > 0 {
-                        let chunk = &word[temp_start..i];
-                        if let Some(last) = lines.last_mut() {
-                            last.spans.push(Span::styled(chunk.to_owned(), style));
-                        }
-
-                        lines.push(WrappedLine::default());
-                        temp_start = i;
-                        temp_w = 0;
-                    }
-                    temp_w += cw;
-                }
-                let chunk = &word[temp_start..];
-                if !chunk.is_empty() {
-                    if let Some(last) = lines.last_mut() {
-                        last.spans.push(Span::styled(chunk.to_owned(), style));
-                    }
-
-                    current_width = temp_w;
-                }
-            } else if !word.is_empty() {
-                if let Some(last) = lines.last_mut() {
-                    last.spans.push(Span::styled(word.to_owned(), style));
-                }
-
-                current_width += word_width;
-            }
-
-            remaining = rest;
-        }
-    }
-
-    // Clean up trailing empty line if the last word fit exactly
-    if lines.last().map(|l| l.spans.is_empty()).unwrap_or(false) && lines.len() > 1 {
-        lines.pop();
-    }
-
-    lines
-}
-
-fn next_word(s: &str) -> (&str, &str) {
-    // Include leading whitespace with the word
-    let trimmed = s.trim_start();
-    let leading = &s[..s.len() - trimmed.len()];
-    let end = trimmed
-        .find(|c: char| c.is_whitespace())
-        .unwrap_or(trimmed.len());
-    let word_end = leading.len() + end;
-    (&s[..word_end], &s[word_end..])
-}
-
 pub fn get_width_without_format(content: &str) -> usize {
     if is_string_plain(content) {
         return content.width();
@@ -351,9 +248,8 @@ pub fn is_string_plain(content: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use unicode_width::UnicodeWidthStr;
-
     use super::*;
+    use unicode_width::UnicodeWidthStr;
 
     // Helper to extract text and colors from spans for assertion
     fn span_data<'a>(span: &'a Span<'_>) -> (&'a str, Color, Color) {
@@ -364,6 +260,7 @@ mod tests {
             span.style.bg.unwrap_or_default(),
         )
     }
+
     #[test]
     fn test_is_plain() {
         assert!(is_string_plain("Hello world"));
@@ -540,30 +437,6 @@ mod tests {
         // Second span: Red but NOT Bold
         assert!(!spans[1].style.add_modifier.contains(Modifier::BOLD));
         assert_eq!(spans[1].style.fg.unwrap_or_default(), Color::Red);
-    }
-
-    #[test]
-    fn test_wrap_exact_width() {
-        let input = "AAAA BBBB";
-        let width = 4;
-        let wrapped = wrap_spans(input, width, None);
-
-        // Should result in two lines
-        assert_eq!(wrapped.len(), 2);
-        assert_eq!(wrapped[0].spans[0].content, "AAAA");
-        // Depending on next_word, the space might be leading the second line
-        assert!(wrapped[1].spans[0].content.contains("BBBB"));
-    }
-
-    #[test]
-    fn test_wrap_force_split_wide_char() {
-        // Testing force-split on a 0-width or wide character if applicable
-        let input = "🚀🚀🚀🚀"; // Emoji are often width 2
-        let width = 4;
-        let wrapped = wrap_spans(input, width, None);
-
-        // Each 🚀 is width 2. Two should fit per line.
-        assert_eq!(wrapped.len(), 2);
     }
 
     #[test]

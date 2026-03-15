@@ -1,3 +1,6 @@
+use crate::message_irc::message_parser::to_spans;
+use ratatui::style::Style;
+use ratatui::text::Span;
 use std::borrow::Cow;
 use unicode_width::UnicodeWidthChar;
 
@@ -6,30 +9,20 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
         return 0;
     }
 
-    let mut total_lines = 0;
+    let mut total_lines = 1;
     let mut chars = content.chars().peekable();
-
-    while chars.next_if(|c| c.is_whitespace()).is_some() {}
-
     let mut current_width = 0;
-    let mut has_content_on_current_line = false;
-
-    if chars.peek().is_some() {
-        total_lines = 1;
-    }
 
     while let Some(c) = chars.next() {
         let char_width = c.width().unwrap_or(0);
 
         if c.is_whitespace() {
-            if has_content_on_current_line {
-                current_width += char_width;
-            }
+            current_width += char_width;
             continue;
         }
 
+        // Consume the word
         let mut word_width = char_width;
-
         while let Some(next_c) = chars.peek() {
             if next_c.is_whitespace() {
                 break;
@@ -38,108 +31,77 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
             chars.next();
         }
 
+        // Overflow check
         if current_width > 0 && current_width + word_width > width {
             total_lines += 1;
             current_width = 0;
         }
 
+        // Force split or normal
         if word_width > width {
             let distinct_lines = word_width.div_ceil(width);
             total_lines += distinct_lines - 1;
-
             current_width = word_width % width;
             if current_width == 0 {
                 current_width = width;
             }
-
-            has_content_on_current_line = true;
         } else {
             current_width += word_width;
-            has_content_on_current_line = true;
         }
     }
 
-    if total_lines == 0 { 1 } else { total_lines }
+    total_lines
 }
 
 pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
     if width == 0 {
         return vec![];
     }
-
     let mut wrapped_lines = Vec::with_capacity(content.len().div_ceil(width));
-
-    // Preserve existing paragraphs/newlines first
     let line = content;
-
     let mut char_indices = line.char_indices().peekable();
-    let mut start_offset = 0;
-    while let Some((_i, _c)) = char_indices.next_if(|(_, c)| c.is_whitespace()) {
-        start_offset += 1;
-    }
-
-    let mut line_start = start_offset;
+    let mut line_start = 0;
     let mut current_width = 0;
-    let mut last_word_end = start_offset;
-
-    // Start iterator past the leading spaces
-    //let mut char_indices = line.char_indices().skip(start_offset).peekable();
+    let mut last_word_end = 0;
 
     while let Some((i, c)) = char_indices.next() {
         let char_width = c.width().unwrap_or(0);
 
-        // 1. Check if we are at a breakable point (space)
         if c.is_whitespace() {
-            // If the word we just finished fits, we update the "safe" split point
             last_word_end = i;
             current_width += char_width;
+
             continue;
         }
 
-        // We are inside a word. Let's see how long this word is.
+        // Consume the word
         let word_start = i;
         let mut word_width = char_width;
         let mut word_end = i + c.len_utf8();
-
-        // Look ahead to finish the word (consuming chars from iterator)
         while let Some((_next_i, next_c)) = char_indices.peek() {
             if next_c.is_whitespace() {
                 break;
             }
-            let next_w = next_c.width().unwrap_or(0);
-            word_width += next_w;
+            word_width += next_c.width().unwrap_or(0);
             word_end += next_c.len_utf8();
-            char_indices.next(); // Consume the char
+            char_indices.next();
         }
 
-        // Check includes the accumulated space width (current_width)
+        // Overflow check
         if current_width > 0 && current_width + word_width > width {
-            // WRAP: The new word overflows.
-
-            // Push the previous valid content up to the last word end.
-            // We trim existing trailing whitespace from the slice for cleanliness.
             let line_slice = &line[line_start..last_word_end];
             wrapped_lines.push(Cow::Borrowed(line_slice.trim_end()));
-
-            // Reset for new line
             line_start = word_start;
             current_width = 0;
         }
 
-        // Handle Long Words (Word itself is wider than width)
+        // Handle long words
         if word_width > width {
-            // If the word alone is too big, we must split it by graphemes/chars
-
-            // If there was any prior content on the current line, push it before splitting the long word
             if current_width > 0 {
                 wrapped_lines.push(Cow::Borrowed(line[line_start..word_start].trim_end()));
             }
-
-            // Force split the long word and push segments
             let mut temp_w = 0;
             let mut temp_start = word_start;
-
-            // Re-scan the word char by char to find split points
             for (ci, cc) in line[word_start..word_end].char_indices() {
                 let cw = cc.width().unwrap_or(0);
                 if temp_w + cw > width {
@@ -149,20 +111,16 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
                 }
                 temp_w += cw;
             }
-
-            // Set up for the remainder of the word
             line_start = temp_start;
             last_word_end = word_end;
             current_width = temp_w;
         } else {
-            // Word fits (either on new line or existing line)
             current_width += word_width;
             last_word_end = word_end;
         }
     }
 
-    // Push whatever is left in the buffer (the content of the last line)
-    // Only push if there is non-whitespace content.
+    // Push remaining content
     if line_start < line.len() {
         let remaining_slice = &line[line_start..];
         if !remaining_slice.trim().is_empty() {
@@ -173,6 +131,141 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
     wrapped_lines
 }
 
+#[derive(Default)]
+pub struct WrappedLine<'a> {
+    pub spans: Vec<Span<'a>>,
+}
+
+pub fn wrap_spans<'a>(
+    content: &'a str,
+    width: usize,
+    start_style: Option<Style>,
+) -> Vec<WrappedLine<'a>> {
+    if width == 0 || content.is_empty() {
+        return vec![];
+    }
+
+    let spans = to_spans(content, start_style);
+    let mut lines: Vec<WrappedLine<'a>> = vec![WrappedLine::default()];
+    let mut current_width = 0;
+    let mut byte_offset = 0;
+    let mut just_wrapped = false;
+
+    for span in spans {
+        let style = span.style;
+        let span_len = span.content.len();
+        let text_a = &content[byte_offset..byte_offset + span_len];
+        byte_offset += span_len;
+
+        let mut char_indices = text_a.char_indices().peekable();
+
+        while let Some((i, c)) = char_indices.next() {
+            let char_w = c.width().unwrap_or(0);
+
+            // Handle Whitespace
+            if c.is_whitespace() {
+                // Skip leading whitespace only after a word wrap, not on the original first line
+                if !just_wrapped {
+                    if let Some(last_line) = lines.last_mut() {
+                        let char_slice = &text_a[i..i + c.len_utf8()];
+                        last_line.spans.push(Span::styled(char_slice, style));
+                    }
+                    current_width += char_w;
+                }
+                continue;
+            }
+
+            // Consume the Word
+            let word_start = i;
+            let mut word_width = char_w;
+            let mut word_end = i + c.len_utf8();
+
+            while let Some(&(_, next_c)) = char_indices.peek() {
+                if next_c.is_whitespace() {
+                    break;
+                }
+                word_width += next_c.width().unwrap_or(0);
+                word_end += next_c.len_utf8();
+                char_indices.next();
+            }
+            let word_slice = &text_a[word_start..word_end];
+
+            // Overflow Check
+            if current_width > 0 && current_width + word_width > width {
+                // Before moving to a new line, trim trailing whitespace from the current line
+                trim_line_end(lines.last_mut());
+
+                lines.push(WrappedLine::default());
+                current_width = 0;
+                just_wrapped = true;
+            }
+
+            // Force Split or Normal Push
+            if word_width > width {
+                let mut temp_w = 0;
+                let mut temp_start = 0;
+                for (ci, cc) in word_slice.char_indices() {
+                    let ccw = cc.width().unwrap_or(0);
+                    if temp_w + ccw > width && temp_w > 0 {
+                        if let Some(last_line) = lines.last_mut() {
+                            last_line
+                                .spans
+                                .push(Span::styled(&word_slice[temp_start..ci], style));
+                        }
+                        lines.push(WrappedLine::default());
+                        just_wrapped = true;
+                        temp_start = ci;
+                        temp_w = 0;
+                    }
+                    temp_w += ccw;
+                }
+                let remaining = &word_slice[temp_start..];
+                if !remaining.is_empty() {
+                    if let Some(last_line) = lines.last_mut() {
+                        last_line.spans.push(Span::styled(remaining, style));
+                    }
+                    current_width = temp_w;
+                    just_wrapped = false;
+                }
+            } else {
+                if let Some(last_line) = lines.last_mut() {
+                    last_line.spans.push(Span::styled(word_slice, style));
+                }
+                current_width += word_width;
+                just_wrapped = false;
+            }
+        }
+    }
+
+    // Final cleanup for each line
+    for line in &mut lines {
+        trim_line_end(Some(line));
+    }
+
+    // Remove last line if empty
+    if let Some(last) = lines.last()
+        && last.spans.is_empty()
+        && lines.len() > 1
+    {
+        lines.pop();
+    }
+
+    lines
+}
+
+/// Helper to remove trailing whitespace spans from a line
+fn trim_line_end(line: Option<&mut WrappedLine<'_>>) {
+    if let Some(l) = line {
+        while let Some(last_span) = l.spans.last() {
+            if last_span.content.chars().all(|c| c.is_whitespace()) {
+                l.spans.pop();
+            } else {
+                break;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,6 +273,13 @@ mod tests {
 
     fn lines_as_str<'b>(lines: &'b [Cow<'_, str>]) -> Vec<&'b str> {
         lines.iter().map(|l| l.as_ref()).collect()
+    }
+
+    fn span_lines_as_str(lines: &[WrappedLine<'_>]) -> Vec<String> {
+        lines
+            .iter()
+            .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
+            .collect()
     }
 
     #[test]
@@ -192,6 +292,7 @@ mod tests {
     fn zero_width() {
         assert_eq!(wrapped_line_count("hello world", 0), 0);
         assert!(wrap_content("hello world", 0).is_empty());
+        assert!(wrap_spans("hello world", 0, None).is_empty());
     }
 
     #[test]
@@ -201,6 +302,9 @@ mod tests {
 
         let wrapped = wrap_content(content, 10);
         assert_eq!(lines_as_str(&wrapped), vec!["hello"]);
+
+        let wrapped = wrap_spans(content, 10, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["hello"]);
     }
 
     #[test]
@@ -210,6 +314,9 @@ mod tests {
 
         let wrapped = wrap_content(content, 11);
         assert_eq!(lines_as_str(&wrapped), vec!["hello world"]);
+
+        let wrapped = wrap_spans(content, 11, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["hello world"]);
     }
 
     #[test]
@@ -219,6 +326,9 @@ mod tests {
 
         let wrapped = wrap_content(content, 5);
         assert_eq!(lines_as_str(&wrapped), vec!["hello", "world"]);
+
+        let wrapped = wrap_spans(content, 11, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["hello world"]);
     }
 
     #[test]
@@ -228,15 +338,68 @@ mod tests {
 
         let wrapped = wrap_content(content, 11);
         assert_eq!(lines_as_str(&wrapped), vec!["one two", "three four"]);
+
+        let wrapped = wrap_spans(content, 11, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["one two", "three four"]);
     }
 
     #[test]
-    fn ignores_extra_whitespace() {
-        let content = "  hello   world  ";
-        assert_eq!(wrapped_line_count(content, 5), 2);
+    fn leading_whitespace_preserved() {
+        let content = "  hello world";
+        assert_eq!(wrapped_line_count(content, 20), 1);
+        let wrapped = wrap_content(content, 20);
+        assert_eq!(lines_as_str(&wrapped), vec!["  hello world"]);
+        let wrapped = wrap_spans(content, 20, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["  hello world"]);
+    }
 
-        let wrapped = wrap_content(content, 5);
+    #[test]
+    fn leading_whitespace_preserved_with_wrap() {
+        // "  hello" = 7, "world" = 5 — wraps after hello, new line should NOT strip its leading space
+        // "  hello " fits in 8, then " world" would be next but wraps — " world" leading space dropped
+        // width=8: "  hello " = 8 wide, "world" pushes to new line (no leading space to worry about)
+        // More interesting: leading space on the *input* is preserved on line 1
+        let content = "  hi there";
+        assert_eq!(wrapped_line_count(content, 6), 2);
+        let wrapped = wrap_content(content, 6);
+        assert_eq!(lines_as_str(&wrapped), vec!["  hi", "there"]);
+        let wrapped = wrap_spans(content, 6, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["  hi", "there"]);
+    }
+
+    #[test]
+    fn no_leading_whitespace_after_wrap() {
+        // After wrapping, the new line should NOT carry over the space that caused the break
+        let content = "hello world";
+        let wrapped = wrap_content(content, 7);
         assert_eq!(lines_as_str(&wrapped), vec!["hello", "world"]);
+        let wrapped = wrap_spans(content, 7, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["hello", "world"]);
+    }
+
+    #[test]
+    fn multiple_leading_spaces() {
+        let content = "    word";
+        assert_eq!(wrapped_line_count(content, 10), 1);
+        let wrapped = wrap_content(content, 10);
+        assert_eq!(lines_as_str(&wrapped), vec!["    word"]);
+        let wrapped = wrap_spans(content, 10, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["    word"]);
+    }
+
+    #[test]
+    fn leading_whitespace_only() {
+        // Only whitespace — should produce no lines (or empty, depending on your contract)
+        let content = "   ";
+        let wrapped = wrap_content(content, 10);
+        assert!(wrapped.is_empty() || lines_as_str(&wrapped).iter().all(|l| l.trim().is_empty()));
+        let wrapped = wrap_spans(content, 10, None);
+        assert!(
+            wrapped.is_empty()
+                || span_lines_as_str(&wrapped)
+                    .iter()
+                    .all(|l| l.trim().is_empty())
+        );
     }
 
     #[test]
@@ -246,6 +409,9 @@ mod tests {
 
         let wrapped = wrap_content(content, 4);
         assert_eq!(lines_as_str(&wrapped), vec!["abcd", "efgh", "ij"]);
+
+        let wrapped = wrap_spans(content, 4, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["abcd", "efgh", "ij"]);
     }
 
     #[test]
@@ -258,6 +424,12 @@ mod tests {
             lines_as_str(&wrapped),
             vec!["https://gi", "thub.com/F", "4r3n/clown", "/"]
         );
+
+        let wrapped = wrap_spans(content, 10, None);
+        assert_eq!(
+            span_lines_as_str(&wrapped),
+            vec!["https://gi", "thub.com/F", "4r3n/clown", "/"]
+        );
     }
 
     #[test]
@@ -267,6 +439,9 @@ mod tests {
 
         let wrapped = wrap_content(content, 4);
         assert_eq!(lines_as_str(&wrapped), vec!["hi", "abcd", "ef"]);
+
+        let wrapped = wrap_spans(content, 4, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["hi", "abcd", "ef"]);
     }
 
     #[test]
@@ -277,6 +452,9 @@ mod tests {
 
         let wrapped = wrap_content(content, 4);
         assert_eq!(lines_as_str(&wrapped), vec!["中中", "中中"]);
+
+        let wrapped = wrap_spans(content, 4, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["中中", "中中"]);
     }
 
     #[test]
@@ -287,6 +465,9 @@ mod tests {
 
         let wrapped = wrap_content(content, 4);
         assert_eq!(lines_as_str(&wrapped), vec!["😀😀", "😀"]);
+
+        let wrapped = wrap_spans(content, 4, None);
+        assert_eq!(span_lines_as_str(&wrapped), vec!["😀😀", "😀"]);
     }
 
     #[test]

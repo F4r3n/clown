@@ -1,7 +1,5 @@
-use clown::message_irc::message_parser::{
-    get_width_without_format, is_string_plain, to_spans, wrap_spans,
-};
-use clown::message_irc::textwrapper::{wrap_content, wrapped_line_count};
+use clown::message_irc::message_parser::{get_width_without_format, is_string_plain, to_spans};
+use clown::message_irc::textwrapper::{wrap_content, wrap_spans, wrapped_line_count};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
@@ -61,7 +59,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     });
 
-    c.bench_function("wrap spans", |b| {
+    c.bench_function("wrap_spans", |b| {
         b.iter(|| {
             bench_wrap_spans(black_box(
                 "Lorem Ipsum is simply dummy text of the printing and typesetting industry.",
