@@ -44,12 +44,16 @@ impl StoredConfig {
         }
     }
 
-    pub fn get_value(&mut self, path: &str) -> color_eyre::eyre::Result<String> {
-        self.config.get_value_from_root(path)
+    pub fn get_value(
+        &mut self,
+        path: &str,
+        option: Option<&str>,
+    ) -> color_eyre::eyre::Result<String> {
+        self.config.get_value_from_root(path, option)
     }
 
-    pub fn list_fields(&self) -> Vec<String> {
-        self.config.list_fields()
+    pub fn list_fields() -> Vec<String> {
+        Config::list_fields()
     }
 }
 
@@ -94,8 +98,8 @@ impl Model {
         &self.stored_config.config
     }
 
-    pub fn list_fields_config(&self) -> Vec<String> {
-        self.stored_config.list_fields()
+    pub fn list_fields_config() -> Vec<String> {
+        StoredConfig::list_fields()
     }
 
     pub fn save(&self) -> color_eyre::Result<()> {
@@ -179,7 +183,11 @@ impl Model {
         }
     }
 
-    pub fn get_config_value(&mut self, path: &str) -> color_eyre::eyre::Result<String> {
-        self.stored_config.get_value(path)
+    pub fn get_config_value(
+        &mut self,
+        path: &str,
+        option: Option<&str>,
+    ) -> color_eyre::eyre::Result<String> {
+        self.stored_config.get_value(path, option)
     }
 }

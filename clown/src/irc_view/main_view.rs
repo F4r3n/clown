@@ -18,6 +18,7 @@ use crate::message_irc::message_logger::MessageLogger;
 use crate::message_queue::MessageQueue;
 use crate::model::Model;
 use crate::model::RunningState;
+use crate::model::StoredConfig;
 use crate::widget_view;
 use clown_core::command::Command;
 use clown_core::conn::ConnectionConfig;
@@ -61,6 +62,7 @@ impl MainView<'_> {
         cinput.add_completion_command_list(
             ClientCommand::iter().map(|v| v.get_message().unwrap_or("").to_string()),
         );
+        cinput.set_completion_config_list(StoredConfig::list_fields().into_iter());
 
         let input = Component::new("input", cinput);
         let list_users_view: Component<'_, users_widget::UsersWidget> =
@@ -213,20 +215,22 @@ impl MainView<'_> {
                 }
                 command::ClientCommand::Config(config_command_type, path, value) => {
                     match config_command_type {
-                        command::ConfigCommand::Get => match model.get_config_value(&path) {
-                            Ok(result) => Some(MessageEvent::AddMessageViewInfo(
-                                None,
-                                None,
-                                crate::message_irc::message_content::MessageKind::Info,
-                                format!("{} {}", path, result),
-                            )),
-                            Err(e) => Some(MessageEvent::AddMessageViewInfo(
-                                None,
-                                None,
-                                crate::message_irc::message_content::MessageKind::Error,
-                                format!("{} {}", path, e),
-                            )),
-                        },
+                        command::ConfigCommand::Get => {
+                            match model.get_config_value(&path, value.as_deref()) {
+                                Ok(result) => Some(MessageEvent::AddMessageViewInfo(
+                                    None,
+                                    None,
+                                    crate::message_irc::message_content::MessageKind::Info,
+                                    format!("{path} {result}"),
+                                )),
+                                Err(e) => Some(MessageEvent::AddMessageViewInfo(
+                                    None,
+                                    None,
+                                    crate::message_irc::message_content::MessageKind::Error,
+                                    format!("{path} {e}"),
+                                )),
+                            }
+                        }
                         command::ConfigCommand::Add | command::ConfigCommand::Set => {
                             if let Some(value) = value {
                                 match model.set_config_value(&path, value) {

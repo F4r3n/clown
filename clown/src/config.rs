@@ -8,9 +8,9 @@ use color_eyre::eyre::Result;
 
 use crate::irc_view::color_user::ColorGenerator;
 use crate::project_path::ProjectPath;
-
+use color_eyre::{eyre::bail, eyre::eyre};
 pub trait RemoteConfig {
-    fn get_value<I>(&self, path: I) -> Result<String>
+    fn get_value<I>(&self, path: I, option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>;
@@ -18,7 +18,8 @@ pub trait RemoteConfig {
     where
         I: Iterator,
         I::Item: AsRef<str>;
-    fn get_paths(&self, prefix: &str) -> Vec<String>;
+    //should be static
+    fn get_paths(prefix: &str) -> Vec<String>;
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
@@ -28,7 +29,7 @@ pub struct Connection {
 }
 
 impl RemoteConfig for Connection {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, _option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
@@ -36,8 +37,8 @@ impl RemoteConfig for Connection {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("address") => Ok(self.address.to_string()),
             Some("port") => Ok(self.port.to_string()),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("[Connection]: Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Connection]: Invalid path"),
         }
     }
 
@@ -55,12 +56,12 @@ impl RemoteConfig for Connection {
                 self.port = value.parse::<u16>()?;
                 Ok(())
             }
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("[Connection]: Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Connection]: Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
+    fn get_paths(prefix: &str) -> Vec<String> {
         ["address", "port"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
@@ -77,7 +78,7 @@ pub struct Login {
 }
 
 impl RemoteConfig for Login {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, _option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
@@ -87,8 +88,8 @@ impl RemoteConfig for Login {
             Some("real_name") => Ok(self.real_name.clone().unwrap_or_default()),
             Some("username") => Ok(self.username.clone().unwrap_or_default()),
             Some("password") => Ok(self.password.clone().unwrap_or_default()),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("[Login]: Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
         }
     }
 
@@ -114,12 +115,12 @@ impl RemoteConfig for Login {
                 self.password = Some(value);
                 Ok(())
             }
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
+    fn get_paths(prefix: &str) -> Vec<String> {
         ["nickname", "real_name", "username", "password"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
@@ -134,7 +135,7 @@ pub struct Channels {
 }
 
 impl RemoteConfig for Channels {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, _option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
@@ -142,8 +143,8 @@ impl RemoteConfig for Channels {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("list") => Ok(self.list.join(",")),
             Some("auto_join") => Ok(self.auto_join.to_string()),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -164,12 +165,12 @@ impl RemoteConfig for Channels {
                 self.auto_join = value.parse::<bool>()?;
                 Ok(())
             }
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
+    fn get_paths(prefix: &str) -> Vec<String> {
         ["list", "auto_join"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
@@ -185,18 +186,18 @@ pub struct Server {
 }
 
 impl RemoteConfig for Server {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("name") => Ok(self.name.to_string()),
-            Some("connection") => self.connection.get_value(path),
-            Some("login") => self.login.get_value(path),
-            Some("channels") => self.channels.get_value(path),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some("connection") => self.connection.get_value(path, option),
+            Some("login") => self.login.get_value(path, option),
+            Some("channels") => self.channels.get_value(path, option),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -222,24 +223,19 @@ impl RemoteConfig for Server {
                 self.channels.set_value(path, value)?;
                 Ok(())
             }
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
-        let mut fields = ["name", "connection", "login", "channels"]
-            .iter()
-            .map(|v| format!("{prefix}.{v}"))
-            .collect::<Vec<String>>();
-        fields.extend(
-            self.connection
-                .get_paths(format!("{prefix}.connection").as_str()),
-        );
-        fields.extend(self.login.get_paths(format!("{prefix}.login").as_str()));
-        fields.extend(
-            self.channels
-                .get_paths(format!("{prefix}.channels").as_str()),
-        );
+    fn get_paths(prefix: &str) -> Vec<String> {
+        let p = format!("{prefix}.");
+        let mut fields = vec![format!("{p}name")];
+
+        // Call static methods on child types
+        fields.extend(Connection::get_paths(&format!("{p}connection")));
+        fields.extend(Login::get_paths(&format!("{p}login")));
+        fields.extend(Channels::get_paths(&format!("{p}channels")));
+
         fields
     }
 }
@@ -257,16 +253,16 @@ pub struct Completion {
 }
 
 impl RemoteConfig for Completion {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
     {
         match path.next().as_ref().map(AsRef::as_ref) {
-            Some("on_empty_input") => self.on_empty_input.get_value(path),
-            Some("in_message") => self.in_message.get_value(path),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some("on_empty_input") => self.on_empty_input.get_value(path, option),
+            Some("in_message") => self.in_message.get_value(path, option),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -284,24 +280,22 @@ impl RemoteConfig for Completion {
                 self.in_message.set_value(path, value)?;
                 Ok(())
             }
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
+    fn get_paths(prefix: &str) -> Vec<String> {
         let mut fields = ["on_empty_input", "in_message"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
             .collect::<Vec<String>>();
-        fields.extend(
-            self.on_empty_input
-                .get_paths(format!("{prefix}.on_empty_input").as_str()),
-        );
-        fields.extend(
-            self.in_message
-                .get_paths(format!("{prefix}.in_message").as_str()),
-        );
+        fields.extend(CompletionBehavior::get_paths(
+            format!("{prefix}.on_empty_input").as_str(),
+        ));
+        fields.extend(CompletionBehavior::get_paths(
+            format!("{prefix}.in_message").as_str(),
+        ));
         fields
     }
 }
@@ -312,15 +306,15 @@ pub struct CompletionBehavior {
 }
 
 impl RemoteConfig for CompletionBehavior {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, _option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("suffix") => Ok(self.suffix.clone().unwrap_or_default()),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -334,12 +328,12 @@ impl RemoteConfig for CompletionBehavior {
                 self.suffix = Some(value);
                 Ok(())
             }
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
+    fn get_paths(prefix: &str) -> Vec<String> {
         ["suffix"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
@@ -359,7 +353,7 @@ pub struct NicknameColors {
     pub overrides: ahash::AHashMap<String, String>,
 }
 impl RemoteConfig for NicknameColors {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
@@ -367,16 +361,18 @@ impl RemoteConfig for NicknameColors {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("seed") => Ok(self.seed.to_string()),
             Some("overrides") => {
-                if let Some(name) = path.next()
-                    && let Some(value) = self.overrides.get(name.as_ref())
-                {
-                    Ok(value.to_string())
+                if let Some(name) = option {
+                    if let Some(value) = self.overrides.get(name) {
+                        Ok(value.to_string())
+                    } else {
+                        bail!("The {name} has not been overrided")
+                    }
                 } else {
-                    color_eyre::eyre::bail!("Name invalid")
+                    bail!("Name invalid: overrides 'name'")
                 }
             }
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -390,28 +386,29 @@ impl RemoteConfig for NicknameColors {
                 self.seed = value.parse::<u64>()?;
                 Ok(())
             }
-            Some("overrides") => match ColorGenerator::is_color_valid(&value) {
-                color_eyre::Result::Ok(()) => {
-                    if let Some(name) = path.next() {
-                        self.overrides.insert(name.as_ref().to_string(), value);
+            Some("overrides") => {
+                let mut split = value.split_ascii_whitespace();
+                if let Some(name) = split.next()
+                    && let Some(hexa) = split.next()
+                {
+                    match ColorGenerator::is_color_valid(hexa) {
+                        color_eyre::Result::Ok(()) => {
+                            self.overrides.insert(name.to_string(), hexa.to_string());
+                            Ok(())
+                        }
+                        Err(e) => Err(e),
                     }
-                    Ok(())
+                } else {
+                    Err(eyre!("Invalid value: {value}.\n should be: name #FFFFFF"))
                 }
-                Err(e) => Err(e),
-            },
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            }
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
-        let mut fields = vec![format!("{prefix}.seed"), format!("{prefix}.overrides")];
-
-        for name in self.overrides.keys() {
-            fields.push(format!("{prefix}.overrides.{name}"));
-        }
-
-        fields
+    fn get_paths(prefix: &str) -> Vec<String> {
+        vec![format!("{prefix}.seed"), format!("{prefix}.overrides")]
     }
 }
 
@@ -422,15 +419,15 @@ pub struct Topic {
 }
 
 impl RemoteConfig for Topic {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, _option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("enabled") => Ok(self.enabled.to_string()),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -444,12 +441,12 @@ impl RemoteConfig for Topic {
                 self.enabled = value.parse::<bool>()?;
                 Ok(())
             }
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
+    fn get_paths(prefix: &str) -> Vec<String> {
         ["enabled"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
@@ -470,15 +467,15 @@ pub struct Discuss {
 }
 
 impl RemoteConfig for Discuss {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
     {
         match path.next().as_ref().map(AsRef::as_ref) {
-            Some("left_bar") => self.left_bar.get_value(path),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some("left_bar") => self.left_bar.get_value(path, option),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -489,20 +486,17 @@ impl RemoteConfig for Discuss {
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("left_bar") => self.left_bar.set_value(path, value),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
+    fn get_paths(prefix: &str) -> Vec<String> {
         let mut fields = ["left_bar"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
             .collect::<Vec<String>>();
-        fields.extend(
-            self.left_bar
-                .get_paths(format!("{prefix}.left_bar").as_str()),
-        );
+        fields.extend(LeftBar::get_paths(format!("{prefix}.left_bar").as_str()));
         fields
     }
 }
@@ -516,7 +510,7 @@ pub struct LeftBar {
 }
 
 impl RemoteConfig for LeftBar {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, _option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
@@ -524,8 +518,8 @@ impl RemoteConfig for LeftBar {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("time") => Ok(self.time.to_string()),
             Some("nickname") => Ok(self.nickname.to_string()),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -543,12 +537,12 @@ impl RemoteConfig for LeftBar {
                 self.nickname = value.parse::<bool>()?;
                 Ok(())
             }
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
+    fn get_paths(prefix: &str) -> Vec<String> {
         ["time", "nickname"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
@@ -571,15 +565,15 @@ pub struct Users {
 }
 
 impl RemoteConfig for Users {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, _option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
     {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("enabled") => Ok(self.enabled.to_string()),
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -593,12 +587,12 @@ impl RemoteConfig for Users {
                 self.enabled = value.parse::<bool>()?;
                 Ok(())
             }
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, prefix: &str) -> Vec<String> {
+    fn get_paths(prefix: &str) -> Vec<String> {
         ["enabled"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
@@ -704,35 +698,40 @@ impl Default for Config {
 }
 
 impl RemoteConfig for Config {
-    fn get_value<I>(&self, mut path: I) -> Result<String>
+    fn get_value<I>(&self, mut path: I, option: Option<&str>) -> Result<String>
     where
         I: Iterator,
         I::Item: AsRef<str>,
     {
         match path.next().as_ref().map(AsRef::as_ref) {
-            Some("servers") => {
-                let index = path
-                    .next()
-                    .ok_or_else(|| color_eyre::eyre::eyre!("Missing server index"))?
-                    .as_ref()
-                    .parse::<usize>()?;
+            Some("server") => {
+                if let Some(option) = option {
+                    let mut split = option.split_ascii_whitespace();
+                    let server_id = split
+                        .next()
+                        .and_then(|v| v.parse::<usize>().ok())
+                        .ok_or_else(|| eyre!("Invalid server index"))?;
+                    let rest = split.collect::<String>();
 
-                self.servers
-                    .get(index)
-                    .ok_or_else(|| color_eyre::eyre::eyre!("Invalid server index"))?
-                    .get_value(path)
+                    self.servers
+                        .get(server_id)
+                        .ok_or_else(|| eyre!("Invalid server index"))?
+                        .get_value(path, Some(rest.as_str()))
+                } else {
+                    Err(eyre!("Invalid option. Needs to have: 'id'"))
+                }
             }
-            Some("completion") => self.completion.get_value(path),
-            Some("nickname_colors") => self.nickname_colors.get_value(path),
-            Some("discuss") => self.discuss.get_value(path),
-            Some("users") => self.users.get_value(path),
-            Some("topic") => self.topic.get_value(path),
+            Some("completion") => self.completion.get_value(path, option),
+            Some("nickname_colors") => self.nickname_colors.get_value(path, option),
+            Some("discuss") => self.discuss.get_value(path, option),
+            Some("users") => self.users.get_value(path, option),
+            Some("topic") => self.topic.get_value(path, option),
             Some("meta") => match path.next().as_ref().map(AsRef::as_ref) {
                 Some("version") => Ok(self.meta.version.to_string()),
-                _ => color_eyre::eyre::bail!("Invalid path"),
+                _ => bail!("Invalid path"),
             },
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
@@ -742,17 +741,18 @@ impl RemoteConfig for Config {
         I::Item: AsRef<str>,
     {
         match path.next().as_ref().map(AsRef::as_ref) {
-            Some("servers") => {
-                let index = path
+            Some("server") => {
+                let mut split = value.split_ascii_whitespace();
+                let server_id = split
                     .next()
-                    .ok_or_else(|| color_eyre::eyre::eyre!("Missing server index"))?
-                    .as_ref()
-                    .parse::<usize>()?;
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .ok_or_else(|| eyre!("Invalid server index"))?;
+                let rest = split.collect::<String>();
 
                 self.servers
-                    .get_mut(index)
-                    .ok_or_else(|| color_eyre::eyre::eyre!("Invalid server index"))?
-                    .set_value(path, value)
+                    .get_mut(server_id)
+                    .ok_or_else(|| eyre!("Invalid server index"))?
+                    .set_value(path, rest)
             }
             Some("completion") => self.completion.set_value(path, value),
             Some("nickname_colors") => self.nickname_colors.set_value(path, value),
@@ -762,17 +762,17 @@ impl RemoteConfig for Config {
             Some("meta") =>
             //Meta cannot be set
             {
-                color_eyre::eyre::bail!("Invalid path, impossible to set")
+                bail!("Invalid path, impossible to set")
             }
 
-            Some(p) => color_eyre::eyre::bail!("Invalid path {p}"),
-            _ => color_eyre::eyre::bail!("Invalid path"),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
         }
     }
 
-    fn get_paths(&self, _prefix: &str) -> Vec<String> {
+    fn get_paths(_prefix: &str) -> Vec<String> {
         let mut fields = [
-            "servers",
+            "server",
             "completion",
             "nickname_colors",
             "discuss",
@@ -783,16 +783,13 @@ impl RemoteConfig for Config {
         .map(|v| v.to_string())
         .collect::<Vec<String>>();
 
-        for (i, server) in self.servers.iter().enumerate() {
-            let server_prefix = format!("servers.{i}");
-            fields.extend(server.get_paths(&server_prefix));
-        }
+        fields.extend(Server::get_paths("server"));
 
-        fields.extend(self.completion.get_paths("completion"));
-        fields.extend(self.nickname_colors.get_paths("nickname_colors"));
-        fields.extend(self.discuss.get_paths("discuss"));
-        fields.extend(self.users.get_paths("users"));
-        fields.extend(self.topic.get_paths("topic"));
+        fields.extend(Completion::get_paths("completion"));
+        fields.extend(NicknameColors::get_paths("nickname_colors"));
+        fields.extend(Discuss::get_paths("discuss"));
+        fields.extend(Users::get_paths("users"));
+        fields.extend(Topic::get_paths("topic"));
 
         fields
     }
@@ -802,12 +799,16 @@ impl Config {
         Self::read(config_name)
     }
 
-    pub fn list_fields(&self) -> Vec<String> {
-        self.get_paths("")
+    pub fn list_fields() -> Vec<String> {
+        Config::get_paths("")
     }
 
-    pub fn get_value_from_root(&self, path: &str) -> color_eyre::Result<String> {
-        self.get_value(path.split('.'))
+    pub fn get_value_from_root(
+        &self,
+        path: &str,
+        option: Option<&str>,
+    ) -> color_eyre::Result<String> {
+        self.get_value(path.split('.'), option)
     }
 
     pub fn set_value_from_root(&mut self, path: &str, value: String) -> color_eyre::Result<()> {
@@ -832,9 +833,9 @@ impl Config {
     fn read(config_name: &str) -> color_eyre::Result<Self> {
         if let Some(config_path) = Self::config_path(config_name) {
             let content = std::fs::read(config_path)?;
-            toml::from_slice::<Config>(&content).map_err(|e| color_eyre::eyre::eyre!("{}", e))
+            toml::from_slice::<Config>(&content).map_err(|e| eyre!("{}", e))
         } else {
-            color_eyre::eyre::bail!("Invalid config")
+            bail!("Invalid config")
         }
     }
 
@@ -918,21 +919,21 @@ mod tests {
 
         assert_eq!(
             config
-                .get_value_from_root("servers.0.connection.address")
+                .get_value_from_root("server.connection.address", Some("0"))
                 .unwrap(),
             "irc.example.com"
         );
 
         assert_eq!(
             config
-                .get_value_from_root("servers.0.connection.port")
+                .get_value_from_root("server.connection.port", Some("0"))
                 .unwrap(),
             "6667"
         );
 
         assert_eq!(
             config
-                .get_value_from_root("servers.0.login.nickname")
+                .get_value_from_root("server.login.nickname", Some("0"))
                 .unwrap(),
             "tester"
         );
@@ -943,13 +944,13 @@ mod tests {
         let mut config = sample_config();
 
         config
-            .set_value_from_root("servers.0.connection.address", "irc.new.net".into())
+            .set_value_from_root("server.connection.address", "0 irc.new.net".into())
             .unwrap();
 
         assert_eq!(config.servers[0].connection.address, "irc.new.net");
 
         config
-            .set_value_from_root("servers.0.connection.port", "7000".into())
+            .set_value_from_root("server.connection.port", "0 7000".into())
             .unwrap();
 
         assert_eq!(config.servers[0].connection.port, 7000);
@@ -957,19 +958,14 @@ mod tests {
 
     #[test]
     fn test_list_fields_contains_known_paths() {
-        let config = sample_config();
-        let fields = config.list_fields();
+        let fields = Config::list_fields();
 
         assert!(
-            fields.contains(&".servers.0.connection.address".to_string())
-                || fields.contains(&"servers.0.connection.address".to_string())
+            fields.contains(&".server.connection.address".to_string())
+                || fields.contains(&"server.connection.address".to_string())
         );
 
-        assert!(
-            fields
-                .iter()
-                .any(|v| v.contains("servers.0.login.nickname"))
-        );
+        assert!(fields.iter().any(|v| v.contains("server.login.nickname")));
     }
 
     #[test]
@@ -1034,7 +1030,7 @@ mod tests {
 
         assert!(
             config
-                .get_value_from_root("servers.0.invalid.field")
+                .get_value_from_root("servers.invalid.field", Some("0"))
                 .is_err()
         );
     }
