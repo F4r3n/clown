@@ -1,5 +1,7 @@
 use ahash::AHashMap;
 
+use crate::config::{Config, ValueParameter};
+
 use super::trie::Trie;
 
 #[derive(Hash, PartialEq, Eq)]
@@ -94,12 +96,13 @@ impl InputCompletion {
 
     pub fn add_user(&mut self, server_id: usize, channel: &str, user: String) {
         let channel = Self::sanitize_key(channel);
-        if let Some(channel) = self.channels.get_mut(&KeyServerChannel {
-            channel: channel.to_string(),
-            server_id: Some(server_id),
-        }) {
-            channel.add_word(user);
-        }
+        self.channels
+            .entry(KeyServerChannel {
+                channel: channel.to_string(),
+                server_id: Some(server_id),
+            })
+            .or_insert(Trie::new())
+            .add_word(user);
     }
 
     pub fn list(
@@ -168,29 +171,66 @@ impl Completion {
             return;
         }
 
+        //TODO: the completion context should be cursor dependant
         if let Some(end) = full_phrase.strip_prefix("/") {
-            let mut parts = end.split_whitespace();
-            if let Some(part) = parts.next()
-                && part.eq("config")
-                && matches!(parts.next(), Some("get") | Some("set"))
-                && let Some(list) = self
-                    .input_completion
-                    .list_config(parts.next().unwrap_or_default())
-            {
-                self.state = Some(CompletionState {
-                    list,
-                    kind: CompletionKind::Config,
-                    start_character_pos: start.saturating_add(full_phrase.len() - end.len() - 1),
-                    index_list: 0,
-                });
-            } else if let Some(list) = self.input_completion.list_command(end) {
-                self.state = Some(CompletionState {
-                    list,
-                    kind: CompletionKind::Command,
-                    start_character_pos: start.saturating_add(1),
-                    index_list: 0,
-                });
-            }
+            let tokens = end.split_whitespace().collect::<Vec<&str>>();
+
+            match tokens.as_slice() {
+                ["config", "get" | "set", config_option, ..] => {
+                    let last = tokens.last().unwrap_or(&"");
+                    if let Ok(expected_parameters) =
+                        Config::expected_parameters_from_root(config_option)
+                    {
+                        let index = tokens.len().saturating_sub(4);
+
+                        if let Some(expected_parameter) = expected_parameters.get(index)
+                            && *expected_parameter == ValueParameter::Nickname
+                            && let Some(list) = self.input_completion.list(
+                                self.server_id,
+                                &self.current_channel,
+                                last,
+                            )
+                        {
+                            self.apply_state(
+                                list,
+                                CompletionKind::Nickname,
+                                start.saturating_add(full_phrase.len() - end.len() - 1),
+                            );
+                        }
+                    } else if let Some(list) = self.input_completion.list_config(last) {
+                        self.apply_state(
+                            list,
+                            CompletionKind::Config,
+                            start.saturating_add(full_phrase.len() - end.len() - 1),
+                        );
+                    }
+                }
+                ["config", "get" | "set", ..] => {
+                    let last = tokens.last().unwrap_or(&"");
+                    if let Some(list) = self.input_completion.list_config(last) {
+                        self.apply_state(
+                            list,
+                            CompletionKind::Config,
+                            start.saturating_add(full_phrase.len() - end.len() - 1),
+                        );
+                    }
+                }
+
+                ["config", ..] => {
+                    let mut list: Vec<String> = vec!["set".into(), "get".into()];
+                    list.retain(|v| v.starts_with(slice));
+                    self.apply_state(
+                        list,
+                        CompletionKind::Config,
+                        start.saturating_add(full_phrase.len() - end.len() - 1),
+                    );
+                }
+                _ => {
+                    if let Some(list) = self.input_completion.list_command(end) {
+                        self.apply_state(list, CompletionKind::Command, start.saturating_add(1));
+                    }
+                }
+            };
         } else if let Some(list) =
             self.input_completion
                 .list(self.server_id, &self.current_channel, slice)
@@ -202,6 +242,15 @@ impl Completion {
                 index_list: 0,
             });
         }
+    }
+
+    fn apply_state(&mut self, list: Vec<String>, kind: CompletionKind, pos: usize) {
+        self.state = Some(CompletionState {
+            list,
+            kind,
+            start_character_pos: pos,
+            index_list: 0,
+        });
     }
 
     pub fn get_next_completion(&mut self, is_first_word: bool) -> Option<(usize, String)> {
@@ -299,6 +348,7 @@ mod test {
         comp.input_completion.add_command("/quit".into());
         comp.input_completion.add_command("/help".into());
         comp.input_completion.add_command("/config".into());
+        comp.input_completion.add_user(0, "#test", "yolo".into());
 
         comp.input_completion
             .add_config_field("nickname_colors.seed".into());
@@ -310,6 +360,21 @@ mod test {
         assert_eq!(
             comp.get_next_completion(true),
             Some((0, "nickname_colors.seed".to_string()))
+        );
+
+        comp.reset();
+        comp.set_completion(0, "s", "/config s");
+        assert_eq!(comp.get_next_completion(true), Some((0, "set".to_string())));
+
+        comp.reset();
+        comp.set_completion(0, "", "/config");
+        assert_eq!(comp.get_next_completion(true), Some((0, "get".to_string())));
+
+        comp.reset();
+        comp.set_completion(0, "y", "/config set nickname_colors.overrides y");
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((0, "yolo".to_string()))
         );
     }
 

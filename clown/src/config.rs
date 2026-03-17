@@ -9,6 +9,18 @@ use color_eyre::eyre::Result;
 use crate::irc_view::color_user::ColorGenerator;
 use crate::project_path::ProjectPath;
 use color_eyre::{eyre::bail, eyre::eyre};
+
+#[derive(PartialEq, Eq)]
+pub enum ValueParameter {
+    Nickname,
+    List,
+    String,
+    Number,
+    Boolean,
+    #[allow(dead_code)]
+    None,
+}
+
 pub trait RemoteConfig {
     fn get_value<I>(&self, path: I, option: Option<&str>) -> Result<String>
     where
@@ -18,8 +30,11 @@ pub trait RemoteConfig {
     where
         I: Iterator,
         I::Item: AsRef<str>;
-    //should be static
     fn get_paths(prefix: &str) -> Vec<String>;
+    fn expected_parameters<I>(path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>;
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
@@ -37,6 +52,18 @@ impl RemoteConfig for Connection {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("address") => Ok(self.address.to_string()),
             Some("port") => Ok(self.port.to_string()),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Connection]: Invalid path"),
+        }
+    }
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("address") => Ok(vec![ValueParameter::String]),
+            Some("port") => Ok(vec![ValueParameter::Number]),
             Some(p) => bail!("Invalid path {p}"),
             _ => bail!("[Connection]: Invalid path"),
         }
@@ -88,6 +115,21 @@ impl RemoteConfig for Login {
             Some("real_name") => Ok(self.real_name.clone().unwrap_or_default()),
             Some("username") => Ok(self.username.clone().unwrap_or_default()),
             Some("password") => Ok(self.password.clone().unwrap_or_default()),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
+        }
+    }
+
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("nickname") => Ok(vec![ValueParameter::String]),
+            Some("real_name") => Ok(vec![ValueParameter::String]),
+            Some("username") => Ok(vec![ValueParameter::String]),
+            Some("password") => Ok(vec![ValueParameter::String]),
             Some(p) => bail!("Invalid path {p}"),
             _ => bail!("[Login]: Invalid path"),
         }
@@ -148,6 +190,19 @@ impl RemoteConfig for Channels {
         }
     }
 
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("list") => Ok(vec![ValueParameter::String]),
+            Some("auto_join") => Ok(vec![ValueParameter::List]),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
+        }
+    }
+
     fn set_value<I>(&mut self, mut path: I, value: String) -> Result<()>
     where
         I: Iterator,
@@ -198,6 +253,21 @@ impl RemoteConfig for Server {
             Some("channels") => self.channels.get_value(path, option),
             Some(p) => bail!("Invalid path {p}"),
             _ => bail!("Invalid path"),
+        }
+    }
+
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("name") => Ok(vec![ValueParameter::String]),
+            Some("connection") => Connection::expected_parameters(path),
+            Some("login") => Login::expected_parameters(path),
+            Some("channels") => Channels::expected_parameters(path),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
         }
     }
 
@@ -266,6 +336,19 @@ impl RemoteConfig for Completion {
         }
     }
 
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("on_empty_input") => CompletionBehavior::expected_parameters(path),
+            Some("in_message") => CompletionBehavior::expected_parameters(path),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
+        }
+    }
+
     fn set_value<I>(&mut self, mut path: I, value: String) -> Result<()>
     where
         I: Iterator,
@@ -315,6 +398,18 @@ impl RemoteConfig for CompletionBehavior {
             Some("suffix") => Ok(self.suffix.clone().unwrap_or_default()),
             Some(p) => bail!("Invalid path {p}"),
             _ => bail!("Invalid path"),
+        }
+    }
+
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("suffix") => Ok(vec![ValueParameter::String]),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
         }
     }
 
@@ -376,6 +471,19 @@ impl RemoteConfig for NicknameColors {
         }
     }
 
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("seed") => Ok(vec![ValueParameter::Number]),
+            Some("overrides") => Ok(vec![ValueParameter::Nickname, ValueParameter::String]),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
+        }
+    }
+
     fn set_value<I>(&mut self, mut path: I, value: String) -> Result<()>
     where
         I: Iterator,
@@ -431,6 +539,18 @@ impl RemoteConfig for Topic {
         }
     }
 
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("enabled") => Ok(vec![ValueParameter::Boolean]),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
+        }
+    }
+
     fn set_value<I>(&mut self, mut path: I, value: String) -> Result<()>
     where
         I: Iterator,
@@ -479,6 +599,18 @@ impl RemoteConfig for Discuss {
         }
     }
 
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("left_bar") => LeftBar::expected_parameters(path),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
+        }
+    }
+
     fn set_value<I>(&mut self, mut path: I, value: String) -> Result<()>
     where
         I: Iterator,
@@ -520,6 +652,19 @@ impl RemoteConfig for LeftBar {
             Some("nickname") => Ok(self.nickname.to_string()),
             Some(p) => bail!("Invalid path {p}"),
             _ => bail!("Invalid path"),
+        }
+    }
+
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("time") => Ok(vec![ValueParameter::Boolean]),
+            Some("nickname") => Ok(vec![ValueParameter::Boolean]),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
         }
     }
 
@@ -574,6 +719,18 @@ impl RemoteConfig for Users {
             Some("enabled") => Ok(self.enabled.to_string()),
             Some(p) => bail!("Invalid path {p}"),
             _ => bail!("Invalid path"),
+        }
+    }
+
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("enabled") => Ok(vec![ValueParameter::Boolean]),
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("[Login]: Invalid path"),
         }
     }
 
@@ -735,6 +892,31 @@ impl RemoteConfig for Config {
         }
     }
 
+    fn expected_parameters<I>(mut path: I) -> Result<Vec<ValueParameter>>
+    where
+        I: Iterator,
+        I::Item: AsRef<str>,
+    {
+        match path.next().as_ref().map(AsRef::as_ref) {
+            Some("server") => {
+                let mut list = vec![ValueParameter::Number];
+                list.extend(Server::expected_parameters(path)?);
+                Ok(list)
+            }
+            Some("completion") => Completion::expected_parameters(path),
+            Some("nickname_colors") => NicknameColors::expected_parameters(path),
+            Some("discuss") => Discuss::expected_parameters(path),
+            Some("users") => Users::expected_parameters(path),
+            Some("topic") => Topic::expected_parameters(path),
+            Some("meta") => match path.next().as_ref().map(AsRef::as_ref) {
+                Some("version") => Ok(vec![ValueParameter::String]),
+                _ => bail!("Invalid path"),
+            },
+            Some(p) => bail!("Invalid path {p}"),
+            _ => bail!("Invalid path"),
+        }
+    }
+
     fn set_value<I>(&mut self, mut path: I, value: String) -> Result<()>
     where
         I: Iterator,
@@ -801,6 +983,10 @@ impl Config {
 
     pub fn list_fields() -> Vec<String> {
         Config::get_paths("")
+    }
+
+    pub fn expected_parameters_from_root(path: &str) -> color_eyre::Result<Vec<ValueParameter>> {
+        Config::expected_parameters(path.split('.'))
     }
 
     pub fn get_value_from_root(
