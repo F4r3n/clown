@@ -27,7 +27,7 @@ pub struct StoredConfig {
 }
 
 impl StoredConfig {
-    pub fn save(&self) -> color_eyre::Result<()> {
+    pub fn save(&self) -> anyhow::Result<()> {
         self.config.save(&self.stored_name)
     }
 
@@ -37,18 +37,14 @@ impl StoredConfig {
         }
     }
 
-    pub fn set_value(&mut self, path: &str, value: String) -> color_eyre::eyre::Result<()> {
+    pub fn set_value(&mut self, path: &str, value: String) -> anyhow::Result<()> {
         match self.config.set_value_from_root(path, value) {
             Ok(()) => self.save(),
             Err(e) => Err(e),
         }
     }
 
-    pub fn get_value(
-        &mut self,
-        path: &str,
-        option: Option<&str>,
-    ) -> color_eyre::eyre::Result<String> {
+    pub fn get_value(&mut self, path: &str, option: Option<&str>) -> anyhow::Result<String> {
         self.config.get_value_from_root(path, option)
     }
 
@@ -81,7 +77,7 @@ impl Model {
         color_generator
     }
 
-    pub fn new(config_name: String) -> color_eyre::Result<Self> {
+    pub fn new(config_name: String) -> anyhow::Result<Self> {
         let config = Config::new(&config_name)?;
 
         Ok(Self {
@@ -102,11 +98,11 @@ impl Model {
         StoredConfig::list_fields()
     }
 
-    pub fn save(&self) -> color_eyre::Result<()> {
+    pub fn save(&self) -> anyhow::Result<()> {
         self.stored_config.save()
     }
 
-    pub fn set_nickname(&mut self, server_id: usize, nickname: String) -> color_eyre::Result<()> {
+    pub fn set_nickname(&mut self, server_id: usize, nickname: String) -> anyhow::Result<()> {
         self.stored_config
             .set_nickname(server_id, nickname.to_string());
         self.save()?;
@@ -172,7 +168,7 @@ impl Model {
         &self.stored_config.config.discuss
     }
 
-    pub fn set_config_value(&mut self, path: &str, value: String) -> color_eyre::eyre::Result<()> {
+    pub fn set_config_value(&mut self, path: &str, value: String) -> anyhow::Result<()> {
         match self.stored_config.set_value(path, value) {
             Ok(()) => {
                 //TODO: be more granular
@@ -183,11 +179,7 @@ impl Model {
         }
     }
 
-    pub fn get_config_value(
-        &mut self,
-        path: &str,
-        option: Option<&str>,
-    ) -> color_eyre::eyre::Result<String> {
+    pub fn get_config_value(&mut self, path: &str, option: Option<&str>) -> anyhow::Result<String> {
         self.stored_config.get_value(path, option)
     }
 }

@@ -16,9 +16,9 @@ impl ColorGenerator {
         }
     }
 
-    pub fn is_color_valid(input: &str) -> color_eyre::Result<()> {
+    pub fn is_color_valid(input: &str) -> anyhow::Result<()> {
         if Self::parse_hex_color(input).is_none() {
-            return Err(color_eyre::eyre::eyre!(
+            return Err(anyhow::anyhow!(
                 "The format color is invalid. Format expected #FFFFFF"
             ));
         }

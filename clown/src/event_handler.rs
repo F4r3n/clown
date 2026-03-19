@@ -70,7 +70,7 @@ impl EventHandler {
         }
     }
 
-    pub fn enable_mouse_event() -> color_eyre::Result<()> {
+    pub fn enable_mouse_event() -> anyhow::Result<()> {
         std::io::stdout().execute(crossterm::event::EnableMouseCapture)?;
         Ok(())
     }
@@ -79,16 +79,16 @@ impl EventHandler {
         self.rx.recv().await
     }
 
-    pub async fn _join(&mut self) -> color_eyre::Result<()> {
+    pub async fn _join(&mut self) -> anyhow::Result<()> {
         if let Some(task) = self._task.take()
             && let Err(_e) = join!(task).0
         {
-            return Err(color_eyre::eyre::Error::msg("Failed to stop"));
+            anyhow::bail!("Failed to stop");
         }
         Ok(())
     }
 
-    pub fn disable_mouse_event() -> color_eyre::Result<()> {
+    pub fn disable_mouse_event() -> anyhow::Result<()> {
         std::io::stdout().execute(crossterm::event::DisableMouseCapture)?;
         Ok(())
     }

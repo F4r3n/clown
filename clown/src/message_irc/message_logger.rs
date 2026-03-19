@@ -18,7 +18,7 @@ struct Logger {
 }
 
 impl Logger {
-    pub fn try_from_path(path: &Path) -> color_eyre::Result<Logger> {
+    pub fn try_from_path(path: &Path) -> anyhow::Result<Logger> {
         Ok(Self {
             duration: std::time::Instant::now(),
             last_data_written: std::time::Instant::now(),
@@ -26,7 +26,7 @@ impl Logger {
         })
     }
 
-    fn init_writer(path: &Path) -> color_eyre::Result<BufWriter<std::fs::File>> {
+    fn init_writer(path: &Path) -> anyhow::Result<BufWriter<std::fs::File>> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -104,7 +104,7 @@ impl MessageLogger {
         &mut self,
         server_address: &str,
         target: Option<&str>,
-    ) -> color_eyre::Result<&mut Logger> {
+    ) -> anyhow::Result<&mut Logger> {
         //The name is not sanitized because is only used as a key to a hashmap
         let target = target.unwrap_or("server");
         let name = format!("{}.{}.log", server_address, target);
@@ -156,7 +156,7 @@ impl MessageLogger {
         target: Option<&str>,
         data: impl std::fmt::Display,
         force_flush: bool,
-    ) -> color_eyre::Result<()> {
+    ) -> anyhow::Result<()> {
         let logger = self.init_buffer(server_address, target)?;
         logger.write(data)?;
         logger.flush(force_flush)?;
@@ -169,7 +169,7 @@ impl MessageLogger {
         server_address: &str,
         irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
         message: &MessageEvent,
-    ) -> color_eyre::Result<()> {
+    ) -> anyhow::Result<()> {
         match message {
             MessageEvent::Join(_, channel, user) => {
                 self.write_to_target(

@@ -1,6 +1,5 @@
 use crate::project_path::ProjectPath;
 use clown_spell::dict;
-use color_eyre::eyre::eyre;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -10,7 +9,7 @@ pub struct SpellChecker {
 }
 use std::{io::Write, path::PathBuf};
 impl SpellChecker {
-    async fn download_file(url: &str, to: &PathBuf) -> color_eyre::Result<PathBuf> {
+    async fn download_file(url: &str, to: &PathBuf) -> anyhow::Result<PathBuf> {
         let mut response = reqwest::get(url).await?;
         to.parent().map(std::fs::create_dir_all);
         let mut file = std::fs::File::create(to)?;
@@ -21,7 +20,7 @@ impl SpellChecker {
         Ok(to.to_path_buf())
     }
 
-    async fn download_affix(language: &str) -> color_eyre::Result<PathBuf> {
+    async fn download_affix(language: &str) -> anyhow::Result<PathBuf> {
         if let Some(dest) = ProjectPath::project_dir()
             .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.aff", language)))
         {
@@ -35,11 +34,11 @@ impl SpellChecker {
             );
             SpellChecker::download_file(&url, &dest).await
         } else {
-            Err(eyre!("Error downloading dict"))
+            Err(anyhow::anyhow!("Error downloading dict"))
         }
     }
 
-    async fn download_dict(language: &str) -> color_eyre::Result<PathBuf> {
+    async fn download_dict(language: &str) -> anyhow::Result<PathBuf> {
         if let Some(dest) = ProjectPath::project_dir()
             .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.dic", language)))
         {
@@ -54,11 +53,11 @@ impl SpellChecker {
             );
             SpellChecker::download_file(&url, &dest).await
         } else {
-            Err(eyre!("Error downloading dict"))
+            Err(anyhow::anyhow!("Error downloading dict"))
         }
     }
 
-    pub async fn try_build(language: &str) -> color_eyre::Result<Self> {
+    pub async fn try_build(language: &str) -> anyhow::Result<Self> {
         let dict = SpellChecker::download_dict(language).await?;
         let affix = SpellChecker::download_affix(language).await?;
 
@@ -67,7 +66,7 @@ impl SpellChecker {
         })
     }
 
-    pub fn async_build(language: &str) -> JoinHandle<color_eyre::Result<Self>> {
+    pub fn async_build(language: &str) -> JoinHandle<anyhow::Result<Self>> {
         let handle = Handle::current();
         let language = language.to_string();
         handle.spawn(async move { SpellChecker::try_build(&language).await })

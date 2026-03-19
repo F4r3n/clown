@@ -82,8 +82,8 @@ impl MessageEvent {
     }
 }
 
-impl From<color_eyre::eyre::Report> for MessageEvent {
-    fn from(value: color_eyre::eyre::Report) -> Self {
+impl From<anyhow::Error> for MessageEvent {
+    fn from(value: anyhow::Error) -> Self {
         MessageEvent::AddMessageViewInfo(
             None,
             None,

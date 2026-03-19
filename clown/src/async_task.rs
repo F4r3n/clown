@@ -1,7 +1,7 @@
 use tokio::task::{JoinHandle, block_in_place};
 pub struct AsyncTask<T> {
-    pub handle: Option<JoinHandle<color_eyre::Result<T>>>,
-    pub result: Option<color_eyre::Result<T>>,
+    pub handle: Option<JoinHandle<anyhow::Result<T>>>,
+    pub result: Option<anyhow::Result<T>>,
 }
 
 impl<T> AsyncTask<T> {
@@ -12,7 +12,7 @@ impl<T> AsyncTask<T> {
             .unwrap_or_else(|| false)
     }
 
-    pub fn take_result(mut self) -> Option<color_eyre::Result<T>> {
+    pub fn take_result(mut self) -> Option<anyhow::Result<T>> {
         self.result.take()
     }
 
@@ -29,7 +29,7 @@ impl<T> AsyncTask<T> {
 
         match res {
             Ok(res) => self.result = Some(res),
-            Err(e) => self.result = Some(Err(color_eyre::eyre::eyre!(e))),
+            Err(e) => self.result = Some(Err(anyhow::anyhow!(e))),
         }
 
         true

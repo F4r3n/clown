@@ -31,18 +31,18 @@ impl Session {
         self.retry = 5;
     }
 
-    pub fn send_command(&mut self, in_id: usize, in_command: Command) -> color_eyre::Result<()> {
+    pub fn send_command(&mut self, in_id: usize, in_command: Command) -> anyhow::Result<()> {
         if let Some(Some(connection)) = self.connections.get_mut(in_id) {
             connection
                 .command_sender
                 .send(in_command)
                 .map_err(Into::into)
         } else {
-            color_eyre::eyre::bail!("connection {in_id} not found")
+            anyhow::bail!("connection {in_id} not found")
         }
     }
 
-    pub fn send_command_current_server(&mut self, in_command: Command) -> color_eyre::Result<()> {
+    pub fn send_command_current_server(&mut self, in_command: Command) -> anyhow::Result<()> {
         if let Some(current_id) = self.model.current_id
             && let Some(Some(connection)) = self.connections.get_mut(current_id)
         {
@@ -51,7 +51,7 @@ impl Session {
                 .send(in_command)
                 .map_err(Into::into)
         } else {
-            color_eyre::eyre::bail!("Not connected")
+            anyhow::bail!("Not connected")
         }
     }
 
@@ -114,17 +114,17 @@ impl Session {
         }
     }
 
-    pub fn send_command_topic(&mut self, topic: String) -> color_eyre::Result<()> {
+    pub fn send_command_topic(&mut self, topic: String) -> anyhow::Result<()> {
         if let Some(irc_model) = self.get_current_irc_server_model()
             && let Some(channel) = irc_model.get_current_channel()
         {
             self.send_command_current_server(Command::Topic(channel.to_string(), topic))
         } else {
-            color_eyre::eyre::bail!("Not connected")
+            anyhow::bail!("Not connected")
         }
     }
 
-    pub fn send_command_join(&mut self, server: String) -> color_eyre::Result<()> {
+    pub fn send_command_join(&mut self, server: String) -> anyhow::Result<()> {
         self.send_command_current_server(Command::Join(server))
     }
 
@@ -132,7 +132,7 @@ impl Session {
         &mut self,
         channel: Option<String>,
         reason: Option<String>,
-    ) -> color_eyre::Result<()> {
+    ) -> anyhow::Result<()> {
         let Some(irc_model) = self.get_current_irc_server_model() else {
             return Ok(());
         };
@@ -148,7 +148,7 @@ impl Session {
         self.send_command_current_server(Command::Part(channel, reason))
     }
 
-    pub fn send_command_action(&mut self, content: String) -> color_eyre::Result<()> {
+    pub fn send_command_action(&mut self, content: String) -> anyhow::Result<()> {
         if let Some(irc_model) = self.get_current_irc_server_model()
             && let Some(channel) = irc_model.get_current_channel()
         {
@@ -158,7 +158,7 @@ impl Session {
                 format!("\x01ACTION {}\x01", content.clone()),
             ))
         } else {
-            color_eyre::eyre::bail!("Not connected")
+            anyhow::bail!("Not connected")
         }
     }
 

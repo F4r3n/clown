@@ -117,7 +117,7 @@ impl MainView<'_> {
         connection_config: Option<&ConnectionConfig>,
         irc_model: Option<&IrcModel>,
         message: &MessageEvent,
-    ) -> color_eyre::Result<()> {
+    ) -> anyhow::Result<()> {
         if let Some(connection_config) = connection_config {
             self.logger
                 .write_message(&connection_config.address, irc_model, message)

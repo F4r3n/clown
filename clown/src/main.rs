@@ -43,7 +43,7 @@ struct Args {
     debug: bool,
 }
 
-fn prepare_logs(is_debug: bool) -> color_eyre::Result<WorkerGuard> {
+fn prepare_logs(is_debug: bool) -> anyhow::Result<WorkerGuard> {
     let file_appender = tracing_appender::rolling::never(
         if !is_debug {
             ProjectPath::cache_dir().unwrap_or(std::env::current_dir()?)
@@ -67,11 +67,10 @@ fn prepare_logs(is_debug: bool) -> color_eyre::Result<WorkerGuard> {
 }
 
 #[tokio::main]
-async fn main() -> color_eyre::Result<()> {
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let _guard = prepare_logs(args.debug)?;
     //info!("TEST");
-    color_eyre::install()?;
     let mut list_messages = message_queue::MessageQueue::new();
 
     let mut model = match model::Model::new(args.config_name) {
@@ -153,7 +152,7 @@ fn handle_event(
     views: &mut Views<'_>,
     event: Event,
     out_messages: &mut MessageQueue,
-) -> color_eyre::Result<Option<MessageEvent>> {
+) -> anyhow::Result<Option<MessageEvent>> {
     match views {
         Views::Main(view) => {
             view.handle_event(model, session, &event, out_messages);

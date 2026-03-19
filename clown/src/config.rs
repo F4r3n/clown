@@ -3,13 +3,11 @@ use std::path::PathBuf;
 
 use clown_core::client::LoginConfig;
 use clown_core::conn::ConnectionConfig;
-use color_eyre::eyre::Ok;
-use color_eyre::eyre::Result;
 
 use crate::irc_view::color_user::ColorGenerator;
 use crate::project_path::ProjectPath;
-use color_eyre::{eyre::bail, eyre::eyre};
-
+use anyhow::Result;
+use anyhow::bail;
 #[derive(PartialEq, Eq)]
 pub enum ValueParameter {
     Nickname,
@@ -500,14 +498,14 @@ impl RemoteConfig for NicknameColors {
                     && let Some(hexa) = split.next()
                 {
                     match ColorGenerator::is_color_valid(hexa) {
-                        color_eyre::Result::Ok(()) => {
+                        anyhow::Result::Ok(()) => {
                             self.overrides.insert(name.to_string(), hexa.to_string());
                             Ok(())
                         }
                         Err(e) => Err(e),
                     }
                 } else {
-                    Err(eyre!("Invalid value: {value}.\n should be: name #FFFFFF"))
+                    bail!("Invalid value: {value}.\n should be: name #FFFFFF")
                 }
             }
             Some(p) => bail!("Invalid path {p}"),
@@ -867,15 +865,15 @@ impl RemoteConfig for Config {
                     let server_id = split
                         .next()
                         .and_then(|v| v.parse::<usize>().ok())
-                        .ok_or_else(|| eyre!("Invalid server index"))?;
+                        .ok_or_else(|| anyhow::anyhow!("Invalid server index"))?;
                     let rest = split.collect::<String>();
 
                     self.servers
                         .get(server_id)
-                        .ok_or_else(|| eyre!("Invalid server index"))?
+                        .ok_or_else(|| anyhow::anyhow!("Invalid server index"))?
                         .get_value(path, Some(rest.as_str()))
                 } else {
-                    Err(eyre!("Invalid option. Needs to have: 'id'"))
+                    bail!("Invalid option. Needs to have: 'id'")
                 }
             }
             Some("completion") => self.completion.get_value(path, option),
@@ -928,12 +926,12 @@ impl RemoteConfig for Config {
                 let server_id = split
                     .next()
                     .and_then(|v| v.parse::<usize>().ok())
-                    .ok_or_else(|| eyre!("Invalid server index"))?;
+                    .ok_or_else(|| anyhow::anyhow!("Invalid server index"))?;
                 let rest = split.collect::<String>();
 
                 self.servers
                     .get_mut(server_id)
-                    .ok_or_else(|| eyre!("Invalid server index"))?
+                    .ok_or_else(|| anyhow::anyhow!("Invalid server index"))?
                     .set_value(path, rest)
             }
             Some("completion") => self.completion.set_value(path, value),
@@ -977,7 +975,7 @@ impl RemoteConfig for Config {
     }
 }
 impl Config {
-    pub fn new(config_name: &str) -> color_eyre::Result<Self> {
+    pub fn new(config_name: &str) -> anyhow::Result<Self> {
         Self::read(config_name)
     }
 
@@ -985,26 +983,21 @@ impl Config {
         Config::get_paths("")
     }
 
-    pub fn expected_parameters_from_root(path: &str) -> color_eyre::Result<Vec<ValueParameter>> {
+    pub fn expected_parameters_from_root(path: &str) -> anyhow::Result<Vec<ValueParameter>> {
         Config::expected_parameters(path.split('.'))
     }
 
-    pub fn get_value_from_root(
-        &self,
-        path: &str,
-        option: Option<&str>,
-    ) -> color_eyre::Result<String> {
+    pub fn get_value_from_root(&self, path: &str, option: Option<&str>) -> anyhow::Result<String> {
         self.get_value(path.split('.'), option)
     }
 
-    pub fn set_value_from_root(&mut self, path: &str, value: String) -> color_eyre::Result<()> {
+    pub fn set_value_from_root(&mut self, path: &str, value: String) -> anyhow::Result<()> {
         self.set_value(path.split('.'), value)
     }
 
-    pub fn save(&self, config_name: &str) -> color_eyre::Result<()> {
+    pub fn save(&self, config_name: &str) -> anyhow::Result<()> {
         let result = toml::to_string(self)?;
-        let config_path =
-            Self::config_path(config_name).ok_or(color_eyre::eyre::Error::msg("Invalid Path"))?;
+        let config_path = Self::config_path(config_name).ok_or(anyhow::anyhow!("Invalid Path"))?;
         if let Some(parent) = config_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -1016,10 +1009,10 @@ impl Config {
         ProjectPath::project_dir().map(|proj_dirs| proj_dirs.config_dir().join(config_name))
     }
 
-    fn read(config_name: &str) -> color_eyre::Result<Self> {
+    fn read(config_name: &str) -> anyhow::Result<Self> {
         if let Some(config_path) = Self::config_path(config_name) {
             let content = std::fs::read(config_path)?;
-            toml::from_slice::<Config>(&content).map_err(|e| eyre!("{}", e))
+            toml::from_slice::<Config>(&content).map_err(|e| anyhow::anyhow!("{e}"))
         } else {
             bail!("Invalid config")
         }
