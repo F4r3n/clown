@@ -254,7 +254,9 @@ impl Completion {
     }
 
     pub fn get_next_completion(&mut self, is_first_word: bool) -> Option<(usize, String)> {
-        if let Some(state) = self.state.as_mut() {
+        if let Some(state) = self.state.as_mut()
+            && !state.list.is_empty()
+        {
             state.index_list = state.index_list.saturating_add(1) % state.list.len();
 
             if let Some(v) = state.list.get(state.index_list) {

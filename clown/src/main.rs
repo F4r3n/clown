@@ -70,7 +70,7 @@ fn prepare_logs(is_debug: bool) -> anyhow::Result<WorkerGuard> {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let _guard = prepare_logs(args.debug)?;
-    //info!("TEST");
+
     let mut list_messages = message_queue::MessageQueue::new();
 
     let mut model = match model::Model::new(args.config_name) {
