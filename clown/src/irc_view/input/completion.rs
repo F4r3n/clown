@@ -132,6 +132,84 @@ impl InputCompletion {
     }
 }
 
+struct Token<'a> {
+    value: &'a str,
+    start: usize, //inclusive
+    end: usize,   //exclusive
+}
+
+impl Token<'_> {
+    pub fn is_within_word(&self, value: usize) -> bool {
+        value >= self.start && value <= self.end
+    }
+}
+
+struct Tokens<'a> {
+    tokens: Vec<Token<'a>>,
+}
+
+impl<'a> Tokens<'a> {
+    pub fn list_values(&self) -> Vec<&'a str> {
+        self.tokens.iter().map(|v| v.value).collect()
+    }
+
+    pub fn get_last_index(&self, char_index: usize) -> usize {
+        self.tokens
+            .iter()
+            .enumerate()
+            .take_while(|(_, t)| t.start <= char_index)
+            .map(|(i, _)| i)
+            .last()
+            .unwrap_or(0)
+    }
+
+    pub fn get_token_index(&self, char_index: usize) -> Option<usize> {
+        self.tokens
+            .iter()
+            .position(|t| t.is_within_word(char_index))
+    }
+
+    pub fn get_token(&self, char_index: usize) -> Option<&Token<'a>> {
+        self.get_token_index(char_index)
+            .and_then(|i| self.tokens.get(i))
+    }
+}
+
+struct Parser;
+
+impl Parser {
+    pub fn parse<'a>(phrase: &'a str) -> Tokens<'a> {
+        let mut result = Vec::new();
+        let mut start_current_word: usize = 0;
+        let mut is_in_word = false;
+        for (i, c) in phrase.char_indices() {
+            if c.is_whitespace() {
+                if is_in_word {
+                    result.push(Token {
+                        value: &phrase[start_current_word..i],
+                        start: start_current_word,
+                        end: i,
+                    });
+                    is_in_word = false;
+                    start_current_word = i;
+                }
+            } else if !is_in_word {
+                is_in_word = true;
+                start_current_word = i;
+            }
+        }
+
+        if is_in_word {
+            result.push(Token {
+                value: &phrase[start_current_word..],
+                start: start_current_word,
+                end: phrase.len(),
+            });
+        }
+        Tokens { tokens: result }
+    }
+}
+
 #[derive(PartialEq, Eq)]
 enum CompletionKind {
     Command,
@@ -166,22 +244,24 @@ impl Completion {
         self.in_message_suffix = in_message_suffix;
     }
 
-    pub fn set_completion(&mut self, start: usize, slice: &str, full_phrase: &str) {
+    pub fn set_completion(&mut self, start: usize, cursor_pos: usize, full_phrase: &str) {
         if self.state.is_some() {
             return;
         }
 
-        //TODO: the completion context should be cursor dependant
-        if let Some(end) = full_phrase.strip_prefix("/") {
-            let tokens = end.split_whitespace().collect::<Vec<&str>>();
+        let phrase = &full_phrase[..cursor_pos];
+        let tokens = Parser::parse(phrase);
+        let last = tokens.get_token(cursor_pos).map(|t| t.value).unwrap_or("");
 
-            match tokens.as_slice() {
-                ["config", "get" | "set", config_option, ..] => {
-                    let last = tokens.last().unwrap_or(&"");
+        if let Some(end) = phrase.strip_prefix("/") {
+            let slice = tokens.list_values();
+
+            match slice.as_slice() {
+                ["/config", "get" | "set", config_option, ..] => {
                     if let Ok(expected_parameters) =
                         Config::expected_parameters_from_root(config_option)
                     {
-                        let index = tokens.len().saturating_sub(4);
+                        let index = tokens.get_last_index(cursor_pos).saturating_sub(4);
 
                         if let Some(expected_parameter) = expected_parameters.get(index)
                             && *expected_parameter == ValueParameter::Nickname
@@ -205,8 +285,7 @@ impl Completion {
                         );
                     }
                 }
-                ["config", "get" | "set", ..] => {
-                    let last = tokens.last().unwrap_or(&"");
+                ["/config", "get" | "set", ..] => {
                     if let Some(list) = self.input_completion.list_config(last) {
                         self.apply_state(
                             list,
@@ -216,9 +295,10 @@ impl Completion {
                     }
                 }
 
-                ["config", ..] => {
+                ["/config", ..] => {
                     let mut list: Vec<String> = vec!["set".into(), "get".into()];
-                    list.retain(|v| v.starts_with(slice));
+
+                    list.retain(|v| v.starts_with(last));
                     self.apply_state(
                         list,
                         CompletionKind::Config,
@@ -233,7 +313,7 @@ impl Completion {
             };
         } else if let Some(list) =
             self.input_completion
-                .list(self.server_id, &self.current_channel, slice)
+                .list(self.server_id, &self.current_channel, last)
         {
             self.state = Some(CompletionState {
                 list,
@@ -257,7 +337,8 @@ impl Completion {
         if let Some(state) = self.state.as_mut()
             && !state.list.is_empty()
         {
-            state.index_list = state.index_list.saturating_add(1) % state.list.len();
+            let index = state.index_list;
+            state.index_list = index % state.list.len();
 
             if let Some(v) = state.list.get(state.index_list) {
                 let mut v = v.to_string();
@@ -268,7 +349,7 @@ impl Completion {
                         v.push_str(self.in_message_suffix.as_ref());
                     };
                 }
-
+                state.index_list = index.saturating_add(1);
                 Some((state.start_character_pos, v))
             } else {
                 None
@@ -301,8 +382,11 @@ mod test {
         comp.server_id = Some(0);
 
         // Normal user completion (not first word)
-        comp.set_completion(0, "t", "t");
-
+        comp.set_completion(0, 1, "t");
+        assert_eq!(
+            comp.get_next_completion(false),
+            Some((0, "tata".to_string()))
+        );
         assert_eq!(
             comp.get_next_completion(false),
             Some((0, "titi".to_string()))
@@ -319,24 +403,24 @@ mod test {
         // No channel → no completion
         comp.current_channel = "".to_string();
         comp.reset();
-        comp.set_completion(0, "t", "t");
+        comp.set_completion(0, 1, "t");
         assert_eq!(comp.get_next_completion(false), None);
 
         // Command completion
         comp.reset();
-        comp.set_completion(0, "/", "/");
+        comp.set_completion(0, 1, "/");
 
-        assert_eq!(
-            comp.get_next_completion(true),
-            Some((1, "quit".to_string()))
-        );
         assert_eq!(
             comp.get_next_completion(true),
             Some((1, "help".to_string()))
         );
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((1, "quit".to_string()))
+        );
 
         comp.reset();
-        comp.set_completion(0, "/h", "/h");
+        comp.set_completion(0, 2, "/h");
         assert_eq!(
             comp.get_next_completion(true),
             Some((1, "help".to_string()))
@@ -358,22 +442,30 @@ mod test {
         comp.current_channel = "#test".to_string();
         comp.server_id = Some(0);
 
-        comp.set_completion(0, "n", "/config set n");
+        comp.set_completion(0, 13, "/config set n");
         assert_eq!(
             comp.get_next_completion(true),
             Some((0, "nickname_colors.seed".to_string()))
         );
 
         comp.reset();
-        comp.set_completion(0, "s", "/config s");
+        comp.set_completion(0, 9, "/config s");
         assert_eq!(comp.get_next_completion(true), Some((0, "set".to_string())));
 
         comp.reset();
-        comp.set_completion(0, "", "/config");
+        comp.set_completion(0, 8, "/config ");
+        assert_eq!(comp.get_next_completion(true), Some((0, "set".to_string())));
         assert_eq!(comp.get_next_completion(true), Some((0, "get".to_string())));
 
         comp.reset();
-        comp.set_completion(0, "y", "/config set nickname_colors.overrides y");
+        comp.set_completion(0, 39, "/config set nickname_colors.overrides y");
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((0, "yolo".to_string()))
+        );
+
+        comp.reset();
+        comp.set_completion(0, 38, "/config set nickname_colors.overrides ");
         assert_eq!(
             comp.get_next_completion(true),
             Some((0, "yolo".to_string()))
@@ -392,8 +484,11 @@ mod test {
 
         comp.current_channel = "#test".to_string();
 
-        comp.set_completion(0, "t", "t");
-
+        comp.set_completion(0, 1, "t");
+        assert_eq!(
+            comp.get_next_completion(false),
+            Some((0, "tata".to_string()))
+        );
         assert_eq!(
             comp.get_next_completion(false),
             Some((0, "Titi".to_string()))
@@ -416,7 +511,7 @@ mod test {
         comp.server_id = Some(0);
 
         // First word completion → should use on_empty_input_suffix
-        comp.set_completion(0, "t", "t");
+        comp.set_completion(0, 1, "t");
 
         assert_eq!(
             comp.get_next_completion(true),
@@ -426,7 +521,7 @@ mod test {
         comp.reset();
 
         // In-message completion → should use in_message_suffix
-        comp.set_completion(5, "t", "t");
+        comp.set_completion(5, 1, "t");
 
         assert_eq!(
             comp.get_next_completion(false),

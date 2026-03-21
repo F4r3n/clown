@@ -213,11 +213,12 @@ impl crate::component::EventHandler for CInput {
 
 impl CInput {
     fn set_completion(&mut self) {
-        if let Some(start) = self.input.find_previous_break(false).or(Some(0))
-            && let Some(slice) = self.input.get_slice_till_cursor(start)
-        {
-            self.completion
-                .set_completion(start, slice, self.input.get_value());
+        if let Some(start) = self.input.find_previous_break(false).or(Some(0)) {
+            self.completion.set_completion(
+                start,
+                self.input.cursor_position,
+                self.input.get_value(),
+            );
         }
     }
 
