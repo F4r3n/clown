@@ -429,10 +429,6 @@ impl InputWidget {
         self.cursor_position = self.value[..start + count + word[count..].len()].len();
     }
 
-    fn get_slice_till_cursor(&self, start: usize) -> Option<&str> {
-        self.value.get(start..self.cursor_position)
-    }
-
     fn find_previous_break(&self, skip_spaces: bool) -> Option<usize> {
         if self.cursor_position == 0 || self.cursor_position > self.value.len() {
             return None;

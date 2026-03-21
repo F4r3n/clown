@@ -76,8 +76,6 @@ impl EventHandler for TopicWidget {
     ) -> Option<MessageEvent> {
         match event {
             MessageEvent::SetTopic(server_id, _source, channel, topic) => {
-                self.topic_collection
-                    .resize(server_id.saturating_add(1), Default::default());
                 self.update_topic(*server_id, channel, topic.to_string());
                 self.need_redraw = true;
 

@@ -94,10 +94,6 @@ impl Model {
         &self.stored_config.config
     }
 
-    pub fn list_fields_config() -> Vec<String> {
-        StoredConfig::list_fields()
-    }
-
     pub fn save(&self) -> anyhow::Result<()> {
         self.stored_config.save()
     }
