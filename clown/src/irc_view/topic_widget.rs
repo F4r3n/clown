@@ -19,8 +19,6 @@ impl Draw for TopicWidget {
     ) {
         if self.need_redraw {
             self.need_redraw = false;
-        } else {
-            return;
         }
 
         if let Some(model) = irc_model
