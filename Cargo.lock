@@ -388,6 +388,7 @@ dependencies = [
  "crossterm",
  "directories",
  "futures",
+ "nom",
  "once_cell",
  "open",
  "palette",

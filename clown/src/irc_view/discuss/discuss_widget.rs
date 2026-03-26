@@ -3,6 +3,7 @@ use std::time::Duration;
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::component::Draw;
 use crate::message_irc::message_content::WordPos;
+use crate::message_irc::message_logger::{LoggedMessage, LoggedTimedMessage};
 use crate::message_irc::textwrapper::wrap_content;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use ahash::AHashMap;
@@ -240,6 +241,42 @@ impl DiscussWidget {
         } else {
             None
         }
+    }
+
+    fn create_message(log: LoggedTimedMessage<'_>) -> MessageContent {
+        let mut m = match log.message {
+            LoggedMessage::Action { source, content } => {
+                MessageContent::new_action(source.to_string(), content.to_string())
+            }
+            LoggedMessage::Topic {
+                source,
+                channel,
+                content,
+            } => {
+                let data = format!(
+                    "{} has changed topic for {} to \"{}\"",
+                    source, channel, content
+                );
+                MessageContent::new_info(data)
+            }
+            LoggedMessage::Join { source, channel } => {
+                MessageContent::new_info(format!("{} has joined", source))
+            }
+            LoggedMessage::Part { source, channel } => {
+                MessageContent::new_info(format!("{} has left {}", source, channel))
+            }
+            LoggedMessage::Quit { source } => {
+                MessageContent::new_info(format!("{} has quit", source))
+            }
+            LoggedMessage::NickChange { old, new } => {
+                MessageContent::new_info(format!("{} has changed their nickname to {}", old, new))
+            }
+            LoggedMessage::Message { source, content } => {
+                MessageContent::new_privmsg(source.to_string(), content.to_string())
+            }
+        };
+        m.set_time(log.time);
+        m
     }
 
     pub fn get_current_line_index_character(

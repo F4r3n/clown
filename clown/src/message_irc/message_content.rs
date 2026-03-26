@@ -1,3 +1,4 @@
+use crate::message_irc::message_logger::LoggedMessage;
 use crate::message_irc::message_parser::{get_width_without_format, strip_irc_formatting_cow};
 use crate::message_irc::textwrapper::{WrappedLine, wrap_spans, wrapped_line_count};
 use chrono::{DateTime, Local};
@@ -30,6 +31,7 @@ pub enum MessageKind {
     Normal,
     Highlight,
     Action,
+    Log,
     Notice,
 }
 
@@ -76,6 +78,16 @@ impl MessageContent {
         }
     }
 
+    pub fn new_log(time: std::time::SystemTime, source: Option<String>, content: String) -> Self {
+        Self {
+            time,
+            source,
+            width_without_format: get_width_without_format(&content),
+            content,
+            kind: MessageKind::Log,
+        }
+    }
+
     pub fn new_error(content: String) -> Self {
         Self {
             time: std::time::SystemTime::now(),
@@ -96,6 +108,10 @@ impl MessageContent {
             content,
             kind: MessageKind::Action,
         }
+    }
+
+    pub fn set_time(&mut self, time: std::time::SystemTime) {
+        self.time = time
     }
 
     pub fn new_privmsg(target: String, content: String) -> Self {
@@ -184,6 +200,7 @@ impl MessageContent {
 
         let default_style = match &self.kind {
             MessageKind::Error => Style::default().fg(Color::Red),
+            MessageKind::Log => Style::default().fg(Color::Gray),
             MessageKind::Info => Style::default().fg(Color::LightBlue),
             MessageKind::Action | MessageKind::Notice => Style::default().fg(Color::LightBlue),
             MessageKind::Normal | MessageKind::Highlight => Style::default(),
