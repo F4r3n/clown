@@ -135,43 +135,52 @@ impl LogWriter {
     }
 }
 
-struct LogReader {
-    buffer: std::io::BufReader<std::fs::File>,
-    seek_pos: i64, //starts from end
+struct LogReader<R: Read + Seek> {
+    buffer: std::io::BufReader<R>,
+    seek_pos: u64, //starts from start, because the logs appends at the end
 }
 
-impl LogReader {
-    fn init(path: &Path) -> anyhow::Result<BufReader<std::fs::File>> {
+impl LogReader<std::fs::File> {
+    pub fn try_from_path(path: &Path) -> anyhow::Result<Self> {
+        let file = Self::init(path)?;
+        Ok(Self {
+            seek_pos: file.metadata()?.len(),
+            buffer: BufReader::new(file),
+        })
+    }
+}
+
+impl<R: Read + Seek> LogReader<R> {
+    fn init(path: &Path) -> anyhow::Result<std::fs::File> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let file = std::fs::File::options().read(true).open(path)?;
-        Ok(BufReader::new(file))
+        Ok(file)
     }
 
-    pub fn try_from_path(path: &Path) -> anyhow::Result<LogReader> {
+    pub fn new(mut reader: R) -> anyhow::Result<Self> {
+        let end_pos = reader.seek(std::io::SeekFrom::End(0))?;
         Ok(Self {
-            buffer: Self::init(path)?,
-            seek_pos: 0,
+            buffer: BufReader::new(reader),
+            seek_pos: end_pos,
         })
     }
 
-    pub fn read(&mut self, number_lines: usize) -> anyhow::Result<Vec<LoggedTimedMessage<'_>>> {
-        let mut vec = Vec::new();
-        let mut start_pos = self.seek_pos;
-
+    fn find_last_offset(&mut self, target: std::time::SystemTime) -> anyhow::Result<u64> {
+        let mut pos = self.seek_pos;
         let mut chunk = [0; 1024];
-
-        let mut to_read = number_lines;
         let mut carry: Vec<u8> = Vec::new();
 
-        while to_read > 0 {
-            start_pos = start_pos.saturating_sub(1024);
+        loop {
+            if pos == 0 {
+                break;
+            }
 
-            let pos = std::io::SeekFrom::End(start_pos);
-            self.buffer.seek(pos)?;
+            let read_start = pos.saturating_sub(1024);
+            self.buffer.seek(std::io::SeekFrom::Start(read_start))?;
+
             let read_size = self.buffer.read(&mut chunk)?;
-
             if read_size == 0 {
                 break;
             }
@@ -187,27 +196,80 @@ impl LogReader {
                     let line = &combined[i + 1..start];
 
                     if !line.is_empty() {
-                        vec.push(log_parser::parse(line)?);
-                        to_read = to_read.saturating_sub(1);
+                        let parsed = log_parser::parse(line)?;
 
-                        if to_read == 0 {
-                            break;
+                        if parsed.time < target {
+                            return Ok(read_start + start as u64);
                         }
                     }
 
                     start = i + 1;
                 }
             }
-            let consumed = (combined.len() - start) as i64;
-            start_pos += consumed;
+
+            // keep incomplete line
             carry = combined[..start].to_vec();
+
+            pos = read_start;
+        }
+
+        // If nothing found, return start of file
+        Ok(0)
+    }
+
+    pub fn seek_last_time(&mut self, target: std::time::SystemTime) -> bool {
+        if let Ok(offset) = self.find_last_offset(target) {
+            self.seek_pos = offset;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn read(&mut self, number_lines: usize) -> anyhow::Result<Vec<LoggedTimedMessage<'_>>> {
+        let mut vec = Vec::new();
+        let mut to_read = number_lines;
+        let mut carry: Vec<u8> = Vec::new();
+
+        while to_read > 0 && self.seek_pos > 0 {
+            let amount_to_read = self.seek_pos.min(1024);
+            self.seek_pos -= amount_to_read;
+
+            self.buffer.seek(std::io::SeekFrom::Start(self.seek_pos))?;
+            let mut chunk = vec![0; amount_to_read as usize];
+            self.buffer.read_exact(&mut chunk)?;
+
+            // BACKWARDS STITCHING: chunk (earlier) + carry (later)
+            let mut combined = chunk;
+            combined.extend_from_slice(&carry);
+
+            let mut end_idx = combined.len();
+            for i in (0..combined.len()).rev() {
+                if combined.get(i) == Some(&b'\n') {
+                    if let Some(line) = combined.get(i + 1..end_idx)
+                        && !line.is_empty()
+                    {
+                        vec.push(log_parser::parse(line)?);
+                        to_read -= 1;
+                        if to_read == 0 {
+                            self.seek_pos += (i + 1) as u64;
+                            break;
+                        }
+                    }
+
+                    end_idx = i;
+                }
+            }
+
+            if to_read == 0 {
+                break;
+            }
+            carry = combined[..end_idx].to_vec();
         }
 
         if to_read > 0 && !carry.is_empty() {
-            vec.push(log_parser::parse(carry.as_slice())?);
+            vec.push(log_parser::parse(&carry)?);
         }
-        self.seek_pos = start_pos;
-        vec.reverse(); // restore correct order
 
         Ok(vec)
     }
@@ -405,6 +467,7 @@ impl MessageLogger {
 
             MessageEvent::Notice(_, source, target, content)
             | MessageEvent::PrivMsg(_, source, target, content) => {
+                tracing::debug!("NEW MESSAGE");
                 self.write_to_target(
                     server_address,
                     Some(target),
@@ -438,9 +501,11 @@ impl MessageLogger {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{DateTime, NaiveDateTime, Utc};
     use std::fs;
+    use std::io::Cursor;
+    use std::time::SystemTime;
     use tempfile::tempdir;
-
     #[test]
     fn test_sanitize_path() {
         assert_eq!(
@@ -464,5 +529,69 @@ mod tests {
         assert!(content.contains("Hello, Rust!"));
         // Check for timestamp format (YYYY-MM-DD)
         assert!(content.contains(&chrono::Local::now().format("%Y-%m-%d").to_string()));
+    }
+
+    fn parse_utc_to_system_time(date_str: &str) -> anyhow::Result<SystemTime> {
+        let format = "%Y-%m-%d %H:%M:%S";
+
+        let naive = NaiveDateTime::parse_from_str(date_str, format)?;
+
+        let datetime_utc: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+
+        Ok(SystemTime::from(datetime_utc))
+    }
+
+    fn system_time_to_utc_string(st: SystemTime) -> String {
+        let dt: DateTime<Utc> = st.into();
+
+        dt.format("%Y-%m-%d %H:%M:%S").to_string()
+    }
+
+    #[test]
+    fn test_read_from_time() {
+        let data = "2026-03-28 09:42:01\tfarine a\n2026-03-28 09:42:02\tfarine b\n2026-03-28 09:42:03\tfarine c\n";
+        let cursor = Cursor::new(data.as_bytes());
+
+        let mut reader = LogReader::new(cursor).unwrap();
+
+        assert!(reader.seek_last_time(parse_utc_to_system_time("2026-03-28 09:42:03").unwrap()));
+        let results = reader.read(1).unwrap();
+
+        assert_eq!(
+            system_time_to_utc_string(results[0].time),
+            "2026-03-28 09:42:02"
+        );
+    }
+
+    #[test]
+    fn test_read_backwards_simple() {
+        let data = "2026-03-28 09:42:01\tfarine a\n2026-03-28 09:42:02\tfarine b\n2026-03-28 09:42:03\tfarine c\n";
+        let cursor = Cursor::new(data.as_bytes());
+
+        let mut reader = LogReader::new(cursor).unwrap();
+
+        let results = reader.read(2).unwrap();
+        assert_eq!(
+            system_time_to_utc_string(results[0].time),
+            "2026-03-28 09:42:03"
+        );
+        assert_eq!(
+            system_time_to_utc_string(results[1].time),
+            "2026-03-28 09:42:02"
+        );
+
+        reader.seek_pos = data.len() as u64;
+
+        let results = reader.read(1).unwrap();
+        assert_eq!(
+            system_time_to_utc_string(results[0].time),
+            "2026-03-28 09:42:03"
+        );
+        let results = reader.read(1).unwrap();
+
+        assert_eq!(
+            system_time_to_utc_string(results[0].time),
+            "2026-03-28 09:42:02"
+        );
     }
 }

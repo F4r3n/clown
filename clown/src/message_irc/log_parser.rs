@@ -116,6 +116,20 @@ fn parse_nick<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMess
     ))
 }
 
+fn parse_priv_message<'a>(input: &'a [u8]) -> IResult<&'a [u8], LoggedMessage<'static>> {
+    let (input, source) =
+        map_res(take_till(|c: u8| c.is_ascii_whitespace()), buf_to_str).parse(input)?;
+    let (input, rest) = map_res(nom::combinator::rest, buf_to_str).parse(input)?;
+
+    Ok((
+        input,
+        LoggedMessage::Message {
+            source: std::borrow::Cow::Owned(source.to_string()),
+            content: std::borrow::Cow::Owned(rest.to_string()),
+        },
+    ))
+}
+
 fn parse_part<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMessage<'static>> {
     let (input, _) = tag(" has left ").parse(input)?;
     let (input, channel) =
@@ -146,6 +160,7 @@ fn parse_event(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
         preceded(tag("\t<--\t "), parse_outgoing_subevents),
         preceded(tag("\t-->\t "), parse_ingoing_subevents),
         preceded(tag("\t--\t "), parse_network_subevents),
+        parse_priv_message,
     ))
     .parse(input)
 }
