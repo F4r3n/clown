@@ -6,7 +6,7 @@ use nom::bytes::complete::tag;
 use nom::{
     IResult, Parser,
     branch::alt,
-    bytes::{take_till, take_while, take_while_m_n},
+    bytes::{take_till, take_while_m_n},
     character::complete::char,
     combinator::map_res,
     sequence::preceded,
@@ -90,7 +90,6 @@ fn parse_topic(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
 
 fn parse_join<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMessage<'static>> {
     let (input, _) = tag(" has joined ").parse(input)?;
-    println!("{source} '{:?}'", buf_to_str(input));
 
     let (input, channel) = map_res(nom::combinator::rest, buf_to_str).parse(input)?;
 
@@ -116,9 +115,10 @@ fn parse_nick<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMess
     ))
 }
 
-fn parse_priv_message<'a>(input: &'a [u8]) -> IResult<&'a [u8], LoggedMessage<'static>> {
+fn parse_priv_message(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
     let (input, source) =
         map_res(take_till(|c: u8| c.is_ascii_whitespace()), buf_to_str).parse(input)?;
+    let (input, _) = tag(" ").parse(input)?;
     let (input, rest) = map_res(nom::combinator::rest, buf_to_str).parse(input)?;
 
     Ok((
@@ -160,7 +160,7 @@ fn parse_event(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
         preceded(tag("\t<--\t "), parse_outgoing_subevents),
         preceded(tag("\t-->\t "), parse_ingoing_subevents),
         preceded(tag("\t--\t "), parse_network_subevents),
-        parse_priv_message,
+        preceded(tag("\t"), parse_priv_message),
     ))
     .parse(input)
 }
@@ -222,6 +222,34 @@ mod tests {
             assert_eq!(channel, "#rust-lang");
         } else {
             panic!("Expected Join message");
+        }
+    }
+
+    #[test]
+    fn test_parse_message() {
+        let raw = b"2024-05-20 14:30:05\t-->\t Alice has joined #rust-lang";
+        let result = parse(raw);
+        let result = result.expect("failed");
+        assert_eq!(to_utc_string(result.time), "2024-05-20T14:30:05+00:00");
+        if let LoggedMessage::Join { source, channel } = result.message {
+            assert_eq!(source, "Alice");
+            assert_eq!(channel, "#rust-lang");
+        } else {
+            panic!("Expected Join message");
+        }
+    }
+
+    #[test]
+    fn test_parse_priv_message() {
+        let raw = b"2024-05-20 14:30:05\tAlice HELLO";
+        let result = parse(raw);
+        let result = result.expect("failed");
+        assert_eq!(to_utc_string(result.time), "2024-05-20T14:30:05+00:00");
+        if let LoggedMessage::Message { source, content } = result.message {
+            assert_eq!(source, "Alice");
+            assert_eq!(content, "HELLO");
+        } else {
+            panic!("Expected Priv message");
         }
     }
 

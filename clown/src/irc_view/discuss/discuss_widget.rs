@@ -1,9 +1,12 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::component::Draw;
 use crate::message_irc::message_content::WordPos;
-use crate::message_irc::message_logger::{LoggedMessage, LoggedTimedMessage};
+use crate::message_irc::message_logger::{
+    LogReader, LoggedMessage, LoggedTimedMessage, MessageLogger,
+};
 use crate::message_irc::textwrapper::wrap_content;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use ahash::AHashMap;
@@ -24,15 +27,19 @@ struct Range {
 }
 
 #[derive(Debug, Default)]
-pub struct ServerMessages {
+pub struct ServersMessages {
     messages: Vec<ChannelMessages>,
+    log_folder: PathBuf,
 }
 
-impl ServerMessages {
-    pub fn new() -> Self {
-        Self {
-            messages: vec![ChannelMessages::default()],
-        }
+impl ServersMessages {
+    pub fn new(log_folder: PathBuf) -> Self {
+        let mut result = Self {
+            log_folder,
+            messages: vec![],
+        };
+        result.add_server_group(None, None);
+        result
     }
 
     pub fn add_message(
@@ -41,8 +48,33 @@ impl ServerMessages {
         channel: &str,
         in_message: MessageContent,
     ) {
-        if let Some(server_group) = self.add_server_group(server_id) {
+        if let Some(server_group) = self.get_server_group_mut(server_id) {
             server_group.add_message(channel, in_message);
+        }
+    }
+
+    fn open_log(&mut self, server_id: usize, channel: &str) {
+        if let Some(server_group) = self.get_server_group(Some(server_id))
+            && server_group.is_log_open(channel)
+        {
+            return;
+        }
+        let path = self.log_folder.clone();
+        if let Some(server_group) = self.get_server_group_mut(Some(server_id)) {
+            server_group.open_log(path, channel);
+        }
+    }
+
+    fn read_log(
+        &mut self,
+        number_lines: usize,
+        server_id: usize,
+        channel: &str,
+    ) -> anyhow::Result<bool> {
+        if let Some(server_group) = self.get_server_group_mut(Some(server_id)) {
+            server_group.read_log(channel, number_lines)
+        } else {
+            Ok(false)
         }
     }
 
@@ -50,9 +82,17 @@ impl ServerMessages {
         server_id.map(|v| v.saturating_add(1)).unwrap_or(0)
     }
 
-    fn add_server_group(&mut self, server_id: Option<usize>) -> Option<&mut ChannelMessages> {
-        let new_length = Self::server_id_position(server_id).saturating_add(1);
+    fn add_server_group(
+        &mut self,
+        server_id: Option<usize>,
+        server_address: Option<String>,
+    ) -> Option<&mut ChannelMessages> {
+        let position = Self::server_id_position(server_id);
+        let new_length = position.saturating_add(1);
         self.messages.resize_with(new_length, Default::default);
+        if let Some(server_group) = self.messages.get_mut(position) {
+            server_group.server_address = server_address;
+        }
 
         self.get_server_group_mut(server_id)
     }
@@ -79,11 +119,7 @@ impl ServerMessages {
         }
     }
 
-    pub fn get_messages(
-        &self,
-        server_id: Option<usize>,
-        channel: &str,
-    ) -> Option<&Vec<MessageContent>> {
+    fn get_messages(&self, server_id: Option<usize>, channel: &str) -> Option<&Messages> {
         if let Some(server_group) = self.get_server_group(server_id) {
             server_group.get_messages(channel)
         } else {
@@ -119,9 +155,88 @@ impl ServerMessages {
     }
 }
 
+//Cannot have only one vector
+// The logged message would have been inserted at the beginning
+// The logged messages are reversed in order
+#[derive(Debug, Default)]
+struct Messages {
+    logged_messages: Vec<MessageContent>,
+    messages: Vec<MessageContent>,
+    log_reader: Option<LogReader<std::fs::File>>,
+}
+
+impl Messages {
+    pub fn push_new(&mut self, in_message: MessageContent) {
+        self.messages.push(in_message);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.logged_messages.is_empty() && self.messages.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.logged_messages.len() + self.messages.len()
+    }
+
+    // Logged -1 -2 -3 -4
+    // Message 0 1 2 3
+    // -1 -2 -3 -4 0 1 2 3
+    pub fn get(&self, index: usize) -> Option<&MessageContent> {
+        let logged_len = self.logged_messages.len();
+
+        if index < logged_len {
+            // reverse access
+            let rev_index = logged_len - 1 - index;
+            self.logged_messages.get(rev_index)
+        } else {
+            self.messages.get(index - logged_len)
+        }
+    }
+
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &MessageContent> {
+        self.logged_messages
+            .iter()
+            .rev()
+            .chain(self.messages.iter())
+    }
+
+    fn open_log(&mut self, log_folder: PathBuf, server_address: &str, channel: &str) {
+        let name = MessageLogger::compute_filename(server_address, Some(channel));
+        let path = log_folder.join(name);
+        self.log_reader = LogReader::try_from_path(path.as_path()).ok();
+        if let Some(log_reader) = self.log_reader.as_mut() {
+            log_reader.seek_last_time(
+                self.messages
+                    .first()
+                    .map(|v| v.get_time())
+                    .unwrap_or(std::time::SystemTime::now()),
+            );
+        }
+    }
+
+    fn read_log(&mut self, number_lines: usize) -> anyhow::Result<bool> {
+        let log_reader = match self.log_reader.as_mut() {
+            Some(reader) => reader,
+            None => return Ok(false),
+        };
+
+        let list_read = log_reader.read(number_lines)?;
+        let has_lines = !list_read.is_empty();
+
+        self.logged_messages.extend(
+            list_read
+                .into_iter()
+                .map(|msg| DiscussWidget::create_message(msg)),
+        );
+
+        Ok(has_lines)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ChannelMessages {
-    messages: AHashMap<String, Vec<MessageContent>>,
+    messages: AHashMap<String, Messages>,
+    server_address: Option<String>,
 }
 
 impl ChannelMessages {
@@ -129,7 +244,7 @@ impl ChannelMessages {
         self.messages
             .entry(channel.to_string())
             .or_default()
-            .push(in_message);
+            .push_new(in_message);
     }
 
     fn rename(&mut self, old: &str, new: &str) {
@@ -138,11 +253,33 @@ impl ChannelMessages {
         }
     }
 
+    fn is_log_open(&self, channel: &str) -> bool {
+        self.messages
+            .get(channel)
+            .is_some_and(|v| v.log_reader.is_some())
+    }
+
+    fn open_log(&mut self, log_folder: PathBuf, channel: &str) {
+        if let Some(server_address) = self.server_address.as_deref() {
+            self.messages
+                .entry(channel.to_string())
+                .or_default()
+                .open_log(log_folder, server_address, channel);
+        }
+    }
+
+    fn read_log(&mut self, channel: &str, number_lines: usize) -> anyhow::Result<bool> {
+        self.messages
+            .entry(channel.to_string())
+            .or_default()
+            .read_log(number_lines)
+    }
+
     pub fn has_messages(&self, channel: &str) -> bool {
         self.messages.get(channel).is_some_and(|c| !c.is_empty())
     }
 
-    pub fn get_messages(&self, channel: &str) -> Option<&Vec<MessageContent>> {
+    fn get_messages(&self, channel: &str) -> Option<&Messages> {
         self.messages.get(channel)
     }
 
@@ -189,7 +326,7 @@ pub struct DiscussWidget {
     follow_last: bool,
     area: Rect,
     content_width: usize,
-    messages: ServerMessages,
+    messages: ServersMessages,
     current_channel: String,
     current_server_id: Option<usize>,
 
@@ -200,11 +337,11 @@ pub struct DiscussWidget {
 }
 
 impl DiscussWidget {
-    pub fn new() -> Self {
+    pub fn new(log_folder: PathBuf) -> Self {
         Self {
             current_channel: String::new(),
             current_server_id: None,
-            messages: ServerMessages::new(),
+            messages: ServersMessages::new(log_folder),
             scroll_offset: 0,
             max_visible_height: 10,
             follow_last: true,
@@ -260,7 +397,7 @@ impl DiscussWidget {
                 MessageContent::new_info(data)
             }
             LoggedMessage::Join { source, channel } => {
-                MessageContent::new_info(format!("{} has joined", source))
+                MessageContent::new_info(format!("{source} has joined {channel}"))
             }
             LoggedMessage::Part { source, channel } => {
                 MessageContent::new_info(format!("{} has left {}", source, channel))
@@ -272,7 +409,7 @@ impl DiscussWidget {
                 MessageContent::new_info(format!("{} has changed their nickname to {}", old, new))
             }
             LoggedMessage::Message { source, content } => {
-                MessageContent::new_privmsg(source.to_string(), content.to_string())
+                MessageContent::new(Some(source.to_string()), content.to_string())
             }
         };
         m.set_time(log.time);
@@ -325,50 +462,45 @@ impl DiscussWidget {
                 rows_from_bottom += total_rows;
             }
 
-            if let Some(slice) = messages.get(start_message_index..) {
-                for (line_index, line) in slice.iter().enumerate() {
-                    let total_line_rows = line.wrapped_line_count(self.content_width);
+            for (line_index, line) in messages.iter().enumerate().skip(start_message_index) {
+                let total_line_rows = line.wrapped_line_count(self.content_width);
 
-                    // Calculate available rows after skipping the top part (if any)
-                    let rows_available = total_line_rows.saturating_sub(rows_to_skip_in_message);
+                // Calculate available rows after skipping the top part (if any)
+                let rows_available = total_line_rows.saturating_sub(rows_to_skip_in_message);
 
-                    // Cap strictly to the remaining height
-                    let rows_remaining = self.max_visible_height.saturating_sub(visible_rows_total);
-                    let rows_to_take = rows_remaining.min(rows_available);
+                // Cap strictly to the remaining height
+                let rows_remaining = self.max_visible_height.saturating_sub(visible_rows_total);
+                let rows_to_take = rows_remaining.min(rows_available);
 
-                    if rows_to_take == 0 && rows_remaining == 0 {
-                        break;
-                    }
-
-                    let stripped = line.stripped_formatting();
-                    let mut rows = wrap_content(&stripped, self.content_width);
-                    let mut char_skipped: usize = 0;
-                    if let Some(rows) = rows.get(..rows_to_skip_in_message) {
-                        char_skipped = rows.iter().map(|v| v.chars().count()).sum();
-                    }
-                    rows = rows.into_iter().skip(rows_to_skip_in_message).collect();
-                    let rows_len = rows.len();
-
-                    if index_y < visible_rows_total + rows_len {
-                        let pointed_row = (index_y - visible_rows_total).min(rows_len - 1);
-                        //it will be an approximation, because wrapping can remove spaces,
-                        //  but sometimes does not remove characters
-                        let char_position: usize = rows
-                            .get(..pointed_row)
-                            .map(|slice| slice.iter().map(|v| v.chars().count()).sum())
-                            .unwrap_or(0);
-                        if char_skipped + char_position + pos_x > line.get_message_width() {
-                            return None;
-                        }
-                        return Some((
-                            line_index + start_message_index,
-                            char_skipped + char_position + pos_x,
-                        ));
-                    }
-                    rows_to_skip_in_message = 0; // Reset for subsequent messages
-
-                    visible_rows_total += rows_len;
+                if rows_to_take == 0 && rows_remaining == 0 {
+                    break;
                 }
+
+                let stripped = line.stripped_formatting();
+                let mut rows = wrap_content(&stripped, self.content_width);
+                let mut char_skipped: usize = 0;
+                if let Some(rows) = rows.get(..rows_to_skip_in_message) {
+                    char_skipped = rows.iter().map(|v| v.chars().count()).sum();
+                }
+                rows = rows.into_iter().skip(rows_to_skip_in_message).collect();
+                let rows_len = rows.len();
+
+                if index_y < visible_rows_total + rows_len {
+                    let pointed_row = (index_y - visible_rows_total).min(rows_len - 1);
+                    //it will be an approximation, because wrapping can remove spaces,
+                    //  but sometimes does not remove characters
+                    let char_position: usize = rows
+                        .get(..pointed_row)
+                        .map(|slice| slice.iter().map(|v| v.chars().count()).sum())
+                        .unwrap_or(0);
+                    if char_skipped + char_position + pos_x > line.get_message_width() {
+                        return None;
+                    }
+                    return Some((line_index, char_skipped + char_position + pos_x));
+                }
+                rows_to_skip_in_message = 0; // Reset for subsequent messages
+
+                visible_rows_total += rows_len;
             }
         }
 
@@ -409,41 +541,39 @@ impl DiscussWidget {
 
             let mut visible_rows_total = 0;
 
-            if let Some(slice) = messages.get(start_message_index..) {
-                for line in slice {
-                    let total_line_rows = line.wrapped_line_count(self.content_width);
+            for line in messages.iter().skip(start_message_index) {
+                let total_line_rows = line.wrapped_line_count(self.content_width);
 
-                    // Calculate available rows after skipping the top part (if any)
-                    let rows_available = total_line_rows.saturating_sub(rows_to_skip_in_message);
+                // Calculate available rows after skipping the top part (if any)
+                let rows_available = total_line_rows.saturating_sub(rows_to_skip_in_message);
 
-                    // Cap strictly to the remaining height
-                    let rows_remaining = self.max_visible_height.saturating_sub(visible_rows_total);
-                    let rows_to_take = rows_remaining.min(rows_available);
+                // Cap strictly to the remaining height
+                let rows_remaining = self.max_visible_height.saturating_sub(visible_rows_total);
+                let rows_to_take = rows_remaining.min(rows_available);
 
-                    if rows_to_take == 0 && rows_remaining == 0 {
-                        break;
-                    }
-                    let color = line
-                        .get_source()
-                        .and_then(|s| model.map(|v| v.get_color(s)));
-                    let rows = line
-                        .create_rows(
-                            self.content_width as u16,
-                            color,
-                            self.time_size,
-                            NICKNAME_LENGTH,
-                        )
-                        .skip(rows_to_skip_in_message)
-                        .take(rows_to_take);
+                if rows_to_take == 0 && rows_remaining == 0 {
+                    break;
+                }
+                let color = line
+                    .get_source()
+                    .and_then(|s| model.map(|v| v.get_color(s)));
+                let rows = line
+                    .create_rows(
+                        self.content_width as u16,
+                        color,
+                        self.time_size,
+                        NICKNAME_LENGTH,
+                    )
+                    .skip(rows_to_skip_in_message)
+                    .take(rows_to_take);
 
-                    visible_rows_total += rows_to_take;
-                    visible_rows.extend(rows);
+                visible_rows_total += rows_to_take;
+                visible_rows.extend(rows);
 
-                    rows_to_skip_in_message = 0; // Reset for subsequent messages
+                rows_to_skip_in_message = 0; // Reset for subsequent messages
 
-                    if visible_rows_total >= self.max_visible_height {
-                        break;
-                    }
+                if visible_rows_total >= self.max_visible_height {
+                    break;
                 }
             }
         }
@@ -510,6 +640,10 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
+    pub fn add_server_group(&mut self, server_id: Option<usize>, server_address: Option<String>) {
+        self.messages.add_server_group(server_id, server_address);
+    }
+
     pub fn add_line_current(&mut self, in_message: MessageContent) {
         self.messages
             .add_message(self.current_server_id, &self.current_channel, in_message);
@@ -541,11 +675,31 @@ impl DiscussWidget {
         }
     }
 
-    fn scroll_up(&mut self) {
+    fn scroll_up(&mut self) -> bool {
         if self.possible_scroll_up(1) > 0 {
             self.scroll_offset = self.scroll_offset.saturating_add(1);
             self.follow_last = false;
             self.redraw = true;
+            tracing::debug!("Update scroll up");
+            true
+        } else {
+            false
+        }
+    }
+
+    fn read_log(&mut self) -> bool {
+        if let Some(server_id) = self.current_server_id {
+            //cannot scroll up, maybe open the logs
+            self.messages.open_log(server_id, &self.current_channel);
+            match self.messages.read_log(1, server_id, &self.current_channel) {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!("Cannot read logs: {e}");
+                    false
+                }
+            }
+        } else {
+            false
         }
     }
 
@@ -836,6 +990,14 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::JoinServer(server_id, server) => {
+                self.add_server_group(
+                    Some(*server_id),
+                    model
+                        .get_connection_config(*server_id)
+                        .as_ref()
+                        .map(|v| v.address.clone()),
+                );
+
                 self.add_line(
                     Some(*server_id),
                     server,
@@ -911,7 +1073,9 @@ impl crate::component::EventHandler for DiscussWidget {
                         None
                     }
                     crossterm::event::MouseEventKind::ScrollUp => {
-                        self.scroll_up();
+                        if !self.scroll_up() && self.read_log() {
+                            self.scroll_down();
+                        }
                         None
                     }
                     crossterm::event::MouseEventKind::Down(button) => {
@@ -1043,8 +1207,9 @@ mod tests {
     fn test_find_index() {
         pub const TEXT_START: usize = TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH;
 
-        let mut discuss = DiscussWidget::new();
+        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
         discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
+        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
 
         discuss.content_width = 4;
         discuss.max_visible_height = 4;
@@ -1118,8 +1283,9 @@ mod tests {
 
     #[test]
     fn test_total_lines() {
-        let mut discuss = DiscussWidget::new();
+        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
         discuss.content_width = 10;
+        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
         discuss.set_current_channel(Some(TEST_SERVER_ID), "");
         discuss.add_line(
             Some(TEST_SERVER_ID),
@@ -1142,12 +1308,12 @@ mod tests {
 
     #[test]
     fn test_can_scroll_up() {
-        let mut discuss = DiscussWidget::new();
+        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
         discuss.set_current_channel(Some(TEST_SERVER_ID), "");
 
         discuss.content_width = 5;
         discuss.max_visible_height = 3;
-
+        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "",
@@ -1172,7 +1338,7 @@ mod tests {
     fn test_should_hightlight() {
         let current_nick = "nickname".to_string();
 
-        let discuss = DiscussWidget::new();
+        let discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
         assert!(discuss.should_highlight(&current_nick, "my nickname is "));
         assert!(!discuss.should_highlight(&current_nick, "my nicknameis "));
         assert!(discuss.should_highlight(&current_nick, "nickname"));
@@ -1183,8 +1349,9 @@ mod tests {
 
     #[test]
     fn test_render_rows() {
-        let mut discuss = DiscussWidget::new();
+        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
         discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
+        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
 
         discuss.add_line(
             Some(TEST_SERVER_ID),

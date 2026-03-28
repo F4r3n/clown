@@ -135,7 +135,8 @@ impl LogWriter {
     }
 }
 
-struct LogReader<R: Read + Seek> {
+#[derive(Debug)]
+pub struct LogReader<R: Read + Seek> {
     buffer: std::io::BufReader<R>,
     seek_pos: u64, //starts from start, because the logs appends at the end
 }
@@ -159,12 +160,17 @@ impl<R: Read + Seek> LogReader<R> {
         Ok(file)
     }
 
+    #[cfg(test)]
     pub fn new(mut reader: R) -> anyhow::Result<Self> {
         let end_pos = reader.seek(std::io::SeekFrom::End(0))?;
         Ok(Self {
             buffer: BufReader::new(reader),
             seek_pos: end_pos,
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.seek_pos == 0
     }
 
     fn find_last_offset(&mut self, target: std::time::SystemTime) -> anyhow::Result<u64> {
@@ -217,6 +223,7 @@ impl<R: Read + Seek> LogReader<R> {
         Ok(0)
     }
 
+    //target should be in utc
     pub fn seek_last_time(&mut self, target: std::time::SystemTime) -> bool {
         if let Ok(offset) = self.find_last_offset(target) {
             self.seek_pos = offset;
@@ -227,6 +234,9 @@ impl<R: Read + Seek> LogReader<R> {
     }
 
     pub fn read(&mut self, number_lines: usize) -> anyhow::Result<Vec<LoggedTimedMessage<'_>>> {
+        if self.is_empty() {
+            return Ok(Vec::new());
+        }
         let mut vec = Vec::new();
         let mut to_read = number_lines;
         let mut carry: Vec<u8> = Vec::new();
@@ -326,30 +336,36 @@ impl MessageLogger {
         hash
     }
 
+    pub fn compute_filename(server_address: &str, target: Option<&str>) -> String {
+        let target = target.unwrap_or("server");
+
+        let name = format!(
+            "{}.{}.{}.log",
+            Self::sanitize_path(server_address),
+            Self::sanitize_path(target),
+            // if someone is called foo/bar and foo_bar the same file will be used
+            // Use a hash to be more precise
+            Self::hash_target(LogKey {
+                server_address,
+                target
+            })
+        );
+        name
+    }
+
     fn init_buffer(
         &mut self,
         server_address: &str,
         target: Option<&str>,
     ) -> anyhow::Result<&mut LogWriter> {
         //The name is not sanitized because is only used as a key to a hashmap
-        let target = target.unwrap_or("server");
-        let name = format!("{}.{}.log", server_address, target);
+        let name = format!("{}{}", server_address, target.unwrap_or("server"));
 
         let logger = match self.writers.entry(name) {
             std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
             std::collections::hash_map::Entry::Vacant(v) => {
                 //If new key, sanitize input
-                let name = format!(
-                    "{}.{}.{}.log",
-                    Self::sanitize_path(server_address),
-                    Self::sanitize_path(target),
-                    // if someone is called foo/bar and foo_bar the same file will be used
-                    // Use a hash to be more precise
-                    Self::hash_target(LogKey {
-                        server_address,
-                        target
-                    })
-                );
+                let name = Self::compute_filename(server_address, target);
                 let logger = LogWriter::try_from_path(&self.folder.join(name))?;
                 v.insert(logger)
             }
@@ -530,13 +546,13 @@ mod tests {
         // Check for timestamp format (YYYY-MM-DD)
         assert!(content.contains(&chrono::Local::now().format("%Y-%m-%d").to_string()));
     }
-
+    use chrono::TimeZone;
     fn parse_utc_to_system_time(date_str: &str) -> anyhow::Result<SystemTime> {
         let format = "%Y-%m-%d %H:%M:%S";
 
         let naive = NaiveDateTime::parse_from_str(date_str, format)?;
 
-        let datetime_utc: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+        let datetime_utc: DateTime<Utc> = Utc.from_utc_datetime(&naive);
 
         Ok(SystemTime::from(datetime_utc))
     }

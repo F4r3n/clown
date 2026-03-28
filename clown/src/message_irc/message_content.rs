@@ -1,4 +1,3 @@
-use crate::message_irc::message_logger::LoggedMessage;
 use crate::message_irc::message_parser::{get_width_without_format, strip_irc_formatting_cow};
 use crate::message_irc::textwrapper::{WrappedLine, wrap_spans, wrapped_line_count};
 use chrono::{DateTime, Local};
@@ -112,6 +111,10 @@ impl MessageContent {
 
     pub fn set_time(&mut self, time: std::time::SystemTime) {
         self.time = time
+    }
+
+    pub fn get_time(&self) -> std::time::SystemTime {
+        self.time
     }
 
     pub fn new_privmsg(target: String, content: String) -> Self {
