@@ -483,7 +483,6 @@ impl MessageLogger {
 
             MessageEvent::Notice(_, source, target, content)
             | MessageEvent::PrivMsg(_, source, target, content) => {
-                tracing::debug!("NEW MESSAGE");
                 self.write_to_target(
                     server_address,
                     Some(target),

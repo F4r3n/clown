@@ -30,7 +30,6 @@ pub enum MessageKind {
     Normal,
     Highlight,
     Action,
-    Log,
     Notice,
 }
 
@@ -41,19 +40,10 @@ pub struct MessageContent {
     content: String,             /*Content */
     width_without_format: usize,
     kind: MessageKind,
+    is_log: bool,
 }
 
 impl MessageContent {
-    pub fn new(source: Option<String>, content: String) -> Self {
-        Self {
-            time: std::time::SystemTime::now(),
-            source,
-            width_without_format: get_width_without_format(&content),
-            content,
-            kind: MessageKind::Normal,
-        }
-    }
-
     pub fn get_source(&self) -> Option<&str> {
         self.source.as_deref()
     }
@@ -67,96 +57,88 @@ impl MessageContent {
             .filter(|w| w.starts_with("http://") || w.starts_with("https://"))
     }
 
-    pub fn new_highlight(source: Option<String>, content: String) -> Self {
+    fn new(kind: MessageKind, source: Option<String>, content: String) -> Self {
         Self {
-            time: std::time::SystemTime::now(),
+            width_without_format: get_width_without_format(&content),
+            content,
             source,
-            width_without_format: get_width_without_format(&content),
-            content,
-            kind: MessageKind::Highlight,
-        }
-    }
-
-    pub fn new_log(time: std::time::SystemTime, source: Option<String>, content: String) -> Self {
-        Self {
-            time,
-            source,
-            width_without_format: get_width_without_format(&content),
-            content,
-            kind: MessageKind::Log,
-        }
-    }
-
-    pub fn new_error(content: String) -> Self {
-        Self {
+            kind,
             time: std::time::SystemTime::now(),
-            source: None,
-            width_without_format: get_width_without_format(&content),
-            content,
-            kind: MessageKind::Error,
+            is_log: false,
         }
     }
 
-    pub fn new_action(source: String, content: String) -> Self {
-        let content = format!("{} {}", source, content);
-        let source = Some("*".into());
-        Self {
-            time: std::time::SystemTime::now(),
-            source,
-            width_without_format: get_width_without_format(&content),
-            content,
-            kind: MessageKind::Action,
-        }
+    // --- Entry Points (Replacing your "new_*" methods) ---
+
+    pub fn action(source: String, content: String) -> Self {
+        Self::new(
+            MessageKind::Action,
+            Some("*".into()),
+            format!("{} {}", source, content),
+        )
     }
 
-    pub fn set_time(&mut self, time: std::time::SystemTime) {
-        self.time = time
+    pub fn message(source: Option<String>, content: String) -> Self {
+        Self::new(MessageKind::Normal, source, content)
     }
 
-    pub fn get_time(&self) -> std::time::SystemTime {
-        self.time
+    pub fn highlight(source: Option<String>, content: String) -> Self {
+        Self::new(MessageKind::Highlight, source, content)
     }
 
-    pub fn new_privmsg(target: String, content: String) -> Self {
-        let source = Some(format!(">{}<", target));
-        Self {
-            time: std::time::SystemTime::now(),
-            source,
-            width_without_format: get_width_without_format(&content),
-            content,
-            kind: MessageKind::Normal,
-        }
+    pub fn error(content: String) -> Self {
+        Self::new(MessageKind::Error, None, content)
     }
 
-    pub fn new_notice(source: Option<String>, content: String) -> Self {
-        Self {
-            time: std::time::SystemTime::now(),
-            source,
-            width_without_format: get_width_without_format(&content),
-            content,
-            kind: MessageKind::Notice,
-        }
+    pub fn privmsg(target: String, content: String) -> Self {
+        Self::new(MessageKind::Normal, Some(format!(">{}<", target)), content)
     }
 
-    pub fn new_info(content: String) -> Self {
-        Self {
-            time: std::time::SystemTime::now(),
-            source: None,
-            kind: MessageKind::Info,
-            width_without_format: get_width_without_format(&content),
-            content,
+    pub fn notice(source: Option<String>, content: String) -> Self {
+        Self::new(MessageKind::Notice, source, content)
+    }
+
+    pub fn info(content: String) -> Self {
+        Self::new(MessageKind::Info, None, content)
+    }
+
+    // --- Modifiers ---
+
+    pub fn with_time(mut self, time: std::time::SystemTime) -> Self {
+        self.time = time;
+        self
+    }
+
+    pub fn as_log(mut self) -> Self {
+        self.is_log = true;
+        self
+    }
+
+    // --- Finalizer ---
+
+    pub fn build(self) -> MessageContent {
+        MessageContent {
+            width_without_format: get_width_without_format(&self.content),
+            time: self.time,
+            source: self.source,
+            content: self.content,
+            kind: self.kind,
+            is_log: self.is_log,
         }
     }
 
     pub fn from_kind(kind: MessageKind, source: Option<String>, content: String) -> Option<Self> {
-        match kind {
-            MessageKind::Info => Some(Self::new_info(content)),
-            MessageKind::Error => Some(Self::new_error(content)),
-            MessageKind::Normal => Some(Self::new(source, content)),
-            _ => None,
-        }
+        let builder = match kind {
+            MessageKind::Info => MessageContent::info(content),
+            MessageKind::Error => MessageContent::error(content),
+            MessageKind::Normal => MessageContent::message(source, content),
+            _ => return None,
+        };
+        Some(builder.build())
     }
-
+    pub fn get_time(&self) -> std::time::SystemTime {
+        self.time
+    }
     pub fn get_word_pos(&self, character_pos: usize) -> Option<WordPos> {
         let text = self.content.as_str(); //Lets say the URL is in a RAW message
         let bytes = text.as_bytes();
@@ -203,10 +185,14 @@ impl MessageContent {
 
         let default_style = match &self.kind {
             MessageKind::Error => Style::default().fg(Color::Red),
-            MessageKind::Log => Style::default().fg(Color::Gray),
             MessageKind::Info => Style::default().fg(Color::LightBlue),
             MessageKind::Action | MessageKind::Notice => Style::default().fg(Color::LightBlue),
             MessageKind::Normal | MessageKind::Highlight => Style::default(),
+        };
+        let separator_style = if self.is_log {
+            Style::default().fg(Color::Gray)
+        } else {
+            Style::default()
         };
         let wrapped = self.wrap_spans(content_width as usize, Some(default_style));
         let mut visible_rows = Vec::with_capacity(wrapped.len());
@@ -227,7 +213,7 @@ impl MessageContent {
                 width = nickname_length
             ))
             .style(nickname_style),
-            Cell::from("┃ "),
+            Cell::from("┃ ").style(separator_style),
             Cell::from(""),
         ]);
 
@@ -242,7 +228,7 @@ impl MessageContent {
                         },
                         Cell::from(format!("{:<width$}", " ", width = nickname_length))
                             .style(nickname_style),
-                        Cell::from("┃ "),
+                        Cell::from("┃ ").style(separator_style),
                         Cell::from(""),
                     ]
                 })
@@ -288,24 +274,25 @@ mod test {
 
     #[test]
     fn test_wrapped_line_count() {
-        let message = MessageContent::new(None, "aaaaa".to_string());
+        let message = MessageContent::message(None, "aaaaa".to_string());
         assert_eq!(message.wrapped_line_count(2), 3);
 
-        let message1 = MessageContent::new(None, "Use the command /help".to_string());
+        let message1 = MessageContent::message(None, "Use the command /help".to_string());
         assert_eq!(message1.wrapped_line_count(12), 3);
 
-        let message2 = MessageContent::new(None, "Try to connect to a.aaaaaaaaa.io...".to_string());
+        let message2 =
+            MessageContent::message(None, "Try to connect to a.aaaaaaaaa.io...".to_string());
         //2026-01-02T11:57:07.587223Z DEBUG clown::irc_view::main_view: ServerMessage { message: Message { internal: IRCMessage { source: Some(Source { source
         assert_eq!(message2.wrapped_line_count(12), 4);
     }
 
     #[test]
     fn test_word_find() {
-        let message = MessageContent::new(None, "https://test.com".to_string());
+        let message = MessageContent::message(None, "https://test.com".to_string());
         assert_eq!(message.get_word_pos(0), Some(WordPos::from(0, 16)));
         assert_eq!(message.get_word_pos(100), None);
 
-        let message = MessageContent::new(None, "a aa aa https://test.com".to_string());
+        let message = MessageContent::message(None, "a aa aa https://test.com".to_string());
         assert_eq!(message.get_word_pos(0), Some(WordPos::from(0, 1)));
         assert_eq!(message.get_word_pos(100), None);
         assert_eq!(message.get_word_pos(10), Some(WordPos::from(8, 24)));
@@ -313,14 +300,14 @@ mod test {
 
     #[test]
     fn test_url_find() {
-        let message = MessageContent::new(None, "https://test.com".to_string());
+        let message = MessageContent::message(None, "https://test.com".to_string());
         assert_eq!(
             message.get_url_from_pos(&WordPos::from(0, 16)),
             Some("https://test.com")
         );
         assert_eq!(message.get_url_from_pos(&WordPos::from(0, 100)), None);
 
-        let message = MessageContent::new(None, "a aa aa https://test.com".to_string());
+        let message = MessageContent::message(None, "a aa aa https://test.com".to_string());
         assert_eq!(message.get_url_from_pos(&WordPos::from(0, 0)), None);
         assert_eq!(message.get_url_from_pos(&WordPos::from(0, 100)), None);
         assert_eq!(

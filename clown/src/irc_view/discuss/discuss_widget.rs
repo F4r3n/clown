@@ -70,11 +70,11 @@ impl ServersMessages {
         number_lines: usize,
         server_id: usize,
         channel: &str,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<usize> {
         if let Some(server_group) = self.get_server_group_mut(Some(server_id)) {
             server_group.read_log(channel, number_lines)
         } else {
-            Ok(false)
+            Ok(0)
         }
     }
 
@@ -214,22 +214,21 @@ impl Messages {
         }
     }
 
-    fn read_log(&mut self, number_lines: usize) -> anyhow::Result<bool> {
+    fn read_log(&mut self, number_lines: usize) -> anyhow::Result<usize> {
         let log_reader = match self.log_reader.as_mut() {
             Some(reader) => reader,
-            None => return Ok(false),
+            None => return Ok(0),
         };
 
         let list_read = log_reader.read(number_lines)?;
-        let has_lines = !list_read.is_empty();
-
+        let number_lines = list_read.len();
         self.logged_messages.extend(
             list_read
                 .into_iter()
                 .map(|msg| DiscussWidget::create_message(msg)),
         );
 
-        Ok(has_lines)
+        Ok(number_lines)
     }
 }
 
@@ -268,7 +267,7 @@ impl ChannelMessages {
         }
     }
 
-    fn read_log(&mut self, channel: &str, number_lines: usize) -> anyhow::Result<bool> {
+    fn read_log(&mut self, channel: &str, number_lines: usize) -> anyhow::Result<usize> {
         self.messages
             .entry(channel.to_string())
             .or_default()
@@ -381,9 +380,11 @@ impl DiscussWidget {
     }
 
     fn create_message(log: LoggedTimedMessage<'_>) -> MessageContent {
-        let mut m = match log.message {
+        match log.message {
             LoggedMessage::Action { source, content } => {
-                MessageContent::new_action(source.to_string(), content.to_string())
+                MessageContent::action(source.to_string(), content.to_string())
+                    .with_time(log.time)
+                    .as_log()
             }
             LoggedMessage::Topic {
                 source,
@@ -394,26 +395,32 @@ impl DiscussWidget {
                     "{} has changed topic for {} to \"{}\"",
                     source, channel, content
                 );
-                MessageContent::new_info(data)
+                MessageContent::info(data).with_time(log.time).as_log()
             }
             LoggedMessage::Join { source, channel } => {
-                MessageContent::new_info(format!("{source} has joined {channel}"))
+                MessageContent::info(format!("{source} has joined {channel}"))
+                    .with_time(log.time)
+                    .as_log()
             }
             LoggedMessage::Part { source, channel } => {
-                MessageContent::new_info(format!("{} has left {}", source, channel))
+                MessageContent::info(format!("{} has left {}", source, channel))
+                    .with_time(log.time)
+                    .as_log()
             }
-            LoggedMessage::Quit { source } => {
-                MessageContent::new_info(format!("{} has quit", source))
-            }
+            LoggedMessage::Quit { source } => MessageContent::info(format!("{} has quit", source))
+                .with_time(log.time)
+                .as_log(),
             LoggedMessage::NickChange { old, new } => {
-                MessageContent::new_info(format!("{} has changed their nickname to {}", old, new))
+                MessageContent::info(format!("{} has changed their nickname to {}", old, new))
+                    .with_time(log.time)
+                    .as_log()
             }
             LoggedMessage::Message { source, content } => {
-                MessageContent::new(Some(source.to_string()), content.to_string())
+                MessageContent::message(Some(source.to_string()), content.to_string())
+                    .with_time(log.time)
+                    .as_log()
             }
-        };
-        m.set_time(log.time);
-        m
+        }
     }
 
     pub fn get_current_line_index_character(
@@ -675,39 +682,58 @@ impl DiscussWidget {
         }
     }
 
-    fn scroll_up(&mut self) -> bool {
+    fn scroll_up_no_check(&mut self) {
+        self.scroll_offset = self.scroll_offset.saturating_add(1);
+        self.follow_last = false;
+        self.redraw = true;
+    }
+
+    fn scroll_up_logs(&mut self) {
         if self.possible_scroll_up(1) > 0 {
-            self.scroll_offset = self.scroll_offset.saturating_add(1);
-            self.follow_last = false;
-            self.redraw = true;
-            tracing::debug!("Update scroll up");
-            true
-        } else {
-            false
+            self.scroll_up_no_check();
+        } else if self.read_log(1) > 0 {
+            self.scroll_down();
         }
     }
 
-    fn read_log(&mut self) -> bool {
+    fn read_log(&mut self, number_lines: usize) -> usize {
         if let Some(server_id) = self.current_server_id {
             //cannot scroll up, maybe open the logs
             self.messages.open_log(server_id, &self.current_channel);
-            match self.messages.read_log(1, server_id, &self.current_channel) {
+            match self
+                .messages
+                .read_log(number_lines, server_id, &self.current_channel)
+            {
                 Ok(v) => v,
                 Err(e) => {
                     tracing::error!("Cannot read logs: {e}");
-                    false
+                    0
                 }
             }
         } else {
-            false
+            0
         }
     }
 
-    fn scroll_page_up(&mut self) {
+    fn scroll_page_up(&mut self) -> usize {
         let offset = self.possible_scroll_up(self.max_visible_height);
         if offset > 0 {
             self.scroll_offset = self.scroll_offset.saturating_add(offset);
             self.follow_last = false;
+            self.redraw = true;
+        }
+        offset
+    }
+
+    fn scroll_page_up_logs(&mut self) {
+        let mut offset = self.scroll_page_up();
+        if offset < self.max_visible_height {
+            offset = self.read_log(self.max_visible_height.saturating_sub(offset));
+        }
+
+        if offset > 0 {
+            self.scroll_offset = self.scroll_offset.saturating_sub(offset);
+            self.follow_last = self.scroll_offset == 0;
             self.redraw = true;
         }
     }
@@ -866,7 +892,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         "{} has changed topic for {} to \"{}\"",
                         source, channel, content
                     );
-                    self.add_line(Some(*server_id), channel, MessageContent::new_info(data));
+                    self.add_line(Some(*server_id), channel, MessageContent::info(data));
                 }
 
                 None
@@ -879,7 +905,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         self.add_line(
                             Some(*server_id),
                             channel,
-                            MessageContent::new_info(
+                            MessageContent::info(
                                 reason
                                     .as_ref()
                                     .map(|v| format!("{} has quit: {}", user, v))
@@ -892,7 +918,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         self.add_line(
                             Some(*server_id),
                             user,
-                            MessageContent::new_info(
+                            MessageContent::info(
                                 reason
                                     .as_ref()
                                     .map(|v| format!("{} has quit: {}", user, v))
@@ -909,13 +935,13 @@ impl crate::component::EventHandler for DiscussWidget {
                 self.add_line(
                     Some(*server_id),
                     channel,
-                    MessageContent::new_info(format!("{} has quit", user)),
+                    MessageContent::info(format!("{} has quit", user)),
                 );
                 if self.has_message(Some(*server_id), user) {
                     self.add_line(
                         Some(*server_id),
                         channel,
-                        MessageContent::new_info(format!("{} has quit", user)),
+                        MessageContent::info(format!("{} has quit", user)),
                     );
                 }
 
@@ -934,7 +960,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         self.add_line(
                             Some(*server_id),
                             current_channel,
-                            MessageContent::new_privmsg(target.to_string(), content.clone()),
+                            MessageContent::privmsg(target.to_string(), content.clone()),
                         );
                     }
 
@@ -945,9 +971,9 @@ impl crate::component::EventHandler for DiscussWidget {
                         Some(*server_id),
                         target,
                         if is_highlight {
-                            MessageContent::new_highlight(Some(source.clone()), content.clone())
+                            MessageContent::highlight(Some(source.clone()), content.clone())
                         } else {
-                            MessageContent::new(Some(source.clone()), content.clone())
+                            MessageContent::message(Some(source.clone()), content.clone())
                         },
                     );
                     if is_highlight {
@@ -968,7 +994,7 @@ impl crate::component::EventHandler for DiscussWidget {
                     self.add_line(
                         Some(*server_id),
                         target,
-                        MessageContent::new_notice(Some(source.clone()), content.clone()),
+                        MessageContent::notice(Some(source.clone()), content.clone()),
                     );
                 }
 
@@ -983,7 +1009,7 @@ impl crate::component::EventHandler for DiscussWidget {
                     self.add_line(
                         Some(*server_id),
                         target,
-                        MessageContent::new_action(source.clone(), content.clone()),
+                        MessageContent::action(source.clone(), content.clone()),
                     );
                 }
 
@@ -1001,7 +1027,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 self.add_line(
                     Some(*server_id),
                     server,
-                    MessageContent::new_info(format!("{} has joined", server)),
+                    MessageContent::info(format!("{} has joined", server)),
                 );
                 None
             }
@@ -1014,9 +1040,9 @@ impl crate::component::EventHandler for DiscussWidget {
                         Some(*server_id),
                         channel,
                         if main {
-                            MessageContent::new_info(format!("You joined the channel {}", channel))
+                            MessageContent::info(format!("You joined the channel {}", channel))
                         } else {
-                            MessageContent::new_info(format!("{} has joined", source))
+                            MessageContent::info(format!("{} has joined", source))
                         },
                     );
                 }
@@ -1038,7 +1064,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         self.add_line(
                             Some(*server_id),
                             channel,
-                            MessageContent::new_info(format!(
+                            MessageContent::info(format!(
                                 "{} has changed their nickname to {}",
                                 &old, &new
                             )),
@@ -1073,9 +1099,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         None
                     }
                     crossterm::event::MouseEventKind::ScrollUp => {
-                        if !self.scroll_up() && self.read_log() {
-                            self.scroll_down();
-                        }
+                        self.scroll_up_logs();
                         None
                     }
                     crossterm::event::MouseEventKind::Down(button) => {
@@ -1142,7 +1166,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 },
                 crossterm::event::Event::Key(key_event) => match key_event.code {
                     KeyCode::PageUp => {
-                        self.scroll_page_up();
+                        self.scroll_page_up_logs();
                         None
                     }
                     KeyCode::PageDown => {
@@ -1217,17 +1241,17 @@ mod tests {
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new(None, "HELLO".to_string()),
+            MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new(None, "HELLO".to_string()),
+            MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new(None, "HELLO".to_string()),
+            MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.scroll_offset = 0;
 
@@ -1290,17 +1314,17 @@ mod tests {
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "",
-            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "",
-            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "",
-            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.scroll_offset = 0;
         assert_eq!(discuss.get_total_lines(), 9);
@@ -1317,17 +1341,17 @@ mod tests {
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "",
-            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "",
-            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "",
-            MessageContent::new_info("aa aaaa aaaaa aa aaa".to_string()),
+            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.scroll_offset = 0;
         assert_eq!(discuss.possible_scroll_up(10), 10);
@@ -1356,17 +1380,17 @@ mod tests {
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new(None, "HELLO".to_string()),
+            MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new(None, "HELLO".to_string()),
+            MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             Some(TEST_SERVER_ID),
             "test",
-            MessageContent::new(None, "HELLO".to_string()),
+            MessageContent::message(None, "HELLO".to_string()),
         );
 
         discuss.content_width = 10;
