@@ -52,7 +52,6 @@ pub struct MainView<'a> {
 
     //TODO move them into their own struct
     log_instant: std::time::Instant,
-
     logger: message_logger::MessageLogger,
 }
 
@@ -70,13 +69,13 @@ impl MainView<'_> {
         let topic_view: Component<'_, topic_widget::TopicWidget> =
             Component::new("topic_view", topic_widget::TopicWidget::new());
         //list_components.push()
-        let mut discuss_widget = discuss_widget::DiscussWidget::new();
+        let log_dir = crate::project_path::ProjectPath::log_dir()
+            .unwrap_or(std::env::current_dir().unwrap_or(std::path::Path::new("").to_path_buf()));
+        let mut discuss_widget = discuss_widget::DiscussWidget::new(log_dir.clone());
         discuss_widget.set_current_channel(None, "Global");
         let messages_display = Component::new("messages", discuss_widget);
         let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
 
-        let log_dir = crate::project_path::ProjectPath::log_dir()
-            .unwrap_or(std::env::current_dir().unwrap_or(std::path::Path::new("").to_path_buf()));
         Self {
             list_users_view,
             topic_view,

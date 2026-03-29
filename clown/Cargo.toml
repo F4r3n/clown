@@ -50,6 +50,7 @@ clap = { version = "4.5.53", features = ["derive", "help", "std"], default-featu
 bit-vec = "0.8.0"
 thiserror = "2.0.18"
 anyhow = "1.0.100"
+nom = "8.0.0"
 
 [dev-dependencies]
 anyhow = "1.0.100"

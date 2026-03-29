@@ -1,3 +1,4 @@
+mod log_parser;
 pub mod message_content;
 pub mod message_logger;
 pub mod message_parser;
