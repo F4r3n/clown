@@ -337,17 +337,18 @@ impl MessageLogger {
     }
 
     pub fn compute_filename(server_address: &str, target: Option<&str>) -> String {
-        let target = target.unwrap_or("server");
+        let target = target.unwrap_or("server").to_lowercase();
+        //tracing::debug!("{server_address} {target:?}");
 
         let name = format!(
             "{}.{}.{}.log",
             Self::sanitize_path(server_address),
-            Self::sanitize_path(target),
+            Self::sanitize_path(&target),
             // if someone is called foo/bar and foo_bar the same file will be used
             // Use a hash to be more precise
             Self::hash_target(LogKey {
                 server_address,
-                target
+                target: &target
             })
         );
         name
@@ -359,7 +360,11 @@ impl MessageLogger {
         target: Option<&str>,
     ) -> anyhow::Result<&mut LogWriter> {
         //The name is not sanitized because is only used as a key to a hashmap
-        let name = format!("{}{}", server_address, target.unwrap_or("server"));
+        let name = format!(
+            "{}{}",
+            server_address,
+            target.unwrap_or("server").to_ascii_lowercase()
+        );
 
         let logger = match self.writers.entry(name) {
             std::collections::hash_map::Entry::Occupied(e) => e.into_mut(),
@@ -483,6 +488,7 @@ impl MessageLogger {
 
             MessageEvent::Notice(_, source, target, content)
             | MessageEvent::PrivMsg(_, source, target, content) => {
+                //tracing::debug!("TARGET {target}. SOURCE {source}");
                 self.write_to_target(
                     server_address,
                     Some(target),
