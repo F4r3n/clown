@@ -384,7 +384,7 @@ impl DiscussWidget {
             LoggedMessage::Action { source, content } => {
                 MessageContent::action(source.to_string(), content.to_string())
                     .with_time(log.time)
-                    .as_log()
+                    .with_log()
             }
             LoggedMessage::Topic {
                 source,
@@ -395,30 +395,30 @@ impl DiscussWidget {
                     "{} has changed topic for {} to \"{}\"",
                     source, channel, content
                 );
-                MessageContent::info(data).with_time(log.time).as_log()
+                MessageContent::info(data).with_time(log.time).with_log()
             }
             LoggedMessage::Join { source, channel } => {
                 MessageContent::info(format!("{source} has joined {channel}"))
                     .with_time(log.time)
-                    .as_log()
+                    .with_log()
             }
             LoggedMessage::Part { source, channel } => {
                 MessageContent::info(format!("{} has left {}", source, channel))
                     .with_time(log.time)
-                    .as_log()
+                    .with_log()
             }
             LoggedMessage::Quit { source } => MessageContent::info(format!("{} has quit", source))
                 .with_time(log.time)
-                .as_log(),
+                .with_log(),
             LoggedMessage::NickChange { old, new } => {
                 MessageContent::info(format!("{} has changed their nickname to {}", old, new))
                     .with_time(log.time)
-                    .as_log()
+                    .with_log()
             }
             LoggedMessage::Message { source, content } => {
                 MessageContent::message(Some(source.to_string()), content.to_string())
                     .with_time(log.time)
-                    .as_log()
+                    .with_log()
             }
         }
     }

@@ -109,7 +109,7 @@ impl MessageContent {
         self
     }
 
-    pub fn as_log(mut self) -> Self {
+    pub fn with_log(mut self) -> Self {
         self.is_log = true;
         self
     }
