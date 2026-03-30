@@ -640,7 +640,9 @@ impl DiscussWidget {
         let channel = channel.to_lowercase();
 
         self.messages.add_message(server_id, &channel, in_message);
-        if channel.eq_ignore_ascii_case(&self.current_channel) {
+        if channel.eq_ignore_ascii_case(&self.current_channel)
+            && server_id == self.current_server_id
+        {
             self.add_line_scroll();
         }
 
@@ -689,11 +691,10 @@ impl DiscussWidget {
     }
 
     fn scroll_up_logs(&mut self) {
-        if self.possible_scroll_up(1) > 0 {
-            self.scroll_up_no_check();
-        } else if self.read_log(1) > 0 {
-            self.scroll_down();
+        if !self.possible_scroll_up(1) > 0 {
+            self.read_log(1);
         }
+        self.scroll_up_no_check();
     }
 
     fn read_log(&mut self, number_lines: usize) -> usize {
@@ -726,15 +727,14 @@ impl DiscussWidget {
     }
 
     fn scroll_page_up_logs(&mut self) {
-        let mut offset = self.scroll_page_up();
+        let offset = self.scroll_page_up();
         if offset < self.max_visible_height {
-            offset = self.read_log(self.max_visible_height.saturating_sub(offset));
-        }
-
-        if offset > 0 {
-            self.scroll_offset = self.scroll_offset.saturating_sub(offset);
-            self.follow_last = self.scroll_offset == 0;
-            self.redraw = true;
+            let log_offset = self.read_log(self.max_visible_height.saturating_sub(offset));
+            if log_offset > 0 {
+                self.scroll_offset = self.scroll_offset.saturating_add(log_offset);
+                self.follow_last = false;
+                self.redraw = true;
+            }
         }
     }
 
@@ -935,13 +935,13 @@ impl crate::component::EventHandler for DiscussWidget {
                 self.add_line(
                     Some(*server_id),
                     channel,
-                    MessageContent::info(format!("{} has quit", user)),
+                    MessageContent::info(format!("{} has left {}", user, channel)),
                 );
                 if self.has_message(Some(*server_id), user) {
                     self.add_line(
                         Some(*server_id),
-                        channel,
-                        MessageContent::info(format!("{} has quit", user)),
+                        user,
+                        MessageContent::info(format!("{} has left {}", user, channel)),
                     );
                 }
 
