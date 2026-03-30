@@ -69,6 +69,17 @@ impl Model {
         }
     }
 
+    pub fn new_default_config(in_config_name: String) -> Self {
+        Self {
+            running_state: RunningState::Start,
+            stored_config: StoredConfig {
+                config: Config::default(),
+                stored_name: in_config_name,
+            },
+            color_generator: ColorGenerator::new(0),
+        }
+    }
+
     fn load_color(config: &Config) -> ColorGenerator {
         let mut color_generator = ColorGenerator::new(config.nickname_colors.seed);
         for (input, color) in &config.nickname_colors.overrides {
@@ -77,7 +88,7 @@ impl Model {
         color_generator
     }
 
-    pub fn new(config_name: String) -> anyhow::Result<Self> {
+    pub fn try_new(config_name: String) -> anyhow::Result<Self> {
         let config = Config::new(&config_name)?;
 
         Ok(Self {

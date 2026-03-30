@@ -72,8 +72,7 @@ async fn main() -> anyhow::Result<()> {
     let _guard = prepare_logs(args.debug)?;
 
     let mut list_messages = message_queue::MessageQueue::new();
-
-    let mut model = match model::Model::new(args.config_name) {
+    let mut model = match model::Model::try_new(args.config_name.clone()) {
         Ok(n) => n,
         Err(e) => {
             list_messages.push_message(MessageEvent::AddMessageViewInfo(
@@ -82,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
                 MessageKind::Error,
                 format!("Error to read config: {}", e),
             ));
-            Model::new_empty_config()
+            Model::new_default_config(args.config_name)
         }
     };
 
