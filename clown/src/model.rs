@@ -61,6 +61,7 @@ pub struct Model {
 }
 
 impl Model {
+    #[cfg(test)]
     pub fn new_empty_config() -> Self {
         Self {
             running_state: RunningState::Start,

@@ -382,7 +382,7 @@ impl MainView<'_> {
             let source = recieved.source().map(|v| v.to_string());
 
             debug!("server_id : {:?}, {:?}", server_id, recieved);
-            //log_info_sync(format!("{reply:?}\n").as_str());
+
             match reply {
                 Response::Cmd(command) => match command {
                     Command::PrivMsg(target, content) => {
@@ -403,6 +403,17 @@ impl MainView<'_> {
                             }
                         } else {
                             tracing::error!(error = %MessageError::MissingSource, "PrivMSG");
+                        }
+                    }
+                    Command::Cap(_) => {
+                        //TODO: move CAP negotiation here
+                        //after cap end, the server is ready to receive commands, so we can initialize the session
+                        if let Some(source) = source.clone() {
+                            messages
+                                .push_message(MessageEvent::JoinServer(server_id, source.clone()));
+                            server_to_init.push((source.clone(), server_id));
+                        } else {
+                            tracing::error!(error = %MessageError::MissingSource, "Cap");
                         }
                     }
                     Command::Nick(new_user) => {
@@ -474,13 +485,6 @@ impl MainView<'_> {
                 },
                 Response::Rpl(reply) => match reply {
                     ResponseNumber::Welcome(content) => {
-                        if let Some(source) = source.clone() {
-                            server_to_init.push((source.clone(), server_id));
-                            messages.push_message(MessageEvent::JoinServer(server_id, source));
-                        } else {
-                            tracing::error!(error = %MessageError::MissingSource, "Welcome");
-                        }
-
                         messages.push_message(MessageEvent::AddMessageViewInfo(
                             Some(server_id),
                             source.clone(),
@@ -687,31 +691,38 @@ impl widget_view::WidgetView for MainView<'_> {
                 return;
             }
             MessageEvent::Connect(server_id) => {
-                let addr = model.get_address(*server_id).unwrap_or("No address");
-                messages.push_message(MessageEvent::AddMessageViewInfo(
-                    Some(*server_id),
-                    None,
-                    crate::message_irc::message_content::MessageKind::Info,
-                    format!("Try to connect to {}...", addr),
-                ));
+                if let Some(addr) = model.get_address(*server_id) {
+                    messages.push_message(MessageEvent::AddMessageViewInfo(
+                        None,
+                        None,
+                        crate::message_irc::message_content::MessageKind::Info,
+                        format!("Try to connect to {}...", addr),
+                    ));
 
-                if let Some(conn_cfg) = model.get_connection_config(*server_id)
-                    && let Some(login_cfg) = model.get_login_config(*server_id)
-                {
-                    if session.is_irc_finished(*server_id)
-                        && let Err(e) = session.init_connection(*server_id, conn_cfg, login_cfg)
+                    if let Some(conn_cfg) = model.get_connection_config(*server_id)
+                        && let Some(login_cfg) = model.get_login_config(*server_id)
                     {
-                        tracing::error!(e);
+                        if session.is_irc_finished(*server_id)
+                            && let Err(e) = session.init_connection(*server_id, conn_cfg, login_cfg)
+                        {
+                            tracing::error!(e);
+                        }
+                    } else {
+                        messages.push_message(MessageEvent::AddMessageViewInfo(
+                            Some(*server_id),
+                            None,
+                            crate::message_irc::message_content::MessageKind::Error,
+                            format!("Cannot connect to {}...", addr),
+                        ));
                     }
                 } else {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(*server_id),
                         None,
                         crate::message_irc::message_content::MessageKind::Error,
-                        format!("Cannot connect to {}...", addr),
+                        "No address".to_string(),
                     ));
                 }
-                return;
             }
             MessageEvent::DisConnect(server_id) => {
                 if !session.is_irc_finished(*server_id) {
