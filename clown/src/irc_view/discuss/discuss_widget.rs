@@ -50,6 +50,10 @@ impl ServersMessages {
     ) {
         if let Some(server_group) = self.get_server_group_mut(server_id) {
             server_group.add_message(channel, in_message);
+        } else if let Some(server_group) = self.get_server_group_mut(None) {
+            //If not connected (has not passed Welcome yet)  but received messages
+            // send all messages to main channel
+            server_group.add_message(channel, in_message);
         }
     }
 
