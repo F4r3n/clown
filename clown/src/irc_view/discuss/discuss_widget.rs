@@ -665,24 +665,21 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
+    //How many lines I can scroll up
     fn possible_scroll_up(&mut self, offset: usize) -> usize {
         if let Some(messages) = self
             .messages
             .get_messages(self.current_server_id, &self.current_channel)
         {
+            let current_visible = self.scroll_offset.saturating_add(self.max_visible_height);
             let mut total_rows = 0;
             for line in messages.iter().rev() {
                 total_rows += line.wrapped_line_count(self.content_width);
-                if total_rows
-                    >= self
-                        .scroll_offset
-                        .saturating_add(offset)
-                        .saturating_add(self.max_visible_height)
-                {
+                if total_rows >= offset.saturating_add(current_visible) {
                     return offset;
                 }
             }
-            total_rows.saturating_sub(self.scroll_offset.saturating_add(self.max_visible_height))
+            total_rows.saturating_sub(current_visible)
         } else {
             0
         }
@@ -695,10 +692,9 @@ impl DiscussWidget {
     }
 
     fn scroll_up_logs(&mut self) {
-        if !self.possible_scroll_up(1) > 0 {
-            self.read_log(1);
+        if self.possible_scroll_up(1) > 0 || self.read_log(1) > 0 {
+            self.scroll_up_no_check();
         }
-        self.scroll_up_no_check();
     }
 
     fn read_log(&mut self, number_lines: usize) -> usize {
@@ -819,26 +815,34 @@ impl Draw for DiscussWidget {
             .unwrap_or(0);
 
         self.content_width = content_width as usize;
-        self.vertical_scroll_state = ScrollbarState::new(self.get_fake_total_lines()).position(
-            self.get_fake_total_lines()
-                .saturating_sub(self.scroll_offset),
-        );
+        let number_lines = self.get_fake_total_lines();
+
         let time_size = self.time_size;
-        let visible_rows = self.collect_visible_rows(Some(model));
-        let table = Table::new(
-            visible_rows,
-            [
-                Constraint::Length(time_size.saturating_add(1) as u16), // time
-                Constraint::Length(NICKNAME_LENGTH.saturating_add(1) as u16), // nickname
-                Constraint::Length(1),                                  // separator
-                Constraint::Min(10),                                    // Content
-            ],
-        )
-        .column_spacing(1)
-        .style(text_style);
-        if let Some(layout) = layout.first() {
-            frame.render_widget(table, *layout)
+        let offset = self.scroll_offset;
+        let visible_length;
+        {
+            let visible_rows = self.collect_visible_rows(Some(model));
+            visible_length = visible_rows.len();
+
+            let table = Table::new(
+                visible_rows,
+                [
+                    Constraint::Length(time_size.saturating_add(1) as u16), // time
+                    Constraint::Length(NICKNAME_LENGTH.saturating_add(1) as u16), // nickname
+                    Constraint::Length(1),                                  // separator
+                    Constraint::Min(10),                                    // Content
+                ],
+            )
+            .column_spacing(1)
+            .style(text_style);
+
+            if let Some(layout) = layout.first() {
+                frame.render_widget(table, *layout)
+            }
         }
+        self.vertical_scroll_state = ScrollbarState::new(number_lines)
+            .viewport_content_length(visible_length)
+            .position(number_lines.saturating_sub(offset));
         if let Some(layout_1) = layout.get(1)
             && layout_1.width > 0
         {
@@ -1415,5 +1419,31 @@ mod tests {
         discuss.max_visible_height = 2;
         let rows = discuss.collect_visible_rows(None);
         assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn test_fake_nb_rows() {
+        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
+        discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
+        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
+
+        discuss.add_line(
+            Some(TEST_SERVER_ID),
+            "test",
+            MessageContent::message(None, "HELLO".to_string()),
+        );
+        discuss.add_line(
+            Some(TEST_SERVER_ID),
+            "test",
+            MessageContent::message(None, "HELLO".to_string()),
+        );
+        discuss.add_line(
+            Some(TEST_SERVER_ID),
+            "test",
+            MessageContent::message(None, "HELLO".to_string()),
+        );
+
+        discuss.content_width = 10;
+        assert_eq!(discuss.get_fake_total_lines(), 3);
     }
 }
