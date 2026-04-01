@@ -1,7 +1,6 @@
 use crate::message_irc::message_parser::to_spans;
 use ratatui::style::Style;
 use ratatui::text::Span;
-use std::borrow::Cow;
 use unicode_width::UnicodeWidthChar;
 
 pub fn wrapped_line_count(content: &str, width: usize) -> usize {
@@ -53,7 +52,7 @@ pub fn wrapped_line_count(content: &str, width: usize) -> usize {
     total_lines
 }
 
-pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
+pub fn wrap_content(content: &str, width: usize) -> Vec<&str> {
     if width == 0 {
         return vec![];
     }
@@ -90,7 +89,7 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
         // Overflow check
         if current_width > 0 && current_width + word_width > width {
             let line_slice = &line[line_start..last_word_end];
-            wrapped_lines.push(Cow::Borrowed(line_slice.trim_end()));
+            wrapped_lines.push(line_slice.trim_end());
             line_start = word_start;
             current_width = 0;
         }
@@ -98,14 +97,14 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
         // Handle long words
         if word_width > width {
             if current_width > 0 {
-                wrapped_lines.push(Cow::Borrowed(line[line_start..word_start].trim_end()));
+                wrapped_lines.push(line[line_start..word_start].trim_end());
             }
             let mut temp_w = 0;
             let mut temp_start = word_start;
             for (ci, cc) in line[word_start..word_end].char_indices() {
                 let cw = cc.width().unwrap_or(0);
                 if temp_w + cw > width {
-                    wrapped_lines.push(Cow::Borrowed(&line[temp_start..word_start + ci]));
+                    wrapped_lines.push(&line[temp_start..word_start + ci]);
                     temp_start = word_start + ci;
                     temp_w = 0;
                 }
@@ -124,7 +123,7 @@ pub fn wrap_content<'a>(content: &'a str, width: usize) -> Vec<Cow<'a, str>> {
     if line_start < line.len() {
         let remaining_slice = &line[line_start..];
         if !remaining_slice.trim().is_empty() {
-            wrapped_lines.push(Cow::Borrowed(remaining_slice.trim_end()));
+            wrapped_lines.push(remaining_slice.trim_end());
         }
     }
 
@@ -146,18 +145,16 @@ pub fn wrap_spans<'a>(
     }
 
     let spans = to_spans(content, start_style);
+    //println!("{:?}", spans);
     let mut lines: Vec<WrappedLine<'a>> = vec![WrappedLine::default()];
     let mut current_width = 0;
-    let mut byte_offset = 0;
     let mut just_wrapped = false;
 
     for span in spans {
         let style = span.style;
-        let span_len = span.content.len();
-        let text_a = &content[byte_offset..byte_offset + span_len];
-        byte_offset += span_len;
+        let text_content: &'a str = span.content;
 
-        let mut char_indices = text_a.char_indices().peekable();
+        let mut char_indices = text_content.char_indices().peekable();
 
         while let Some((i, c)) = char_indices.next() {
             let char_w = c.width().unwrap_or(0);
@@ -167,7 +164,7 @@ pub fn wrap_spans<'a>(
                 // Skip leading whitespace only after a word wrap, not on the original first line
                 if !just_wrapped {
                     if let Some(last_line) = lines.last_mut() {
-                        let char_slice = &text_a[i..i + c.len_utf8()];
+                        let char_slice = &text_content[i..i + c.len_utf8()];
                         last_line.spans.push(Span::styled(char_slice, style));
                     }
                     current_width += char_w;
@@ -188,7 +185,7 @@ pub fn wrap_spans<'a>(
                 word_end += next_c.len_utf8();
                 char_indices.next();
             }
-            let word_slice = &text_a[word_start..word_end];
+            let word_slice = &text_content[word_start..word_end];
 
             // Overflow Check
             if current_width > 0 && current_width + word_width > width {
@@ -269,9 +266,8 @@ fn trim_line_end(line: Option<&mut WrappedLine<'_>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Cow;
 
-    fn lines_as_str<'b>(lines: &'b [Cow<'_, str>]) -> Vec<&'b str> {
+    fn lines_as_str<'b>(lines: &'b [&'_ str]) -> Vec<&'b str> {
         lines.iter().map(|l| l.as_ref()).collect()
     }
 
@@ -280,6 +276,58 @@ mod tests {
             .iter()
             .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
             .collect()
+    }
+
+    #[test]
+    fn test_wrap_spans_multibyte_overflow() {
+        // Each '･' is 3 bytes, but width is 1.
+        // Total string: "･✧Hi!"
+        // If width is 2, it should break after "･✧"
+        let input = "･✧Hi!";
+        let width = 2;
+
+        // We assume to_spans is working and returns one span for this plain string
+        let lines = wrap_spans(input, width, None);
+
+        // Expected:
+        // Line 1: "･✧" (Width 2)
+        // Line 2: "Hi!" (Width 3 -> will further wrap if width is strictly 2)
+
+        assert!(lines.len() >= 2);
+
+        // Check first line content
+        let line_strings = span_lines_as_str(lines.as_slice());
+
+        let first_line_text: Option<&str> = line_strings.first().map(|s| s.as_str());
+        assert_eq!(first_line_text, Some("･✧"));
+    }
+
+    #[test]
+    fn test_wrap_with_style_persistence() {
+        // Pink "Hello", then Bold "World"
+        // Width 7 forces a wrap after "Hello "
+        let input = "\x0313Hello \x02World";
+        let width = 7;
+
+        let lines = wrap_spans(input, width, None);
+
+        // Should result in 2 lines:
+        // 1. "Hello" (Pink) -> Note: trailing space should be trimmed by your `trim_line_end`
+        // 2. "World" (Bold)
+
+        assert_eq!(lines.len(), 2);
+
+        // Verify the second line kept the Bold modifier from the previous span
+        let first_line_span = &lines[0].spans[0];
+        assert_eq!(first_line_span.content, "Hello");
+        let second_line_span = &lines[1].spans[0];
+        assert_eq!(second_line_span.content, "World");
+        assert!(
+            second_line_span
+                .style
+                .add_modifier
+                .contains(ratatui::style::Modifier::BOLD)
+        );
     }
 
     #[test]
@@ -489,18 +537,6 @@ mod tests {
                 content,
                 width
             );
-        }
-    }
-
-    #[test]
-    fn borrowed_vs_owned_smoke_test() {
-        let content = "hello world";
-        let wrapped = wrap_content(content, 20);
-
-        assert_eq!(wrapped.len(), 1);
-        match &wrapped[0] {
-            Cow::Borrowed(s) => assert_eq!(*s, "hello world"),
-            Cow::Owned(_) => panic!("expected borrowed Cow"),
         }
     }
 }

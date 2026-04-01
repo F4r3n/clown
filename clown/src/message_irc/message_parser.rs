@@ -1,7 +1,4 @@
-use ratatui::{
-    style::{Color, Modifier, Style},
-    text::Span,
-};
+use ratatui::style::{Color, Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
 fn irc_to_color(code: &str) -> Color {
@@ -90,7 +87,27 @@ pub fn strip_irc_formatting_cow(content: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
-pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a>> {
+#[derive(Debug)]
+pub struct SpanRef<'a> {
+    pub content: &'a str,
+    pub style: ratatui::style::Style,
+}
+
+impl<'a> SpanRef<'a> {
+    pub fn from(content: &'a str) -> Self {
+        Self {
+            content,
+            style: Style::new(),
+        }
+    }
+
+    pub fn style(mut self, style: Style) -> Self {
+        self.style = style;
+        self
+    }
+}
+
+pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<SpanRef<'a>> {
     if content.is_empty() {
         return vec![];
     }
@@ -98,7 +115,7 @@ pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a
     let mut style = start_style.unwrap_or_default();
     let mut colors = [style.fg.unwrap_or_default(), style.bg.unwrap_or_default()];
     if is_string_plain(content) {
-        return vec![Span::from(content).style(style.fg(colors[0]).bg(colors[1]))];
+        return vec![SpanRef::from(content).style(style.fg(colors[0]).bg(colors[1]))];
     }
     let mut modifier = style.add_modifier & style.sub_modifier;
     let mut spans = Vec::new();
@@ -110,27 +127,29 @@ pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a
         if c == '\x03' {
             if start_index != i {
                 spans.push(
-                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                    SpanRef::from(&content[start_index..i])
+                        .style(style.fg(colors[0]).bg(colors[1])),
                 );
             }
             setting_style = true;
             style_buffer.clear();
             index_color = 0;
-            start_index = i;
+            start_index = i + 1;
         } else if setting_style && style_buffer.len() < 2 && c.is_ascii_digit() {
             style_buffer.push(c);
-            start_index = i;
+            start_index = i + 1;
         } else if setting_style && c == ',' && index_color == 0 {
             if let Some(color) = colors.get_mut(index_color) {
                 *color = irc_to_color(&style_buffer);
             }
             index_color += 1;
             style_buffer.clear();
-            start_index = i;
+            start_index = i + 1;
         } else if c == '\x02' {
             if start_index != i {
                 spans.push(
-                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                    SpanRef::from(&content[start_index..i])
+                        .style(style.fg(colors[0]).bg(colors[1])),
                 );
             }
             start_index = i + 1;
@@ -138,7 +157,8 @@ pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a
         } else if c == '\x1D' {
             if start_index != i {
                 spans.push(
-                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                    SpanRef::from(&content[start_index..i])
+                        .style(style.fg(colors[0]).bg(colors[1])),
                 );
             }
             start_index = i + 1;
@@ -146,7 +166,8 @@ pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a
         } else if c == '\x0F' {
             if start_index != i {
                 spans.push(
-                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                    SpanRef::from(&content[start_index..i])
+                        .style(style.fg(colors[0]).bg(colors[1])),
                 );
             }
             start_index = i + 1;
@@ -156,7 +177,8 @@ pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a
         } else if c == '\x1F' {
             if start_index != i {
                 spans.push(
-                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                    SpanRef::from(&content[start_index..i])
+                        .style(style.fg(colors[0]).bg(colors[1])),
                 );
             }
             start_index = i + 1;
@@ -164,7 +186,8 @@ pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a
         } else if c == '\x1E' {
             if start_index != i {
                 spans.push(
-                    Span::from(&content[start_index..i]).style(style.fg(colors[0]).bg(colors[1])),
+                    SpanRef::from(&content[start_index..i])
+                        .style(style.fg(colors[0]).bg(colors[1])),
                 );
             }
             start_index = i + 1;
@@ -174,11 +197,11 @@ pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<Span<'a
             if let Some(color) = colors.get_mut(index_color) {
                 *color = irc_to_color(&style_buffer);
             }
-            start_index = i;
+            //start_index = i;
         }
     }
     if start_index < content.len() {
-        spans.push(Span::from(&content[start_index..]).style(style.fg(colors[0]).bg(colors[1])));
+        spans.push(SpanRef::from(&content[start_index..]).style(style.fg(colors[0]).bg(colors[1])));
     }
     spans
 }
@@ -252,10 +275,10 @@ mod tests {
     use unicode_width::UnicodeWidthStr;
 
     // Helper to extract text and colors from spans for assertion
-    fn span_data<'a>(span: &'a Span<'_>) -> (&'a str, Color, Color) {
+    fn span_data<'a>(span: &'a SpanRef<'_>) -> (&'a str, Color, Color) {
         // Assuming you have methods or public fields to get these:
         (
-            &span.content,
+            span.content,
             span.style.fg.unwrap_or_default(),
             span.style.bg.unwrap_or_default(),
         )
@@ -298,6 +321,62 @@ mod tests {
         assert_eq!(text, "Hi!");
         assert_eq!(fg, Color::Yellow);
         assert_eq!(bg, Color::Red);
+    }
+
+    #[test]
+    fn test_complex_multi_byte_and_style() {
+        // \x0313 = Pink, \x02 = Bold, \x03 = Reset color (but keep bold)
+        // The string contains '･' (3 bytes) and '✧' (3 bytes)
+        let input = "\x0313･\x0211✧\x03Hi!";
+        let spans = to_spans(input, None);
+
+        // Should result in 3 spans:
+        // 1. "･" (Pink)
+        // 2. "11✧" (Pink, Bold) - Note: '11' is text here because setting_style was false
+        // 3. "Hi!" (Default Color, Bold)
+
+        assert_eq!(spans.len(), 3);
+
+        // Span 1: Pink symbol
+        let (text1, fg1, _) = span_data(&spans[0]);
+        assert_eq!(text1, "･");
+        assert_eq!(fg1, Color::Rgb(255, 0, 255)); // IRC 13
+
+        // Span 2: Bold symbol with numeric prefix
+        let (text2, fg2, _) = span_data(&spans[1]);
+        assert_eq!(text2, "11✧");
+        assert_eq!(fg2, Color::Rgb(255, 0, 255));
+        // Ensure bold is active (you might need to check the modifier bitmask)
+        assert!(spans[1].style.add_modifier.contains(Modifier::BOLD));
+
+        // Span 3: Reset color but still Bold
+        let (text3, fg3, _) = span_data(&spans[2]);
+        assert_eq!(text3, "Hi!");
+        assert_ne!(fg3, Color::Rgb(255, 0, 255)); // Should be default
+        assert!(spans[2].style.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn test_interrupted_style_and_multibyte() {
+        // \x0314 = Grey
+        // \x02 = Bold (Interrupted the color digits if they were coming)
+        // "･" = The 3-byte character that caused the original panic
+        let input = "\x0314\x02･✧Hi!";
+        let spans = to_spans(input, None);
+
+        // Expected behavior:
+        // Span 1: "･✧Hi!" (Grey + Bold)
+        // The \x02 should terminate the 'setting_style' state for \x0314.
+
+        assert!(!spans.is_empty(), "Spans should not be empty");
+        let (text, _, _) = span_data(&spans[0]);
+
+        // Ensure the text starts exactly at the multi-byte '･'
+        assert_eq!(text, "･✧Hi!");
+
+        // Ensure both styles applied
+        assert_eq!(spans[0].style.fg, Some(Color::Gray));
+        assert!(spans[0].style.add_modifier.contains(Modifier::BOLD));
     }
 
     #[test]
