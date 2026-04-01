@@ -141,10 +141,9 @@ impl MainView<'_> {
                     0, /*TODO: command should return the id */
                 )),
                 command::ClientCommand::Quit(message) => {
-                    session.send_command_all_server(Command::Quit(message));
+                    session.send_command_all_server(Command::Quit(message.clone()));
 
-                    model.running_state = RunningState::Done;
-                    None
+                    Some(MessageEvent::QuitAll(message))
                 }
                 command::ClientCommand::Help => Some(help()),
                 command::ClientCommand::Nick(new_nick) => {
@@ -733,6 +732,20 @@ impl widget_view::WidgetView for MainView<'_> {
                 self.update_pull_irc(model, session, messages);
                 return;
             }
+            MessageEvent::QuitAll(reason) => {
+                for id in session.iter_valid_connection_id() {
+                    if let Some(nickname) = model.get_nickname(id)
+                        && let Err(e) = self.log(
+                            model.get_connection_config(id).as_ref(),
+                            Some(&session.model),
+                            &MessageEvent::Quit(id, nickname.to_string(), reason.clone()),
+                        )
+                    {
+                        tracing::error!(error = %e, "Cannot write logs");
+                    }
+                }
+                model.running_state = RunningState::Done;
+            }
             // Handle Logging for IRC events
             MessageEvent::ActionMsg(id, ..)
             | MessageEvent::Join(id, ..)
@@ -743,7 +756,11 @@ impl widget_view::WidgetView for MainView<'_> {
             | MessageEvent::PrivMsg(id, ..)
             | MessageEvent::UpdateUsers(id, ..)
             | MessageEvent::SetTopic(id, ..) => {
-                if let Err(e) = self.log(model.get_connection_config(*id).as_ref(), None, &msg) {
+                if let Err(e) = self.log(
+                    model.get_connection_config(*id).as_ref(),
+                    Some(&session.model),
+                    &msg,
+                ) {
                     tracing::error!(error = %e, "Cannot write logs");
                 }
             }

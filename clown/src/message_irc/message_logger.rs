@@ -259,7 +259,11 @@ impl<R: Read + Seek> LogReader<R> {
                     if let Some(line) = combined.get(i + 1..end_idx)
                         && !line.is_empty()
                     {
-                        vec.push(log_parser::parse(line)?);
+                        if let Ok(parsed_message) = log_parser::parse(line) {
+                            vec.push(parsed_message);
+                        } else {
+                            tracing::error!("Cannot parse {}", std::str::from_utf8(line)?);
+                        }
                         to_read -= 1;
                         if to_read == 0 {
                             self.seek_pos += (i + 1) as u64;
@@ -278,7 +282,11 @@ impl<R: Read + Seek> LogReader<R> {
         }
 
         if to_read > 0 && !carry.is_empty() {
-            vec.push(log_parser::parse(&carry)?);
+            if let Ok(parsed_message) = log_parser::parse(&carry) {
+                vec.push(parsed_message);
+            } else {
+                tracing::error!("Cannot parse {}", std::str::from_utf8(&carry)?);
+            }
         }
 
         Ok(vec)
@@ -488,7 +496,6 @@ impl MessageLogger {
 
             MessageEvent::Notice(_, source, target, content)
             | MessageEvent::PrivMsg(_, source, target, content) => {
-                //tracing::debug!("TARGET {target}. SOURCE {source}");
                 self.write_to_target(
                     server_address,
                     Some(target),

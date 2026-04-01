@@ -67,6 +67,7 @@ pub enum MessageEvent {
         String,         /*user*/
         Option<String>, /*reason*/
     ),
+    QuitAll(Option<String> /*reason*/),
     SettingsDidChange,
     Bel,
     CloseBuffer(Option<usize> /*server id */, String /*name */),

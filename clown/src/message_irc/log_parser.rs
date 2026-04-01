@@ -132,8 +132,7 @@ fn parse_priv_message(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
 
 fn parse_part<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMessage<'static>> {
     let (input, _) = tag(" has left ").parse(input)?;
-    let (input, channel) =
-        map_res(take_till(|c: u8| c.is_ascii_whitespace()), buf_to_str).parse(input)?;
+    let (input, channel) = map_res(nom::combinator::rest, buf_to_str).parse(input)?;
 
     Ok((
         input,
@@ -260,6 +259,19 @@ mod tests {
 
         if let LoggedMessage::Quit { source } = result.message {
             assert_eq!(source, "Bob");
+        } else {
+            panic!("Expected Quit message");
+        }
+    }
+
+    #[test]
+    fn test_parse_part() {
+        let raw = b"2024-05-20 15:00:00\t<--\t Bob has left #rust_test";
+        let result = parse(raw).expect("Should parse left");
+
+        if let LoggedMessage::Part { source, channel } = result.message {
+            assert_eq!(source, "Bob");
+            assert_eq!(channel, "#rust_test");
         } else {
             panic!("Expected Quit message");
         }

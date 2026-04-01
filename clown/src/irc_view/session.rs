@@ -61,6 +61,14 @@ impl Session {
         }
     }
 
+    pub fn iter_valid_connection_id(&self) -> impl Iterator<Item = usize> {
+        self.connections
+            .iter()
+            .enumerate()
+            .filter(|(_, v)| v.is_some())
+            .map(|(i, _)| i)
+    }
+
     pub fn is_irc_finished(&self, in_id: usize) -> bool {
         if let Some(Some(connection)) = self.connections.get(in_id) {
             connection.task.is_finished()
