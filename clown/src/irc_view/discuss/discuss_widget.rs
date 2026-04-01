@@ -592,21 +592,6 @@ impl DiscussWidget {
         visible_rows
     }
 
-    fn get_total_lines(&self) -> usize {
-        if self.content_width == 0 {
-            return 0;
-        }
-
-        self.messages
-            .get_messages(self.current_server_id, &self.current_channel)
-            .map(|msgs| {
-                msgs.iter()
-                    .map(|m| m.wrapped_line_count(self.content_width))
-                    .sum()
-            })
-            .unwrap_or(0)
-    }
-
     fn get_fake_total_lines(&self) -> usize {
         if self.content_width == 0 {
             return 0;
@@ -1181,14 +1166,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         self.scroll_page_down();
                         None
                     }
-                    KeyCode::Home => {
-                        self.scroll_offset = self.get_total_lines();
-                        None
-                    }
-                    KeyCode::End => {
-                        self.scroll_offset = 0;
-                        None
-                    }
+
                     _ => None,
                 },
                 _ => None,
@@ -1311,31 +1289,6 @@ mod tests {
             discuss.get_current_line_index_character(0, (TEXT_START + 100) as u16),
             None
         );
-    }
-
-    #[test]
-    fn test_total_lines() {
-        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
-        discuss.content_width = 10;
-        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
-        discuss.set_current_channel(Some(TEST_SERVER_ID), "");
-        discuss.add_line(
-            Some(TEST_SERVER_ID),
-            "",
-            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
-        );
-        discuss.add_line(
-            Some(TEST_SERVER_ID),
-            "",
-            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
-        );
-        discuss.add_line(
-            Some(TEST_SERVER_ID),
-            "",
-            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
-        );
-        discuss.scroll_offset = 0;
-        assert_eq!(discuss.get_total_lines(), 9);
     }
 
     #[test]
