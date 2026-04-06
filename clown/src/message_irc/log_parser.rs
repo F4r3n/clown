@@ -1,6 +1,7 @@
 use crate::message_irc::message_logger::LoggedTimedMessage;
 
 use super::message_logger::LoggedMessage;
+use anyhow::bail;
 use chrono::TimeZone;
 use nom::bytes::complete::tag;
 use nom::{
@@ -46,7 +47,7 @@ fn parse_time(input: &[u8]) -> IResult<&[u8], (u32, u32, u32)> {
     Ok((input, (hour, min, sec)))
 }
 
-fn parse_date_time(input: &[u8]) -> IResult<&[u8], std::time::SystemTime> {
+fn parse_date_time(input: &[u8]) -> IResult<&[u8], anyhow::Result<std::time::SystemTime>> {
     let (input, date) = parse_date(input)?;
     let (input, _) = take_till(|c: u8| c.is_ascii_digit()).parse(input)?;
     let (input, time) = parse_time(input)?;
@@ -54,15 +55,20 @@ fn parse_date_time(input: &[u8]) -> IResult<&[u8], std::time::SystemTime> {
     Ok((input, convert_date_time(date, time)))
 }
 
-fn convert_date_time(date: (i32, u32, u32), time: (u32, u32, u32)) -> std::time::SystemTime {
+fn convert_date_time(
+    date: (i32, u32, u32),
+    time: (u32, u32, u32),
+) -> anyhow::Result<std::time::SystemTime> {
     let (year, month, day) = date;
     let (hour, min, sec) = time;
 
-    let utc_dt = chrono::Utc
-        .with_ymd_and_hms(year, month, day, hour, min, sec)
-        .unwrap();
+    let utc_dt = match chrono::Utc.with_ymd_and_hms(year, month, day, hour, min, sec) {
+        chrono::offset::LocalResult::Single(data) => data,
+        chrono::offset::LocalResult::Ambiguous(a, _) => a,
+        chrono::offset::LocalResult::None => bail!("Error to convert to UTC time"),
+    };
 
-    std::time::SystemTime::from(utc_dt)
+    Ok(std::time::SystemTime::from(utc_dt))
 }
 
 fn buf_to_str(s: &[u8]) -> anyhow::Result<&str> {
@@ -195,7 +201,7 @@ pub fn parse(input: &[u8]) -> anyhow::Result<LoggedTimedMessage<'static>> {
         parse_event(input).map_err(|e| anyhow::anyhow!("Event parsing failed: {}", e))?;
 
     Ok(LoggedTimedMessage {
-        time,
+        time: time?,
         message: event,
     })
 }

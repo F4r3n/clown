@@ -1,6 +1,3 @@
-use std::path::PathBuf;
-use std::time::Duration;
-
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use crate::component::Draw;
 use crate::message_irc::message_content::WordPos;
@@ -19,6 +16,8 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
+use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 struct Range {
@@ -218,21 +217,45 @@ impl Messages {
         }
     }
 
+    fn did_day_change(last_check: std::time::SystemTime, now: std::time::SystemTime) -> bool {
+        let last_date: chrono::DateTime<chrono::Local> = last_check.into();
+        let now_date: chrono::DateTime<chrono::Local> = now.into();
+
+        last_date.date_naive() != now_date.date_naive()
+    }
+
     fn read_log(&mut self, number_lines: usize) -> anyhow::Result<usize> {
         let log_reader = match self.log_reader.as_mut() {
             Some(reader) => reader,
             None => return Ok(0),
         };
-
-        let list_read = log_reader.read(number_lines)?;
-        let number_lines = list_read.len();
-        self.logged_messages.extend(
-            list_read
-                .into_iter()
-                .map(|msg| DiscussWidget::create_message(msg)),
+        let mut last_time = self.logged_messages.last().map(|v| v.get_time()).unwrap_or(
+            self.messages
+                .first()
+                .map(|v| v.get_time())
+                .unwrap_or(std::time::SystemTime::now()),
         );
+        let list_read = log_reader.read(number_lines)?;
+        let number_lines_before = self.logged_messages.len();
+        for msg in list_read.into_iter() {
+            if Self::did_day_change(last_time, msg.time) {
+                let now_date: chrono::DateTime<chrono::Local> = msg.time.into();
 
-        Ok(number_lines)
+                self.logged_messages.push(
+                    MessageContent::info(now_date.format("%d/%m/%Y").to_string())
+                        .with_time(msg.time),
+                );
+            }
+            last_time = msg.time;
+
+            self.logged_messages
+                .push(DiscussWidget::create_message(msg));
+        }
+
+        Ok(self
+            .logged_messages
+            .len()
+            .saturating_sub(number_lines_before))
     }
 }
 
