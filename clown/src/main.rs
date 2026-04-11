@@ -12,7 +12,7 @@ mod tui;
 mod widget_view;
 use crate::irc_view::main_view;
 use crate::irc_view::session::Session;
-use clown::project_path::ProjectPath;
+use crate::project_path::ProjectPath;
 use event_handler::Event;
 use event_handler::EventHandler;
 use message_event::MessageEvent;
@@ -41,6 +41,9 @@ struct Args {
 
     #[arg(short, long)]
     debug: bool,
+
+    #[arg(long)]
+    merge_logs: bool,
 }
 
 fn prepare_logs(is_debug: bool) -> anyhow::Result<WorkerGuard> {
@@ -69,7 +72,15 @@ fn prepare_logs(is_debug: bool) -> anyhow::Result<WorkerGuard> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+
     let _guard = prepare_logs(args.debug)?;
+
+    if args.merge_logs {
+        if let Some(log_location) = ProjectPath::log_dir() {
+            message_irc::log_merger::merge_logs(log_location)?;
+        }
+        return Ok(());
+    }
 
     let mut list_messages = message_queue::MessageQueue::new();
     let mut model = match model::Model::try_new(args.config_name.clone()) {

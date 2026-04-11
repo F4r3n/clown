@@ -362,6 +362,30 @@ impl MessageLogger {
         name
     }
 
+    pub fn get_log_info(path: &Path) -> Option<(&str, &str, &str)> {
+        if path.extension().is_some_and(|ext| ext != "log") {
+            return None;
+        }
+        if let Some(name) = path.file_name()
+            && let Some(name) = name.to_str()
+        {
+            let mut split = name.split('.');
+            let server_name = split.next();
+            let channel = split.next();
+            let hash = split.next();
+            if let Some(server_name) = server_name
+                && let Some(channel) = channel
+                && let Some(hash) = hash
+            {
+                Some((server_name, channel, hash))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     fn init_buffer(
         &mut self,
         server_address: &str,
