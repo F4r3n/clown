@@ -767,8 +767,6 @@ impl widget_view::WidgetView for MainView<'_> {
             _ => {}
         }
 
-        // We inline the children here to avoid the borrow checker conflict with self.session
-
         for child in self.children().iter_mut() {
             if let Some(new_msg) = child.handle_actions(model, Some(&session.model), &msg) {
                 messages.push_message(new_msg);

@@ -48,6 +48,11 @@ impl MessageContent {
         self.source.as_deref()
     }
 
+    #[cfg(test)]
+    pub fn get_content(&self) -> &str {
+        &self.content
+    }
+
     pub fn get_word_from_pos(&self, pos: &WordPos) -> Option<&str> {
         self.content.get(pos.byte_start..pos.byte_end)
     }
