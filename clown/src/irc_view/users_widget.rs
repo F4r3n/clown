@@ -678,7 +678,7 @@ mod tests {
         let irc_model = Some(crate::irc_view::irc_model::IrcModel::new_single_server(
             1,
             TEST_SERVER_ID,
-            "TEST".into(),
+            server_name.into(),
             user_name.to_string(),
         ));
 
