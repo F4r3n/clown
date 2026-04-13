@@ -672,7 +672,9 @@ impl crate::component::EventHandler for DiscussWidget {
 
                 None
             }
-            MessageEvent::JoinServer(server_id, server) => {
+            MessageEvent::JoinServer(server_id) => {
+                let server_name = model.get_name(*server_id).to_string();
+
                 self.add_server_group(
                     Some(*server_id),
                     model
@@ -680,12 +682,12 @@ impl crate::component::EventHandler for DiscussWidget {
                         .as_ref()
                         .map(|v| v.address.clone()),
                 );
-
                 self.add_line(
                     Some(*server_id),
-                    server,
-                    MessageContent::info(format!("{} has joined", server)),
+                    &server_name,
+                    MessageContent::info(format!("{} has joined", server_name)),
                 );
+
                 None
             }
             MessageEvent::Join(server_id, channel, source) => {

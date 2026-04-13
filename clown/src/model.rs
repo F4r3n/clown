@@ -61,6 +61,7 @@ pub struct Model {
 }
 
 impl Model {
+    #[cfg(test)]
     pub fn new_empty_config() -> Self {
         Self {
             running_state: RunningState::Start,
@@ -122,6 +123,10 @@ impl Model {
 
     pub fn get_address(&self, in_id: usize) -> Option<&str> {
         self.get_config().get_address(in_id)
+    }
+
+    pub fn get_name(&self, in_id: usize) -> &str {
+        self.get_config().get_name(in_id)
     }
 
     pub fn get_completion_behaviour(&self) -> (Option<&str>, Option<&str>) {

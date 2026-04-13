@@ -41,7 +41,7 @@ pub enum MessageEvent {
         String, /*channel*/
         String, /*user */
     ),
-    JoinServer(usize /*server id */, String),
+    JoinServer(usize /*server id */),
     SetTopic(
         usize,          /*server id */
         Option<String>, /*source*/

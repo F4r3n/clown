@@ -1035,6 +1035,18 @@ impl Config {
             .map(|v| v.connection.address.as_str())
     }
 
+    pub fn get_name(&self, in_id: usize) -> &str {
+        if let Some(server) = self.servers.get(in_id) {
+            if server.name.is_empty() {
+                server.connection.address.as_str()
+            } else {
+                server.name.as_str()
+            }
+        } else {
+            "Server"
+        }
+    }
+
     pub fn is_autojoin_id(&self, in_id: usize) -> bool {
         self.servers
             .get(in_id)

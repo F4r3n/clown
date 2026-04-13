@@ -346,7 +346,6 @@ impl MessageLogger {
 
     pub fn compute_filename(server_address: &str, target: Option<&str>) -> String {
         let target = target.unwrap_or("server").to_lowercase();
-        //tracing::debug!("{server_address} {target:?}");
 
         let name = format!(
             "{}.{}.{}.log",

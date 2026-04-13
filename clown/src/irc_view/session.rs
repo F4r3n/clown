@@ -114,14 +114,6 @@ impl Session {
             })
     }
 
-    pub fn is_connected(&self, in_id: usize) -> bool {
-        if let Some(connection) = self.connections.get(in_id) {
-            connection.is_some()
-        } else {
-            false
-        }
-    }
-
     pub fn send_command_topic(&mut self, topic: String) -> anyhow::Result<()> {
         if let Some(irc_model) = self.get_current_irc_server_model()
             && let Some(channel) = irc_model.get_current_channel()

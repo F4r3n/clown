@@ -36,6 +36,8 @@ use tracing::error;
 pub enum MessageError {
     #[error("The message should have a source")]
     MissingSource,
+    #[error("The message is not processed")]
+    UnknownMessage,
 }
 
 const LOG_FLUSH_CHECK_TIMER: u64 = 10;
@@ -152,10 +154,11 @@ impl MainView<'_> {
                     {
                         return Some(MessageEvent::from_error(e));
                     }
-                    if let Some(id) = session.get_current_server_id()
-                        && !session.is_connected(id)
-                    {
-                        let _ = model.set_nickname(id, new_nick.clone());
+
+                    if let Some(id) = session.get_current_server_id() {
+                        if let Err(e) = model.set_nickname(id, new_nick.clone()) {
+                            tracing::error!(error = %e, "Impossible to save");
+                        }
                     }
 
                     None
@@ -409,8 +412,11 @@ impl MainView<'_> {
                             && let Some(nickname) = model.get_nickname(server_id)
                         {
                             if source.eq_ignore_ascii_case(nickname) {
-                                let _ = model.set_nickname(server_id, new_user.clone());
+                                if let Err(e) = model.set_nickname(server_id, new_user.clone()) {
+                                    tracing::error!(error = %e, "Impossible to save");
+                                }
                             }
+
                             messages.push_message(MessageEvent::ReplaceUser(
                                 server_id, source, new_user,
                             ));
@@ -466,19 +472,28 @@ impl MainView<'_> {
                             tracing::error!(error = %MessageError::MissingSource, "Join");
                         }
                     }
-                    Command::Error(_err) => {
+                    Command::Error(err) => {
+                        messages.push_message(MessageEvent::AddMessageViewInfo(
+                            Some(server_id),
+                            None,
+                            crate::message_irc::message_content::MessageKind::Error,
+                            err,
+                        ));
                         messages.push_message(MessageEvent::DisConnect(server_id))
+                    }
+                    Command::Unknown(content) => {
+                        messages.push_message(MessageEvent::AddMessageViewInfo(
+                            Some(server_id),
+                            None,
+                            crate::message_irc::message_content::MessageKind::Error,
+                            content,
+                        ));
                     }
                     _ => {}
                 },
                 Response::Rpl(reply) => match reply {
                     ResponseNumber::Welcome(content) => {
-                        if let Some(source) = source.clone() {
-                            server_to_init.push((source.clone(), server_id));
-                            messages.push_message(MessageEvent::JoinServer(server_id, source));
-                        } else {
-                            tracing::error!(error = %MessageError::MissingSource, "Welcome");
-                        }
+                        server_to_init.push(server_id);
 
                         messages.push_message(MessageEvent::AddMessageViewInfo(
                             Some(server_id),
@@ -524,17 +539,23 @@ impl MainView<'_> {
                             content,
                         ));
                     }
-                    _ => {}
+                    _ => {
+                        tracing::error!(error = %MessageError::UnknownMessage);
+                    }
                 },
-                Response::Unknown(_) => {}
+                Response::Unknown(content) => {
+                    messages.push_message(MessageEvent::AddMessageViewInfo(
+                        Some(server_id),
+                        None,
+                        crate::message_irc::message_content::MessageKind::Error,
+                        content,
+                    ));
+                }
             };
         }
 
-        for (server_name, id) in server_to_init {
+        for id in server_to_init {
             session.reset_retry();
-            if let Some(nick) = model.get_nickname(id) {
-                session.init_irc_model(nick.to_string(), id, server_name);
-            }
             if model.is_autojoin_by_id(id) {
                 for channel in model.get_channels(id) {
                     if let Err(e) = session
@@ -687,20 +708,38 @@ impl widget_view::WidgetView for MainView<'_> {
             }
             MessageEvent::Connect(server_id) => {
                 let addr = model.get_address(*server_id).unwrap_or("No address");
+
+                messages.push_message(MessageEvent::JoinServer(*server_id));
+
                 messages.push_message(MessageEvent::AddMessageViewInfo(
                     Some(*server_id),
                     None,
                     crate::message_irc::message_content::MessageKind::Info,
                     format!("Try to connect to {}...", addr),
                 ));
+                let server_name = model.get_name(*server_id).to_string();
+                messages.push_message(MessageEvent::SelectChannel(
+                    Some(*server_id),
+                    server_name.clone(),
+                ));
 
                 if let Some(conn_cfg) = model.get_connection_config(*server_id)
                     && let Some(login_cfg) = model.get_login_config(*server_id)
                 {
-                    if session.is_irc_finished(*server_id)
-                        && let Err(e) = session.init_connection(*server_id, conn_cfg, login_cfg)
-                    {
-                        tracing::error!(e);
+                    if session.is_irc_finished(*server_id) {
+                        if let Err(e) = session.init_connection(*server_id, conn_cfg, login_cfg) {
+                            tracing::error!(e);
+                        } else {
+                            let nick = model.get_nickname(*server_id).unwrap_or("No Nick");
+                            session.init_irc_model(nick.to_string(), *server_id, server_name);
+                        }
+                    } else {
+                        messages.push_message(MessageEvent::AddMessageViewInfo(
+                            Some(*server_id),
+                            None,
+                            crate::message_irc::message_content::MessageKind::Error,
+                            format!("Already connected to {}...", addr),
+                        ));
                     }
                 } else {
                     messages.push_message(MessageEvent::AddMessageViewInfo(

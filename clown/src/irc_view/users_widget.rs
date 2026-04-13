@@ -516,9 +516,13 @@ impl crate::component::EventHandler for UsersWidget {
 
                 None
             }
-            MessageEvent::JoinServer(server_id, server) => {
-                self.add_section_index(Some(*server_id), server.to_string());
-                self.need_redraw = true;
+            MessageEvent::JoinServer(server_id) => {
+                if let Some(irc_model) = irc_model {
+                    let server_name = irc_model.get_server_name(*server_id).to_string();
+
+                    self.add_section_index(Some(*server_id), server_name);
+                    self.need_redraw = true;
+                }
                 None
             }
             MessageEvent::Join(server_id, channel, user) => {
@@ -610,11 +614,8 @@ mod tests {
             }
         }
 
-        fn join_server(&mut self, server_name: &str) {
-            self.handle_action(&MessageEvent::JoinServer(
-                TEST_SERVER_ID,
-                server_name.to_string(),
-            ));
+        fn join_server(&mut self) {
+            self.handle_action(&MessageEvent::JoinServer(TEST_SERVER_ID));
         }
 
         fn join_channel(&mut self, channel: &str, user: &str) {
@@ -686,7 +687,7 @@ mod tests {
             users_widget,
         };
 
-        widget_test.join_server(server_name);
+        widget_test.join_server();
         assert_eq!(widget_test.users_widget.nb_sections(), 1);
 
         widget_test.join_channel(channel, user_name);
@@ -746,7 +747,6 @@ mod tests {
         let users_widget = UsersWidget::new();
         let user_name = "farine";
         let channel = "#rust";
-        let server_name = "IRC-Server";
         let mut irc_model = crate::irc_view::irc_model::IrcModel::new(1);
         irc_model.init_server(0, "TEST".into(), user_name.to_string());
 
@@ -755,7 +755,7 @@ mod tests {
             users_widget,
         };
 
-        widget_test.join_server(server_name);
+        widget_test.join_server();
         widget_test.join_channel(channel, user_name);
         widget_test.join_channel_users(channel, vec!["a"]);
 
@@ -783,7 +783,6 @@ mod tests {
         let users_widget = UsersWidget::new();
         let user_name = "farine";
         let channel = "#rust";
-        let server_name = "IRC-Server";
         let irc_model = Some(crate::irc_view::irc_model::IrcModel::new_single_server(
             1,
             TEST_SERVER_ID,
@@ -796,7 +795,7 @@ mod tests {
             users_widget,
         };
 
-        let action = MessageEvent::JoinServer(TEST_SERVER_ID, server_name.to_string());
+        let action = MessageEvent::JoinServer(TEST_SERVER_ID);
         widget_test.handle_action(&action);
 
         let action = MessageEvent::Join(TEST_SERVER_ID, channel.to_string(), user_name.to_string());

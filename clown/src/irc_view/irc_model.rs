@@ -80,11 +80,11 @@ impl IrcModel {
             .and_then(|v| v.as_ref())
     }
 
-    pub fn get_server_name(&self, server_id: usize) -> Option<&str> {
-        if let Some(server) = self.servers.get(server_id) {
-            server.as_ref().map(|v| v.get_server_name())
+    pub fn get_server_name(&self, server_id: usize) -> &str {
+        if let Some(Some(server)) = self.servers.get(server_id) {
+            server.get_server_name()
         } else {
-            None
+            "Server"
         }
     }
 
@@ -94,7 +94,7 @@ impl IrcModel {
         channel: Option<&'a str>,
     ) -> Option<&'a str> {
         if channel.is_none() {
-            self.get_server_name(server_id)
+            Some(self.get_server_name(server_id))
         } else {
             channel
         }
@@ -142,9 +142,11 @@ impl IrcModel {
 
     pub fn handle_action(&mut self, event: &MessageEvent) {
         match event {
-            MessageEvent::JoinServer(server_id, server_name) => {
+            MessageEvent::JoinServer(server_id) => {
+                let server_name = self.get_server_name(*server_id).to_string();
+
                 if let Some(Some(server)) = self.servers.get_mut(*server_id) {
-                    server.add_channel(server_name);
+                    server.add_channel(&server_name);
                 }
             }
             MessageEvent::Join(server_id, channel, user) => {

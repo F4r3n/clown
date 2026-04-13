@@ -79,7 +79,7 @@ impl EventHandler for TopicWidget {
 
                 None
             }
-            MessageEvent::JoinServer(server_id, _) => {
+            MessageEvent::JoinServer(server_id) => {
                 self.topic_collection
                     .resize(server_id.saturating_add(1), Default::default());
                 None
@@ -114,7 +114,7 @@ mod tests {
         let server_id = 2;
 
         // Simulate joining a server with ID 2
-        let event = MessageEvent::JoinServer(server_id, "irc.example.com".to_string());
+        let event = MessageEvent::JoinServer(server_id);
         widget.handle_actions(&mock_model(), None, &event);
 
         // Vector should be resized to 3 to accommodate index 2
@@ -145,11 +145,7 @@ mod tests {
         let server_id = 0;
 
         // 1. Initialize the server slot first
-        widget.handle_actions(
-            &mock_model(),
-            None,
-            &MessageEvent::JoinServer(server_id, "irc.example.net".into()),
-        );
+        widget.handle_actions(&mock_model(), None, &MessageEvent::JoinServer(server_id));
 
         // 2. Mock the SetTopic event with an Option source (Some)
         let event_with_source = MessageEvent::SetTopic(
