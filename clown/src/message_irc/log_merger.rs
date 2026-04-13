@@ -68,11 +68,10 @@ pub fn merge_logs(log_location: PathBuf) -> anyhow::Result<()> {
             std::io::copy(&mut input, &mut temp_file)?;
         }
 
-        std::fs::rename(&temp, &original)?;
-
         for file in data {
             std::fs::remove_file(&file.1)?;
         }
+        std::fs::rename(&temp, &original)?;
     }
 
     Ok(())
