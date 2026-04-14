@@ -1,5 +1,6 @@
 use super::completion::Completion;
 use super::history::InputHistory;
+#[cfg(feature = "spell-checker")]
 use super::spell_checker::SpellChecker;
 use crate::irc_view::irc_model::IrcModel;
 use crate::message_event::MessageEvent;
@@ -23,7 +24,9 @@ pub struct CInput {
     area: Rect,
     redraw: bool,
 
+    #[cfg(feature = "spell-checker")]
     spell_checker: Option<SpellChecker>,
+    #[cfg(feature = "spell-checker")]
     spellchecker_task: Option<crate::async_task::AsyncTask<SpellChecker>>,
 }
 
@@ -42,20 +45,18 @@ impl Draw for CInput {
         // keep 2 for borders and 1 for cursor
         let width = area.width.max(3) - 3;
         let scroll = self.input.set_visual_scroll(width as usize);
+        #[cfg(feature = "spell-checker")]
         let input = if self.spell_checker.is_some() {
             let mut spans = Vec::new();
-
             spans.push(Span::from("> ").style(Style::default().fg(ratatui::style::Color::Cyan)));
-
             spans.extend(self.spans_with_spellcheck(self.input.get_value()));
-
             Paragraph::new(Line::from(spans))
         } else {
-            Paragraph::new(Line::from(vec![
-                Span::from("> ").style(Style::default().fg(ratatui::style::Color::Cyan)),
-                Span::from(self.input.get_value()),
-            ]))
+            self.default_paragraph()
         };
+
+        #[cfg(not(feature = "spell-checker"))]
+        let input = self.default_paragraph();
 
         frame.render_widget(input.scroll((0, scroll as u16)), area);
 
@@ -79,6 +80,7 @@ impl crate::component::EventHandler for CInput {
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
+            #[cfg(feature = "spell-checker")]
             MessageEvent::SpellChecker(language) => {
                 if let Some(language) = language {
                     self.spellchecker_task = Some(crate::async_task::AsyncTask {
@@ -205,6 +207,7 @@ impl crate::component::EventHandler for CInput {
                     None
                 }
             }
+            #[cfg(feature = "spell-checker")]
             crate::event_handler::Event::Tick => self.handle_spellchecker(),
             _ => None,
         }
@@ -222,6 +225,14 @@ impl CInput {
         }
     }
 
+    fn default_paragraph(&self) -> Paragraph<'_> {
+        Paragraph::new(Line::from(vec![
+            Span::from("> ").style(Style::default().fg(ratatui::style::Color::Cyan)),
+            Span::from(self.input.get_value()),
+        ]))
+    }
+
+    #[cfg(feature = "spell-checker")]
     pub fn spans_with_spellcheck<'a>(&self, input: &'a str) -> Vec<Span<'a>> {
         let mut spans = Vec::new();
         let mut start = 0;
@@ -272,6 +283,7 @@ impl CInput {
         self.input.reset();
     }
 
+    #[cfg(feature = "spell-checker")]
     fn handle_spellchecker(&mut self) -> Option<MessageEvent> {
         if self.spellchecker_task.as_mut().is_some_and(|v| v.poll())
             && let Some(spell_task) = self.spellchecker_task.take()

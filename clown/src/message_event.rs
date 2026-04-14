@@ -48,7 +48,6 @@ pub enum MessageEvent {
         String,         /*channel */
         String,         /*topic */
     ),
-    #[cfg(feature = "website-preview")]
     HoverURL(String /* URL */),
     #[allow(dead_code)]
     Hover(String), //currently not used, but the skeleton can be used anywhere
