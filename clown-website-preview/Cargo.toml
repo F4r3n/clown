@@ -8,9 +8,10 @@ description.workspace = true
 
 [dependencies]
 reqwest = {version = "0.13.1", features=["rustls"], default-features=false}
-scraper = {version="0.25.0", features=["main", "errors"], default-features=false}
 image = { version = "^0.25.9", default-features = false, features = ["jpeg", "png"] }
 bytes = "1.11.0"
+thiserror = "2.0.18"
+astral-tl = "0.7.11"
 
 [dev-dependencies]
 httpmock = {version="0.8.2", default-features=false}

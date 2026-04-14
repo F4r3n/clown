@@ -1,5 +1,4 @@
 use image::DynamicImage;
-use scraper::Html;
 use std::io::Cursor;
 use std::sync::Arc;
 #[derive(Clone)]
@@ -10,37 +9,62 @@ pub struct MetaData {
     image: Option<Arc<DynamicImage>>,
 }
 
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ParserError {
+    #[error("Cannot parse html")]
+    ParseHTML(#[from] tl::ParseError),
+}
+
 impl MetaData {
-    pub fn new(in_html: Html) -> Self {
+    pub fn try_parse(text: &str) -> Result<Self, ParserError> {
+        let dom = tl::parse(text, tl::ParserOptions::default())?;
+        let parser = dom.parser();
+
         let mut meta = MetaData {
             image_url: String::from(""),
             title: String::from(""),
             description: String::from(""),
             image: None,
         };
-        use scraper::Selector;
-        if let Ok(selector) = Selector::parse("head meta") {
-            let s = in_html.select(&selector);
-            for element in s {
-                if let Some(property) = element.attr("property")
-                    && let Some(content) = element.attr("content")
-                {
-                    match property {
-                        "og:title" => {
-                            meta.title = String::from(content);
+
+        if let Some(selector) = dom.query_selector("head") {
+            if let Some(tag) = selector
+                .into_iter()
+                .next()
+                .and_then(|v| v.get(parser).and_then(|node| node.as_tag()))
+            {
+                if let Some(selector) = tag.query_selector(parser, "meta") {
+                    for handle in selector {
+                        println!("handle");
+                        if let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) {
+                            let attributes = tag.attributes();
+                            println!("{attributes:?}");
+
+                            // Extract attributes as strings
+                            let property = attributes
+                                .get("property")
+                                .flatten()
+                                .map(|v| v.as_utf8_str());
+                            let content =
+                                attributes.get("content").flatten().map(|v| v.as_utf8_str());
+
+                            if let (Some(prop), Some(cont)) = (property, content) {
+                                match prop.as_ref() {
+                                    "og:title" => meta.title = cont.to_string(),
+                                    "og:image" => meta.image_url = cont.to_string(),
+                                    "og:description" => meta.description = cont.to_string(),
+                                    _ => {}
+                                }
+                            }
                         }
-                        "og:image" => {
-                            meta.image_url = String::from(content);
-                        }
-                        "og:description" => {
-                            meta.description = String::from(content);
-                        }
-                        _ => {}
                     }
                 }
             }
         }
-        meta
+
+        Ok(meta)
     }
 
     pub fn get_title(&self) -> &str {
@@ -52,17 +76,17 @@ impl MetaData {
     }
 }
 
-fn parse_html(text: &str, is_meta: bool) -> MetaData {
+fn parse_html(text: &str, is_meta: bool) -> Result<MetaData, ParserError> {
     if !is_meta {
-        return MetaData {
+        return Ok(MetaData {
             image_url: String::new(),
             title: String::new(),
             description: String::new(),
             image: None,
-        };
+        });
     }
-    let document = Html::parse_document(text);
-    MetaData::new(document)
+
+    MetaData::try_parse(text)
 }
 
 fn convert_bytes_to_image(bytes: bytes::Bytes) -> Option<Arc<DynamicImage>> {
@@ -117,7 +141,7 @@ pub async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
         let head = fetch_head_html(&mut resp)
             .await
             .map_err(|e| e.to_string())?;
-        let mut m = parse_html(&head, has_meta);
+        let mut m = parse_html(&head, has_meta).map_err(|e| e.to_string())?;
         if !m.image_url.is_empty() {
             m.image = convert_bytes_to_image(
                 client
@@ -149,7 +173,6 @@ pub async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
 mod tests {
     use super::*;
     use httpmock::prelude::*;
-    use scraper::Html;
     use std::sync::Arc;
 
     #[test]
@@ -165,8 +188,7 @@ mod tests {
         </html>
         "#;
 
-        let doc = Html::parse_document(html);
-        let meta = MetaData::new(doc);
+        let meta = MetaData::try_parse(html).unwrap();
 
         assert_eq!(meta.title, "Example Title");
         assert_eq!(meta.description, "Example description.");
@@ -177,7 +199,7 @@ mod tests {
     #[test]
     fn test_parse_html_no_meta() {
         let html = "<html><body>No meta here</body></html>";
-        let meta = parse_html(html, true);
+        let meta = parse_html(html, true).unwrap();
         assert_eq!(meta.title, "");
         assert_eq!(meta.image_url, "");
     }
@@ -185,7 +207,7 @@ mod tests {
     #[test]
     fn test_parse_html_disabled_meta_flag() {
         let html = "<html><head><meta property='og:title' content='Ignored'></head></html>";
-        let meta = parse_html(html, false);
+        let meta = parse_html(html, false).unwrap();
         assert_eq!(meta.title, "");
     }
 
