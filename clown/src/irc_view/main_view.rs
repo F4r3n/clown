@@ -156,7 +156,9 @@ impl MainView<'_> {
                     }
 
                     if let Some(id) = session.get_current_server_id() {
-                        if let Err(e) = model.set_nickname(id, new_nick.clone()) {
+                        if !session.is_connected(id)
+                            && let Err(e) = model.set_nickname(id, new_nick.clone())
+                        {
                             tracing::error!(error = %e, "Impossible to save");
                         }
                     }

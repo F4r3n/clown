@@ -55,6 +55,14 @@ impl Session {
         }
     }
 
+    pub fn is_connected(&self, in_id: usize) -> bool {
+        if let Some(connection) = self.connections.get(in_id) {
+            connection.is_some()
+        } else {
+            false
+        }
+    }
+
     pub fn send_command_all_server(&mut self, in_command: Command) {
         for connection in self.connections.iter_mut().flatten() {
             let _ = connection.command_sender.send(in_command.clone());
@@ -84,7 +92,7 @@ impl Session {
         self.model.clear_server(in_id);
     }
 
-    pub fn pull_all_server_message(&mut self) -> impl Iterator<Item = (usize, ServerMessage)> + '_ {
+    pub fn pull_all_server_message(&mut self) -> impl Iterator<Item = (usize, ServerMessage)> {
         self.connections
             .iter_mut()
             .enumerate()
