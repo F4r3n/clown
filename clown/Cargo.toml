@@ -28,12 +28,11 @@ chrono = { version = "0.4.42", default-features = false, features = [
     "clock",
     "std",
 ] }
-once_cell = { version = "1.21.3", default-features = false }
 directories = "6.0.0"
 toml = "0.9.8"
 serde = { version = "1.0", features = ["serde_derive"] }
 strum = { version = "0.27", features = ["derive", "strum_macros"] }
-tracing = "0.1.41"
+tracing = {version= "0.1.41", features = ["std"], default-features = false}
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 unicode-width = "0.2.0"
 clown-website-preview = {version= "0.1.0", path="../clown-website-preview", optional = true}
@@ -44,13 +43,13 @@ ahash = { version = "0.8.12", features = ["serde"] }
 open = "5.3.3"
 palette = {version="0.7.6", features=["std"], default-features=false}
 reqwest = {version = "0.13.1", features=["rustls"], default-features=false, optional = true}
-tracing-appender = "0.2.3"
+tracing-appender = {version = "0.2.3", default-features=false}
 shadow-rs = {version="1.4.0", default-features=false}
 clap = { version = "4.5.53", features = ["derive", "help", "std"], default-features = false }
 bit-vec = "0.8.0"
 thiserror = "2.0.18"
 anyhow = "1.0.100"
-nom = "8.0.0"
+nom = { version = "8.0.0", features = ["std"], default-features = false }
 
 [dev-dependencies]
 anyhow = "1.0.100"

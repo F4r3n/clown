@@ -1,21 +1,14 @@
-#[cfg(feature = "spell-checker")]
 use crate::project_path::ProjectPath;
-#[cfg(feature = "spell-checker")]
 use clown_spell::dict;
-#[cfg(feature = "spell-checker")]
 use tokio::runtime::Handle;
-#[cfg(feature = "spell-checker")]
 use tokio::task::JoinHandle;
-#[cfg(feature = "spell-checker")]
 use tracing::info;
 
-#[cfg(feature = "spell-checker")]
 pub struct SpellChecker {
     dict: Option<dict::Dictionary>,
 }
-#[cfg(feature = "spell-checker")]
 use std::{io::Write, path::PathBuf};
-#[cfg(feature = "spell-checker")]
+
 impl SpellChecker {
     async fn download_file(url: &str, to: &PathBuf) -> anyhow::Result<PathBuf> {
         let mut response = reqwest::get(url).await?;

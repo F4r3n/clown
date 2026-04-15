@@ -1,9 +1,11 @@
 use tokio::task::{JoinHandle, block_in_place};
+#[allow(dead_code)]
 pub struct AsyncTask<T> {
     pub handle: Option<JoinHandle<anyhow::Result<T>>>,
     pub result: Option<anyhow::Result<T>>,
 }
 
+#[allow(dead_code)]
 impl<T> AsyncTask<T> {
     pub fn is_ready(&self) -> bool {
         self.handle

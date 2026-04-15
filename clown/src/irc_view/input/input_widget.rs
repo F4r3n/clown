@@ -1,10 +1,11 @@
 use super::completion::Completion;
 use super::history::InputHistory;
 #[cfg(feature = "spell-checker")]
-use super::spell_checker::SpellChecker;
+use {super::spell_checker::SpellChecker, crate::message_irc::message_content::MessageKind};
+
+use crate::component::Draw;
 use crate::irc_view::irc_model::IrcModel;
 use crate::message_event::MessageEvent;
-use crate::{component::Draw, message_irc::message_content::MessageKind};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Frame,
