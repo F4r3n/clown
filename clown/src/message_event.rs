@@ -1,49 +1,51 @@
+use crate::model::ServerID;
+
 #[derive(PartialEq, Debug)]
 pub enum MessageEvent {
     MessageInput(String),
     AddMessageViewInfo(
-        Option<usize>, /*server id */
+        Option<ServerID>, /*server id */
         Option<String>,
         crate::message_irc::message_content::MessageKind,
         String,
     ),
     PrivMsg(
-        usize,  /*server id */
-        String, /*source */
-        String, /*target*/
-        String, /*content*/
+        ServerID, /*server id */
+        String,   /*source */
+        String,   /*target*/
+        String,   /*content*/
     ),
     Notice(
-        usize,  /*server id */
-        String, /*source */
-        String, /*target*/
-        String, /*content*/
+        ServerID, /*server id */
+        String,   /*source */
+        String,   /*target*/
+        String,   /*content*/
     ),
     ActionMsg(
-        usize,  /*server id */
-        String, /*source */
-        String, /*target*/
-        String, /*content*/
+        ServerID, /*server id */
+        String,   /*source */
+        String,   /*target*/
+        String,   /*content*/
     ),
-    SelectChannel(Option<usize> /*server id */, String),
+    SelectChannel(Option<ServerID> /*server id */, String),
     UpdateUsers(
-        usize,       /*server id */
+        ServerID,    /*server id */
         String,      /*channel*/
         Vec<String>, /*list users */
     ),
     ReplaceUser(
-        usize,  /*server id */
-        String, /*old */
-        String, /*new */
+        ServerID, /*server id */
+        String,   /*old */
+        String,   /*new */
     ),
     Join(
-        usize,  /*server id */
-        String, /*channel*/
-        String, /*user */
+        ServerID, /*server id */
+        String,   /*channel*/
+        String,   /*user */
     ),
-    JoinServer(usize /*server id */),
+    JoinServer(ServerID /*server id */),
     SetTopic(
-        usize,          /*server id */
+        ServerID,       /*server id */
         Option<String>, /*source*/
         String,         /*channel */
         String,         /*topic */
@@ -52,24 +54,24 @@ pub enum MessageEvent {
     #[allow(dead_code)]
     Hover(String), //currently not used, but the skeleton can be used anywhere
     PullIRC,
-    Connect(usize),
-    DisConnect(usize),
+    Connect(ServerID),
+    DisConnect(ServerID),
     OpenWeb(String),
     SpellChecker(Option<String>),
     Part(
-        usize,  /*server id */
-        String, /*channel */
-        String, /*user */
+        ServerID, /*server id */
+        String,   /*channel */
+        String,   /*user */
     ),
     Quit(
-        usize,          /*server id */
+        ServerID,       /*server id */
         String,         /*user*/
         Option<String>, /*reason*/
     ),
     QuitAll(Option<String> /*reason*/),
     SettingsDidChange,
     Bel,
-    CloseBuffer(Option<usize> /*server id */, String /*name */),
+    CloseBuffer(Option<ServerID> /*server id */, String /*name */),
 }
 
 impl MessageEvent {

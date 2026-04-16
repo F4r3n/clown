@@ -18,6 +18,7 @@ use crate::message_irc::message_logger::MessageLogger;
 use crate::message_queue::MessageQueue;
 use crate::model::Model;
 use crate::model::RunningState;
+use crate::model::ServerID;
 use crate::model::StoredConfig;
 use crate::widget_view;
 use clown_core::command::Command;
@@ -138,7 +139,7 @@ impl MainView<'_> {
         if let Some(parsed_message) = command::parse_command(content) {
             match parsed_message {
                 command::ClientCommand::Connect => Some(MessageEvent::Connect(
-                    0, /*TODO: command should return the id */
+                    ServerID::new(0), /*TODO: command should return the id */
                 )),
                 command::ClientCommand::Quit(message) => {
                     session.send_command_all_server(Command::Quit(message.clone()));

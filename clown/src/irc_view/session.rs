@@ -1,4 +1,5 @@
 use crate::irc_view::irc_model::IrcServerModel;
+use crate::model::ServerID;
 use crate::{irc_view::irc_model::IrcModel, model::IRCConnection};
 use anyhow::anyhow;
 use clown_core::client::LoginConfig;
@@ -6,9 +7,8 @@ use clown_core::command::Command;
 use clown_core::conn::ConnectionConfig;
 use clown_core::message::ServerMessage;
 use tokio::sync::mpsc;
-
 pub struct SessionStatus<'a> {
-    pub server_id: usize,
+    pub server_id: ServerID,
     pub channel: Option<&'a str>,
     pub nickname: &'a str,
 }
@@ -32,8 +32,8 @@ impl Session {
         self.retry = 5;
     }
 
-    pub fn send_command(&mut self, in_id: usize, in_command: Command) -> anyhow::Result<()> {
-        if let Some(Some(connection)) = self.connections.get_mut(in_id) {
+    pub fn send_command(&mut self, in_id: ServerID, in_command: Command) -> anyhow::Result<()> {
+        if let Some(Some(connection)) = self.connections.get_mut(in_id.as_usize()) {
             connection
                 .command_sender
                 .send(in_command)
@@ -45,7 +45,7 @@ impl Session {
 
     pub fn send_command_current_server(&mut self, in_command: Command) -> anyhow::Result<()> {
         if let Some(current_id) = self.model.current_id
-            && let Some(Some(connection)) = self.connections.get_mut(current_id)
+            && let Some(Some(connection)) = self.connections.get_mut(current_id.as_usize())
         {
             connection
                 .command_sender
@@ -56,8 +56,8 @@ impl Session {
         }
     }
 
-    pub fn is_connected(&self, in_id: usize) -> bool {
-        if let Some(connection) = self.connections.get(in_id) {
+    pub fn is_connected(&self, in_id: ServerID) -> bool {
+        if let Some(connection) = self.connections.get(in_id.as_usize()) {
             connection.is_some()
         } else {
             false
@@ -70,30 +70,30 @@ impl Session {
         }
     }
 
-    pub fn iter_valid_connection_id(&self) -> impl Iterator<Item = usize> {
+    pub fn iter_valid_connection_id(&self) -> impl Iterator<Item = ServerID> {
         self.connections
             .iter()
             .enumerate()
             .filter(|(_, v)| v.is_some())
-            .map(|(i, _)| i)
+            .map(|(i, _)| ServerID::new(i))
     }
 
-    pub fn is_irc_finished(&self, in_id: usize) -> bool {
-        if let Some(Some(connection)) = self.connections.get(in_id) {
+    pub fn is_irc_finished(&self, in_id: ServerID) -> bool {
+        if let Some(Some(connection)) = self.connections.get(in_id.as_usize()) {
             connection.task.is_finished()
         } else {
             true
         }
     }
 
-    pub fn clear_connection(&mut self, in_id: usize) {
-        if let Some(connection) = self.connections.get_mut(in_id) {
+    pub fn clear_connection(&mut self, in_id: ServerID) {
+        if let Some(connection) = self.connections.get_mut(in_id.as_usize()) {
             *connection = None;
         }
         self.model.clear_server(in_id);
     }
 
-    pub fn pull_all_server_message(&mut self) -> impl Iterator<Item = (usize, ServerMessage)> {
+    pub fn pull_all_server_message(&mut self) -> impl Iterator<Item = (ServerID, ServerMessage)> {
         self.connections
             .iter_mut()
             .enumerate()
@@ -104,20 +104,23 @@ impl Session {
                             .inner
                             .try_recv()
                             .ok()
-                            .map(|msg| (i, msg))
+                            .map(|msg| (ServerID::new(i), msg))
                     })
                 })
             })
     }
 
-    pub fn pull_all_server_error(&mut self) -> impl Iterator<Item = (usize, String)> {
+    pub fn pull_all_server_error(&mut self) -> impl Iterator<Item = (ServerID, String)> {
         self.connections
             .iter_mut()
             .enumerate()
             .flat_map(|(i, conn)| {
                 conn.iter_mut().flat_map(move |conn| {
                     std::iter::from_fn(move || {
-                        conn.error_receiver.try_recv().ok().map(|msg| (i, msg))
+                        conn.error_receiver
+                            .try_recv()
+                            .ok()
+                            .map(|msg| (ServerID::new(i), msg))
                     })
                 })
             })
@@ -179,11 +182,11 @@ impl Session {
         })
     }
 
-    pub fn init_irc_model(&mut self, stored_nick: String, in_id: usize, server_name: String) {
+    pub fn init_irc_model(&mut self, stored_nick: String, in_id: ServerID, server_name: String) {
         self.model.init_server(in_id, server_name, stored_nick);
     }
 
-    pub fn get_current_server_id(&self) -> Option<usize> {
+    pub fn get_current_server_id(&self) -> Option<ServerID> {
         self.model.current_id
     }
 
@@ -197,7 +200,7 @@ impl Session {
 
     pub fn init_connection(
         &mut self,
-        in_id: usize,
+        in_id: ServerID,
         connection_config: ConnectionConfig,
         login_config: LoginConfig,
     ) -> anyhow::Result<()> {
@@ -223,7 +226,7 @@ impl Session {
 
         let connection = self
             .connections
-            .get_mut(in_id)
+            .get_mut(in_id.as_usize())
             .ok_or_else(|| anyhow!("Wrong ID {}", in_id))?;
 
         *connection = Some(IRCConnection {

@@ -5,6 +5,7 @@ use clown_core::client::LoginConfig;
 use clown_core::conn::ConnectionConfig;
 
 use crate::irc_view::color_user::ColorGenerator;
+use crate::model::ServerID;
 use crate::project_path::ProjectPath;
 use anyhow::Result;
 use anyhow::bail;
@@ -1018,25 +1019,27 @@ impl Config {
         }
     }
 
-    pub fn get_nickname(&self, in_id: usize) -> Option<&str> {
-        self.servers.get(in_id).map(|v| v.login.nickname.as_str())
+    pub fn get_nickname(&self, in_id: ServerID) -> Option<&str> {
+        self.servers
+            .get(in_id.as_usize())
+            .map(|v| v.login.nickname.as_str())
     }
 
-    pub fn get_channels(&self, in_id: usize) -> impl Iterator<Item = &str> {
+    pub fn get_channels(&self, in_id: ServerID) -> impl Iterator<Item = &str> {
         self.servers
-            .get(in_id)
+            .get(in_id.as_usize())
             .into_iter()
             .flat_map(|v| v.channels.list.iter().map(|v| v.deref()))
     }
 
-    pub fn get_address(&self, in_id: usize) -> Option<&str> {
+    pub fn get_address(&self, in_id: ServerID) -> Option<&str> {
         self.servers
-            .get(in_id)
+            .get(in_id.as_usize())
             .map(|v| v.connection.address.as_str())
     }
 
-    pub fn get_name(&self, in_id: usize) -> &str {
-        if let Some(server) = self.servers.get(in_id) {
+    pub fn get_name(&self, in_id: ServerID) -> &str {
+        if let Some(server) = self.servers.get(in_id.as_usize()) {
             if server.name.is_empty() {
                 server.connection.address.as_str()
             } else {
@@ -1047,28 +1050,30 @@ impl Config {
         }
     }
 
-    pub fn is_autojoin_id(&self, in_id: usize) -> bool {
+    pub fn is_autojoin_id(&self, in_id: ServerID) -> bool {
         self.servers
-            .get(in_id)
+            .get(in_id.as_usize())
             .is_some_and(|v| v.channels.auto_join)
     }
 
-    pub fn is_autojoin(&self) -> impl Iterator<Item = usize> {
+    pub fn is_autojoin(&self) -> impl Iterator<Item = ServerID> {
         self.servers
             .iter()
             .enumerate()
-            .filter_map(|(i, v)| v.channels.auto_join.then_some(i))
+            .filter_map(|(i, v)| v.channels.auto_join.then_some(ServerID::new(i)))
     }
 
-    pub fn get_connection_config(&self, in_id: usize) -> Option<ConnectionConfig> {
-        self.servers.get(in_id).map(|v| ConnectionConfig {
-            address: v.connection.address.to_string(),
-            port: v.connection.port,
-        })
+    pub fn get_connection_config(&self, in_id: ServerID) -> Option<ConnectionConfig> {
+        self.servers
+            .get(in_id.as_usize())
+            .map(|v| ConnectionConfig {
+                address: v.connection.address.to_string(),
+                port: v.connection.port,
+            })
     }
 
-    pub fn get_login_config(&self, in_id: usize) -> Option<LoginConfig> {
-        self.servers.get(in_id).map(|v| LoginConfig {
+    pub fn get_login_config(&self, in_id: ServerID) -> Option<LoginConfig> {
+        self.servers.get(in_id.as_usize()).map(|v| LoginConfig {
             nickname: v.login.nickname.clone(),
             password: v.login.password.clone(),
             real_name: v.login.real_name.clone(),
@@ -1163,15 +1168,15 @@ mod tests {
     fn test_get_nickname() {
         let config = sample_config();
 
-        assert_eq!(config.get_nickname(0), Some("tester"));
-        assert_eq!(config.get_nickname(1), None);
+        assert_eq!(config.get_nickname(ServerID::new(0)), Some("tester"));
+        assert_eq!(config.get_nickname(ServerID::new(1)), None);
     }
 
     #[test]
     fn test_get_channels() {
         let config = sample_config();
 
-        let channels: Vec<_> = config.get_channels(0).collect();
+        let channels: Vec<_> = config.get_channels(ServerID::new(0)).collect();
 
         assert_eq!(channels, vec!["#rust", "#linux"]);
     }
@@ -1180,25 +1185,28 @@ mod tests {
     fn test_get_address() {
         let config = sample_config();
 
-        assert_eq!(config.get_address(0), Some("irc.example.com"));
+        assert_eq!(
+            config.get_address(ServerID::new(0)),
+            Some("irc.example.com")
+        );
     }
 
     #[test]
     fn test_autojoin_helpers() {
         let config = sample_config();
 
-        assert!(config.is_autojoin_id(0));
+        assert!(config.is_autojoin_id(ServerID::new(0)));
 
         let ids: Vec<_> = config.is_autojoin().collect();
 
-        assert_eq!(ids, vec![0]);
+        assert_eq!(ids, vec![ServerID::new(0)]);
     }
 
     #[test]
     fn test_get_connection_config() {
         let config = sample_config();
 
-        let conn = config.get_connection_config(0).unwrap();
+        let conn = config.get_connection_config(ServerID::new(0)).unwrap();
 
         assert_eq!(conn.address, "irc.example.com");
         assert_eq!(conn.port, 6667);
@@ -1208,7 +1216,7 @@ mod tests {
     fn test_get_login_config() {
         let config = sample_config();
 
-        let login = config.get_login_config(0).unwrap();
+        let login = config.get_login_config(ServerID::new(0)).unwrap();
 
         assert_eq!(login.nickname, "tester");
         assert_eq!(login.username, Some("user".into()));

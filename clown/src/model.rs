@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     config::{Config, Discuss},
     irc_view::color_user::ColorGenerator,
@@ -10,6 +12,24 @@ pub enum RunningState {
     Start,
     Running,
     Done,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
+pub struct ServerID(usize);
+
+impl ServerID {
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
+    pub const fn new(val: usize) -> Self {
+        Self(val)
+    }
+}
+
+impl Display for ServerID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 pub struct IRCConnection {
@@ -31,8 +51,8 @@ impl StoredConfig {
         self.config.save(&self.stored_name)
     }
 
-    pub fn set_nickname(&mut self, server_id: usize, nickname: String) {
-        if let Some(server) = self.config.servers.get_mut(server_id) {
+    pub fn set_nickname(&mut self, server_id: ServerID, nickname: String) {
+        if let Some(server) = self.config.servers.get_mut(server_id.as_usize()) {
             server.login.nickname = nickname
         }
     }
@@ -110,22 +130,22 @@ impl Model {
         self.stored_config.save()
     }
 
-    pub fn set_nickname(&mut self, server_id: usize, nickname: String) -> anyhow::Result<()> {
+    pub fn set_nickname(&mut self, server_id: ServerID, nickname: String) -> anyhow::Result<()> {
         self.stored_config
             .set_nickname(server_id, nickname.to_string());
         self.save()?;
         Ok(())
     }
 
-    pub fn get_nickname(&self, in_id: usize) -> Option<&str> {
+    pub fn get_nickname(&self, in_id: ServerID) -> Option<&str> {
         self.get_config().get_nickname(in_id)
     }
 
-    pub fn get_address(&self, in_id: usize) -> Option<&str> {
+    pub fn get_address(&self, in_id: ServerID) -> Option<&str> {
         self.get_config().get_address(in_id)
     }
 
-    pub fn get_name(&self, in_id: usize) -> &str {
+    pub fn get_name(&self, in_id: ServerID) -> &str {
         self.get_config().get_name(in_id)
     }
 
@@ -140,23 +160,23 @@ impl Model {
         )
     }
 
-    pub fn is_autojoin_by_id(&self, in_id: usize) -> bool {
+    pub fn is_autojoin_by_id(&self, in_id: ServerID) -> bool {
         self.get_config().is_autojoin_id(in_id)
     }
 
-    pub fn is_autojoin(&self) -> impl Iterator<Item = usize> {
+    pub fn is_autojoin(&self) -> impl Iterator<Item = ServerID> {
         self.get_config().is_autojoin()
     }
 
-    pub fn get_connection_config(&self, in_id: usize) -> Option<ConnectionConfig> {
+    pub fn get_connection_config(&self, in_id: ServerID) -> Option<ConnectionConfig> {
         self.get_config().get_connection_config(in_id)
     }
 
-    pub fn get_login_config(&self, in_id: usize) -> Option<LoginConfig> {
+    pub fn get_login_config(&self, in_id: ServerID) -> Option<LoginConfig> {
         self.get_config().get_login_config(in_id)
     }
 
-    pub fn get_channels(&mut self, in_id: usize) -> impl Iterator<Item = &str> {
+    pub fn get_channels(&mut self, in_id: ServerID) -> impl Iterator<Item = &str> {
         self.stored_config.config.get_channels(in_id)
     }
 

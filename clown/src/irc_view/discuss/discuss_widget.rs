@@ -2,6 +2,7 @@ use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use super::servers_messages::{Range, ServersMessages};
 use crate::component::Draw;
 use crate::message_irc::textwrapper::wrap_content;
+use crate::model::ServerID;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use crossterm::event::KeyCode;
 use crossterm::event::MouseButton;
@@ -39,7 +40,7 @@ pub struct DiscussWidget {
     content_width: usize,
     messages: ServersMessages,
     current_channel: String,
-    current_server_id: Option<usize>,
+    current_server_id: Option<ServerID>,
 
     last_hovered: Option<Hovered>,
     redraw: bool,
@@ -65,7 +66,7 @@ impl DiscussWidget {
         }
     }
 
-    pub fn set_current_channel(&mut self, server_id: Option<usize>, channel: &str) {
+    pub fn set_current_channel(&mut self, server_id: Option<ServerID>, channel: &str) {
         self.current_channel = channel.to_lowercase();
         self.current_server_id = server_id;
         self.scroll_offset = 0;
@@ -271,7 +272,7 @@ impl DiscussWidget {
             .unwrap_or(0)
     }
 
-    pub fn has_message(&self, server_id: Option<usize>, channel: &str) -> bool {
+    pub fn has_message(&self, server_id: Option<ServerID>, channel: &str) -> bool {
         let channel = channel.to_lowercase();
         self.messages.has_messages(server_id, &channel)
     }
@@ -286,7 +287,7 @@ impl DiscussWidget {
 
     pub fn add_line(
         &mut self,
-        server_id: Option<usize>,
+        server_id: Option<ServerID>,
         channel: &str,
         in_message: MessageContent,
     ) {
@@ -302,7 +303,11 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
-    pub fn add_server_group(&mut self, server_id: Option<usize>, server_address: Option<String>) {
+    pub fn add_server_group(
+        &mut self,
+        server_id: Option<ServerID>,
+        server_address: Option<String>,
+    ) {
         self.messages.add_server_group(server_id, server_address);
     }
 
@@ -878,7 +883,7 @@ impl crate::component::EventHandler for DiscussWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const TEST_SERVER_ID: usize = 0;
+    const TEST_SERVER_ID: ServerID = ServerID::new(0);
     #[test]
     fn test_find_index() {
         pub const TEXT_START: usize = TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH;

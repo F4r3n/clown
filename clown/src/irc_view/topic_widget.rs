@@ -1,8 +1,8 @@
+use crate::component::{Draw, EventHandler};
+use crate::model::ServerID;
 use ratatui::layout::Rect;
 use ratatui::text::Text;
 use ratatui::widgets::Paragraph;
-
-use crate::component::{Draw, EventHandler};
 
 pub struct TopicWidget {
     topic_collection: Vec<ahash::AHashMap<String, String>>,
@@ -41,16 +41,16 @@ impl TopicWidget {
         }
     }
 
-    fn get_topic(&self, server_id: usize, channel: &str) -> Option<&str> {
-        if let Some(list_topics) = self.topic_collection.get(server_id) {
+    fn get_topic(&self, server_id: ServerID, channel: &str) -> Option<&str> {
+        if let Some(list_topics) = self.topic_collection.get(server_id.as_usize()) {
             list_topics.get(channel).map(|v| v.as_str())
         } else {
             None
         }
     }
 
-    fn update_topic(&mut self, server_id: usize, channel: &str, content: String) {
-        if let Some(server) = self.topic_collection.get_mut(server_id) {
+    fn update_topic(&mut self, server_id: ServerID, channel: &str, content: String) {
+        if let Some(server) = self.topic_collection.get_mut(server_id.as_usize()) {
             server.insert(channel.to_string(), content);
         }
         self.need_redraw = true;
@@ -81,7 +81,7 @@ impl EventHandler for TopicWidget {
             }
             MessageEvent::JoinServer(server_id) => {
                 self.topic_collection
-                    .resize(server_id.saturating_add(1), Default::default());
+                    .resize(server_id.as_usize().saturating_add(1), Default::default());
                 None
             }
             MessageEvent::SelectChannel(_server_id, _channel) => {
@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn test_join_server_resizes_collection() {
         let mut widget = TopicWidget::new();
-        let server_id = 2;
+        let server_id = ServerID::new(2);
 
         // Simulate joining a server with ID 2
         let event = MessageEvent::JoinServer(server_id);
@@ -124,7 +124,7 @@ mod tests {
     #[test]
     fn test_set_and_get_topic() {
         let mut widget = TopicWidget::new();
-        let server_id = 0;
+        let server_id = ServerID::new(0);
         let channel = "#rust";
         let topic = "Welcome to Rust IRC!";
 
@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn test_handle_set_topic_with_option_source() {
         let mut widget = TopicWidget::new();
-        let server_id = 0;
+        let server_id = ServerID::new(0);
 
         // 1. Initialize the server slot first
         widget.handle_actions(&mock_model(), None, &MessageEvent::JoinServer(server_id));
@@ -180,7 +180,7 @@ mod tests {
     fn test_get_topic_out_of_bounds() {
         let widget = TopicWidget::new();
         // Should return None safely even if server_id doesn't exist in the Vec
-        assert_eq!(widget.get_topic(99, "#anything"), None);
+        assert_eq!(widget.get_topic(ServerID::new(99), "#anything"), None);
     }
 
     // Helper to satisfy the Draw/EventHandler traits in tests

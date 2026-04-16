@@ -1,12 +1,15 @@
 use ahash::AHashMap;
 
-use crate::config::{Config, ValueParameter};
+use crate::{
+    config::{Config, ValueParameter},
+    model::ServerID,
+};
 
 use super::trie::Trie;
 
 #[derive(Hash, PartialEq, Eq)]
 struct KeyServerChannel {
-    server_id: Option<usize>,
+    server_id: Option<ServerID>,
     channel: String,
 }
 
@@ -44,7 +47,7 @@ impl InputCompletion {
         self.config = Trie::new();
     }
 
-    pub fn add_users(&mut self, server_id: usize, channel: &str, users: &Vec<String>) {
+    pub fn add_users(&mut self, server_id: ServerID, channel: &str, users: &Vec<String>) {
         let channel = Self::sanitize_key(channel);
 
         let channel = self
@@ -74,7 +77,7 @@ impl InputCompletion {
         }
     }
 
-    pub fn remove_channel(&mut self, server_id: usize, channel: &str) {
+    pub fn remove_channel(&mut self, server_id: ServerID, channel: &str) {
         let channel = Self::sanitize_key(channel);
 
         self.channels.remove(&KeyServerChannel {
@@ -83,7 +86,7 @@ impl InputCompletion {
         });
     }
 
-    pub fn disable_user(&mut self, server_id: usize, channel: &str, user: &str) {
+    pub fn disable_user(&mut self, server_id: ServerID, channel: &str, user: &str) {
         let channel = Self::sanitize_key(channel);
 
         if let Some(channel) = self.channels.get_mut(&KeyServerChannel {
@@ -94,7 +97,7 @@ impl InputCompletion {
         }
     }
 
-    pub fn add_user(&mut self, server_id: usize, channel: &str, user: String) {
+    pub fn add_user(&mut self, server_id: ServerID, channel: &str, user: String) {
         let channel = Self::sanitize_key(channel);
         self.channels
             .entry(KeyServerChannel {
@@ -107,7 +110,7 @@ impl InputCompletion {
 
     pub fn list(
         &self,
-        server_id: Option<usize>,
+        server_id: Option<ServerID>,
         channel: &str,
         start_word: &str,
     ) -> Option<Vec<String>> {
@@ -229,7 +232,7 @@ pub struct Completion {
     pub input_completion: InputCompletion,
     state: Option<CompletionState>,
     pub current_channel: String,
-    pub server_id: Option<usize>,
+    pub server_id: Option<ServerID>,
     on_empty_input_suffix: String,
     in_message_suffix: String,
 }
@@ -375,11 +378,14 @@ mod test {
         comp.input_completion.add_command("quit".into());
         comp.input_completion.add_command("help".into());
 
-        comp.input_completion
-            .add_users(0, "#test", &vec!["tata".to_string(), "titi".to_string()]);
+        comp.input_completion.add_users(
+            ServerID::new(0),
+            "#test",
+            &vec!["tata".to_string(), "titi".to_string()],
+        );
 
         comp.current_channel = "#test".to_string();
-        comp.server_id = Some(0);
+        comp.server_id = Some(ServerID::new(0));
 
         // Normal user completion (not first word)
         comp.set_completion(0, 1, "t");
@@ -434,13 +440,14 @@ mod test {
         comp.input_completion.add_command("/quit".into());
         comp.input_completion.add_command("/help".into());
         comp.input_completion.add_command("/config".into());
-        comp.input_completion.add_user(0, "#test", "yolo".into());
+        comp.input_completion
+            .add_user(ServerID::new(0), "#test", "yolo".into());
 
         comp.input_completion
             .add_config_field("nickname_colors.seed".into());
 
         comp.current_channel = "#test".to_string();
-        comp.server_id = Some(0);
+        comp.server_id = Some(ServerID::new(0));
 
         comp.set_completion(0, 13, "/config set n");
         assert_eq!(
@@ -475,12 +482,15 @@ mod test {
     #[test]
     fn test_insert_uppercase() {
         let mut comp = Completion {
-            server_id: Some(0),
+            server_id: Some(ServerID::new(0)),
             ..Completion::default()
         };
 
-        comp.input_completion
-            .add_users(0, "#test", &vec!["tata".to_string(), "Titi".to_string()]);
+        comp.input_completion.add_users(
+            ServerID::new(0),
+            "#test",
+            &vec!["tata".to_string(), "Titi".to_string()],
+        );
 
         comp.current_channel = "#test".to_string();
 
@@ -505,10 +515,10 @@ mod test {
         );
 
         comp.input_completion
-            .add_users(0, "#test", &vec!["tata".to_string()]);
+            .add_users(ServerID::new(0), "#test", &vec!["tata".to_string()]);
 
         comp.current_channel = "#test".to_string();
-        comp.server_id = Some(0);
+        comp.server_id = Some(ServerID::new(0));
 
         // First word completion → should use on_empty_input_suffix
         comp.set_completion(0, 1, "t");

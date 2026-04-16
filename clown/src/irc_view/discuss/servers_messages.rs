@@ -3,6 +3,7 @@ use crate::message_irc::message_content::WordPos;
 use crate::message_irc::message_logger::{
     LogReader, LoggedMessage, LoggedTimedMessage, MessageLogger,
 };
+use crate::model::ServerID;
 use ahash::AHashMap;
 
 use std::path::PathBuf;
@@ -75,7 +76,7 @@ impl ServersMessages {
 
     pub fn add_message(
         &mut self,
-        server_id: Option<usize>,
+        server_id: Option<ServerID>,
         channel: &str,
         in_message: MessageContent,
     ) {
@@ -88,7 +89,7 @@ impl ServersMessages {
         }
     }
 
-    pub fn open_log(&mut self, server_id: usize, channel: &str) {
+    pub fn open_log(&mut self, server_id: ServerID, channel: &str) {
         if let Some(server_group) = self.get_server_group(Some(server_id))
             && server_group.is_log_open(channel)
         {
@@ -103,7 +104,7 @@ impl ServersMessages {
     pub fn read_log(
         &mut self,
         number_lines: usize,
-        server_id: usize,
+        server_id: ServerID,
         channel: &str,
     ) -> anyhow::Result<usize> {
         if let Some(server_group) = self.get_server_group_mut(Some(server_id)) {
@@ -113,13 +114,15 @@ impl ServersMessages {
         }
     }
 
-    fn server_id_position(server_id: Option<usize>) -> usize {
-        server_id.map(|v| v.saturating_add(1)).unwrap_or(0)
+    fn server_id_position(server_id: Option<ServerID>) -> usize {
+        server_id
+            .map(|v| v.as_usize().saturating_add(1))
+            .unwrap_or(0)
     }
 
     pub fn add_server_group(
         &mut self,
-        server_id: Option<usize>,
+        server_id: Option<ServerID>,
         server_address: Option<String>,
     ) -> Option<&mut ChannelMessages> {
         let position = Self::server_id_position(server_id);
@@ -132,21 +135,24 @@ impl ServersMessages {
         self.get_server_group_mut(server_id)
     }
 
-    fn get_server_group_mut(&mut self, server_id: Option<usize>) -> Option<&mut ChannelMessages> {
+    fn get_server_group_mut(
+        &mut self,
+        server_id: Option<ServerID>,
+    ) -> Option<&mut ChannelMessages> {
         self.messages.get_mut(Self::server_id_position(server_id))
     }
 
-    fn get_server_group(&self, server_id: Option<usize>) -> Option<&ChannelMessages> {
+    fn get_server_group(&self, server_id: Option<ServerID>) -> Option<&ChannelMessages> {
         self.messages.get(Self::server_id_position(server_id))
     }
 
-    pub fn rename(&mut self, server_id: Option<usize>, old: &str, new: &str) {
+    pub fn rename(&mut self, server_id: Option<ServerID>, old: &str, new: &str) {
         if let Some(server_group) = self.get_server_group_mut(server_id) {
             server_group.rename(old, new);
         }
     }
 
-    pub fn has_messages(&self, server_id: Option<usize>, channel: &str) -> bool {
+    pub fn has_messages(&self, server_id: Option<ServerID>, channel: &str) -> bool {
         if let Some(server_group) = self.get_server_group(server_id) {
             server_group.has_messages(channel)
         } else {
@@ -154,7 +160,7 @@ impl ServersMessages {
         }
     }
 
-    pub fn get_messages(&self, server_id: Option<usize>, channel: &str) -> Option<&Messages> {
+    pub fn get_messages(&self, server_id: Option<ServerID>, channel: &str) -> Option<&Messages> {
         if let Some(server_group) = self.get_server_group(server_id) {
             server_group.get_messages(channel)
         } else {
@@ -164,7 +170,7 @@ impl ServersMessages {
 
     pub fn get_url_from_range(
         &self,
-        server_id: Option<usize>,
+        server_id: Option<ServerID>,
         channel: &str,
         range: &Range,
     ) -> Option<String> {
@@ -177,7 +183,7 @@ impl ServersMessages {
 
     pub fn get_word_pos(
         &self,
-        server_id: Option<usize>,
+        server_id: Option<ServerID>,
         channel: &str,
         index: usize,
         character_pos: usize,
@@ -407,7 +413,7 @@ mod tests {
     #[test]
     fn test_server_message_routing() {
         let mut storage = ServersMessages::new(PathBuf::from("/tmp"));
-        let server_id = Some(1);
+        let server_id = Some(ServerID::new(1));
         let channel = "#rust";
 
         storage.add_server_group(server_id, Some("irc.libera.chat".to_string()));
@@ -430,7 +436,7 @@ mod tests {
     #[test]
     fn test_channel_rename() {
         let mut storage = ServersMessages::new(PathBuf::from("/tmp"));
-        let server_id = Some(0);
+        let server_id = Some(ServerID::new(0));
         storage.add_server_group(server_id, Some("localhost".to_string()));
         storage.add_message(server_id, "Bob", MessageContent::info("Hi Bob".to_string()));
 

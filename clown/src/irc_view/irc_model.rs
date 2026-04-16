@@ -1,7 +1,7 @@
 use ahash::AHashMap;
 
 use crate::message_event::MessageEvent;
-
+use crate::model::ServerID;
 #[derive(Debug, PartialEq, Clone)]
 pub struct User {
     name: String,
@@ -57,7 +57,7 @@ struct Channel {
 #[derive(Debug)]
 pub struct IrcModel {
     pub servers: Vec<Option<IrcServerModel>>,
-    pub current_id: Option<usize>,
+    pub current_id: Option<ServerID>,
 }
 
 impl IrcModel {
@@ -68,29 +68,40 @@ impl IrcModel {
         }
     }
 
-    pub fn init_server(&mut self, in_id: usize, server_name: String, nickname: String) {
-        if let Some(server) = self.servers.get_mut(in_id) {
+    pub fn init_server(&mut self, in_id: ServerID, server_name: String, nickname: String) {
+        if let Some(server) = self.get_mut_server_from_id(in_id) {
             *server = Some(IrcServerModel::new_model(in_id, server_name, nickname))
         }
     }
 
     pub fn get_current_server(&self) -> Option<&IrcServerModel> {
         self.current_id
-            .and_then(|id| self.servers.get(id))
+            .and_then(|id| self.get_server_from_id(id))
             .and_then(|v| v.as_ref())
     }
 
-    pub fn get_server_name(&self, server_id: usize) -> &str {
-        if let Some(Some(server)) = self.servers.get(server_id) {
+    pub fn get_server_name(&self, server_id: ServerID) -> &str {
+        if let Some(Some(server)) = self.get_server_from_id(server_id) {
             server.get_server_name()
         } else {
             "Server"
         }
     }
 
+    fn get_server_from_id(&self, server_id: ServerID) -> Option<&Option<IrcServerModel>> {
+        self.servers.get(server_id.as_usize())
+    }
+
+    fn get_mut_server_from_id(
+        &mut self,
+        server_id: ServerID,
+    ) -> Option<&mut Option<IrcServerModel>> {
+        self.servers.get_mut(server_id.as_usize())
+    }
+
     pub fn get_server_name_from_channel<'a>(
         &'a self,
-        server_id: usize,
+        server_id: ServerID,
         channel: Option<&'a str>,
     ) -> Option<&'a str> {
         if channel.is_none() {
@@ -100,40 +111,39 @@ impl IrcModel {
         }
     }
 
-    pub fn get_server(&self, server_id: usize) -> Option<&IrcServerModel> {
-        if let Some(server) = self.servers.get(server_id) {
+    pub fn get_server(&self, server_id: ServerID) -> Option<&IrcServerModel> {
+        if let Some(server) = self.get_server_from_id(server_id) {
             server.as_ref()
         } else {
             None
         }
     }
 
-    pub fn is_main_user(&self, server_id: usize, nick: &str) -> bool {
-        if let Some(Some(server)) = self.servers.get(server_id) {
+    pub fn is_main_user(&self, server_id: ServerID, nick: &str) -> bool {
+        if let Some(Some(server)) = self.get_server_from_id(server_id) {
             server.is_main_user(nick)
         } else {
             false
         }
     }
 
-    pub fn clear_server(&mut self, in_id: usize) {
+    pub fn clear_server(&mut self, in_id: ServerID) {
         if let Some(id) = self.current_id
             && id == in_id
         {
             self.current_id = None;
         }
-        if let Some(server) = self.servers.get_mut(in_id) {
+        if let Some(server) = self.get_mut_server_from_id(in_id) {
             *server = None;
         }
     }
 
     pub fn get_all_joined_channel(
         &self,
-        server_id: usize,
+        server_id: ServerID,
         user: &str,
     ) -> impl Iterator<Item = &str> + '_ {
-        self.servers
-            .get(server_id)
+        self.get_server_from_id(server_id)
             .and_then(|s| s.as_ref())
             .map(|server| server.get_all_joined_channel(user))
             .into_iter()
@@ -145,32 +155,32 @@ impl IrcModel {
             MessageEvent::JoinServer(server_id) => {
                 let server_name = self.get_server_name(*server_id).to_string();
 
-                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+                if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
                     server.add_channel(&server_name);
                 }
             }
             MessageEvent::Join(server_id, channel, user) => {
-                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+                if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
                     server.join(channel, user);
                 }
             }
             MessageEvent::Part(server_id, channel, user) => {
-                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+                if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
                     server.part(channel, user);
                 }
             }
             MessageEvent::Quit(server_id, user, _) => {
-                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+                if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
                     server.quit(user);
                 }
             }
             MessageEvent::ReplaceUser(server_id, old, new) => {
-                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+                if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
                     server.nick(old, new);
                 }
             }
             MessageEvent::UpdateUsers(server_id, channel, list_users) => {
-                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+                if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
                     for user in list_users {
                         server.join(channel, user);
                     }
@@ -178,7 +188,7 @@ impl IrcModel {
             }
             MessageEvent::SelectChannel(server_id, channel) => {
                 if let Some(server_id) = server_id
-                    && let Some(Some(server)) = self.servers.get_mut(*server_id)
+                    && let Some(Some(server)) = self.get_mut_server_from_id(*server_id)
                 {
                     server.select_channel(channel);
                 }
@@ -186,12 +196,12 @@ impl IrcModel {
             }
             MessageEvent::PrivMsg(server_id, source, target, _)
             | MessageEvent::ActionMsg(server_id, source, target, _) => {
-                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+                if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
                     server.received_message(source, target);
                 }
             }
             MessageEvent::Notice(server_id, source, target, _) => {
-                if let Some(Some(server)) = self.servers.get_mut(*server_id) {
+                if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
                     server.received_message(source, target);
                 }
             }
@@ -202,7 +212,7 @@ impl IrcModel {
     #[cfg(test)]
     pub fn new_single_server(
         in_length: usize,
-        id: usize,
+        id: ServerID,
         server_name: String,
         nickname: String,
     ) -> Self {
@@ -226,12 +236,12 @@ pub struct IrcServerModel {
     current_channel: Option<String>,
 
     current_nick: String,
-    server_id: usize,
+    server_id: ServerID,
     name: String,
 }
 
 impl IrcServerModel {
-    pub fn new_model(server_id: usize, server_name: String, nick_name: String) -> Self {
+    pub fn new_model(server_id: ServerID, server_name: String, nick_name: String) -> Self {
         let mut users = AHashMap::new();
         users.insert(
             Self::sanitize_name(&nick_name).to_lowercase(),
@@ -259,7 +269,7 @@ impl IrcServerModel {
         &self.current_nick
     }
 
-    pub fn get_server_id(&self) -> usize {
+    pub fn get_server_id(&self) -> ServerID {
         self.server_id
     }
 
@@ -462,8 +472,8 @@ mod tests {
     }
 
     fn setup_server(m: &mut IrcModel) {
-        m.init_server(0, "TEST".into(), "Me".into());
-        m.current_id = Some(0);
+        m.init_server(ServerID::new(0), "TEST".into(), "Me".into());
+        m.current_id = Some(ServerID::new(0));
     }
 
     fn server(m: &IrcModel) -> &IrcServerModel {
@@ -487,7 +497,11 @@ mod tests {
         let mut m = model();
         setup_server(&mut m);
 
-        m.handle_action(&MessageEvent::Join(0, "#Rust".into(), "Alice".into()));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#Rust".into(),
+            "Alice".into(),
+        ));
 
         let s = server(&m);
 
@@ -500,10 +514,18 @@ mod tests {
         let mut m = model();
         setup_server(&mut m);
 
-        m.handle_action(&MessageEvent::Join(0, "#Rust".into(), "Alice".into()));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#Rust".into(),
+            "Alice".into(),
+        ));
         assert!(server(&m).has_user_joined_channel("alice", "#rust"));
 
-        m.handle_action(&MessageEvent::Part(0, "#RUST".into(), "ALICE".into()));
+        m.handle_action(&MessageEvent::Part(
+            ServerID::new(0),
+            "#RUST".into(),
+            "ALICE".into(),
+        ));
 
         assert!(!server(&m).has_user_joined_channel("alice", "#rust"));
     }
@@ -513,10 +535,18 @@ mod tests {
         let mut m = model();
         setup_server(&mut m);
 
-        m.handle_action(&MessageEvent::Join(0, "#rust".into(), "Alice".into()));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#rust".into(),
+            "Alice".into(),
+        ));
         assert!(server(&m).get_user("alice").is_some());
 
-        m.handle_action(&MessageEvent::Quit(0, "ALICE".into(), Some("bye".into())));
+        m.handle_action(&MessageEvent::Quit(
+            ServerID::new(0),
+            "ALICE".into(),
+            Some("bye".into()),
+        ));
 
         assert!(server(&m).get_user("alice").is_none());
     }
@@ -526,12 +556,20 @@ mod tests {
         let mut m = model();
         setup_server(&mut m);
 
-        m.handle_action(&MessageEvent::Join(0, "#rust".into(), "Alice".into()));
-        m.handle_action(&MessageEvent::Join(0, "#rust".into(), "Jack".into()));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#rust".into(),
+            "Alice".into(),
+        ));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#rust".into(),
+            "Jack".into(),
+        ));
 
         // Create private channel with Jack
         m.handle_action(&MessageEvent::PrivMsg(
-            0,
+            ServerID::new(0),
             "jack".into(),
             "me".into(),
             "hello".into(),
@@ -540,13 +578,21 @@ mod tests {
         assert!(server(&m).get_channel_id("jack").is_some());
 
         // Rename Alice → Bob
-        m.handle_action(&MessageEvent::ReplaceUser(0, "ALICE".into(), "BoB".into()));
+        m.handle_action(&MessageEvent::ReplaceUser(
+            ServerID::new(0),
+            "ALICE".into(),
+            "BoB".into(),
+        ));
 
         assert!(server(&m).get_user("alice").is_none());
         assert!(server(&m).get_user("bob").is_some());
 
         // Rename Jack → Miki
-        m.handle_action(&MessageEvent::ReplaceUser(0, "Jack".into(), "miki".into()));
+        m.handle_action(&MessageEvent::ReplaceUser(
+            ServerID::new(0),
+            "Jack".into(),
+            "miki".into(),
+        ));
 
         let s = server(&m);
 
@@ -561,10 +607,14 @@ mod tests {
         let mut m = model();
         setup_server(&mut m);
 
-        m.handle_action(&MessageEvent::Join(0, "#Rust".into(), "Alice".into()));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#Rust".into(),
+            "Alice".into(),
+        ));
 
         m.handle_action(&MessageEvent::PrivMsg(
-            0,
+            ServerID::new(0),
             "alice".into(),
             "#RUST".into(),
             "hello".into(),
@@ -572,7 +622,10 @@ mod tests {
 
         assert!(server(&m).has_unread_message("#rust"));
 
-        m.handle_action(&MessageEvent::SelectChannel(Some(0), "#RUST".into()));
+        m.handle_action(&MessageEvent::SelectChannel(
+            Some(ServerID::new(0)),
+            "#RUST".into(),
+        ));
 
         assert!(!server(&m).has_unread_message("#rust"));
     }
@@ -582,8 +635,16 @@ mod tests {
         let mut m = model();
         setup_server(&mut m);
 
-        m.handle_action(&MessageEvent::Join(0, "#Rust".into(), "Alice".into()));
-        m.handle_action(&MessageEvent::Join(0, "#Linux".into(), "ALICE".into()));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#Rust".into(),
+            "Alice".into(),
+        ));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#Linux".into(),
+            "ALICE".into(),
+        ));
 
         let channels: Vec<_> = server(&m).get_all_joined_channel("alice").collect();
 
@@ -597,11 +658,18 @@ mod tests {
         let mut m = model();
         setup_server(&mut m);
 
-        m.handle_action(&MessageEvent::Join(0, "#Rust".into(), "Alice".into()));
-        m.handle_action(&MessageEvent::SelectChannel(Some(0), "#General".into()));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#Rust".into(),
+            "Alice".into(),
+        ));
+        m.handle_action(&MessageEvent::SelectChannel(
+            Some(ServerID::new(0)),
+            "#General".into(),
+        ));
 
         m.handle_action(&MessageEvent::PrivMsg(
-            0,
+            ServerID::new(0),
             "ALICE".into(),
             "#rust".into(),
             "hello".into(),

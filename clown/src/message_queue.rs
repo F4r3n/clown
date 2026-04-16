@@ -84,18 +84,19 @@ impl MessageQueue {
 mod test {
     use crate::message_event::MessageEvent;
     use crate::message_queue::MessageQueue;
+    use crate::model::ServerID;
     #[test]
     pub fn push_test() {
         let mut message_queue = MessageQueue::new();
         assert!(message_queue.is_empty());
 
-        message_queue.push_message(MessageEvent::Connect(0));
+        message_queue.push_message(MessageEvent::Connect(ServerID::new(0)));
         assert!(!message_queue.is_empty());
 
-        message_queue.push_message(MessageEvent::Connect(0));
-        message_queue.push_message(MessageEvent::Connect(0));
+        message_queue.push_message(MessageEvent::Connect(ServerID::new(0)));
+        message_queue.push_message(MessageEvent::Connect(ServerID::new(0)));
         message_queue.push_message_with_time(
-            crate::message_event::MessageEvent::Connect(0),
+            crate::message_event::MessageEvent::Connect(ServerID::new(0)),
             std::time::Duration::from_secs(5),
         );
 
@@ -105,16 +106,27 @@ mod test {
     #[test]
     pub fn test_next() {
         let mut message_queue = MessageQueue::new();
-        message_queue.push_message(MessageEvent::Connect(0));
-        message_queue.push_message(MessageEvent::Connect(0));
-        message_queue.push_message(MessageEvent::Connect(0));
-        message_queue
-            .push_message_with_time(MessageEvent::Connect(0), std::time::Duration::from_secs(5));
+        message_queue.push_message(MessageEvent::Connect(ServerID::new(0)));
+        message_queue.push_message(MessageEvent::Connect(ServerID::new(0)));
+        message_queue.push_message(MessageEvent::Connect(ServerID::new(0)));
+        message_queue.push_message_with_time(
+            MessageEvent::Connect(ServerID::new(0)),
+            std::time::Duration::from_secs(5),
+        );
 
         assert_eq!(message_queue.len(), 4);
-        assert_eq!(message_queue.next(), Some(MessageEvent::Connect(0)));
-        assert_eq!(message_queue.next(), Some(MessageEvent::Connect(0)));
-        assert_eq!(message_queue.next(), Some(MessageEvent::Connect(0)));
+        assert_eq!(
+            message_queue.next(),
+            Some(MessageEvent::Connect(ServerID::new(0)))
+        );
+        assert_eq!(
+            message_queue.next(),
+            Some(MessageEvent::Connect(ServerID::new(0)))
+        );
+        assert_eq!(
+            message_queue.next(),
+            Some(MessageEvent::Connect(ServerID::new(0)))
+        );
         assert_eq!(message_queue.next(), None);
     }
 }
