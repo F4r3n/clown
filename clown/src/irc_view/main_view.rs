@@ -337,7 +337,7 @@ impl MainView<'_> {
 
                 messages.push_message_with_time(
                     MessageEvent::Connect(server_id),
-                    std::time::Duration::from_secs(2),
+                    std::time::Duration::from_secs(5),
                 );
             }
 
@@ -728,7 +728,13 @@ impl widget_view::WidgetView for MainView<'_> {
                 {
                     if session.is_irc_finished(*server_id) {
                         if let Err(e) = session.init_connection(*server_id, conn_cfg, login_cfg) {
-                            tracing::error!(e);
+                            tracing::error!(error =%e);
+                            messages.push_message(MessageEvent::AddMessageViewInfo(
+                                Some(*server_id),
+                                None,
+                                crate::message_irc::message_content::MessageKind::Error,
+                                e.to_string(),
+                            ));
                         } else {
                             let nick = model.get_nickname(*server_id).unwrap_or("No Nick");
                             session.init_irc_model(nick.to_string(), *server_id, server_name);

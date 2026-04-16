@@ -147,7 +147,7 @@ fn part(message: Option<&str>) -> ClientCommand {
         if let Some((channel, reason)) = get_next_word(message) {
             ClientCommand::Part(Some(channel.to_string()), reason.map(|v| v.to_string()))
         } else {
-            ClientCommand::Part(Some(message.to_string()), None)
+            ClientCommand::Part(None, None)
         }
     } else {
         ClientCommand::Part(None, None)

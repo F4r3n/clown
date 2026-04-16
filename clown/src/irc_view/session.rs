@@ -1,5 +1,6 @@
 use crate::irc_view::irc_model::IrcServerModel;
 use crate::{irc_view::irc_model::IrcModel, model::IRCConnection};
+use anyhow::anyhow;
 use clown_core::client::LoginConfig;
 use clown_core::command::Command;
 use clown_core::conn::ConnectionConfig;
@@ -142,14 +143,14 @@ impl Session {
         reason: Option<String>,
     ) -> anyhow::Result<()> {
         let Some(irc_model) = self.get_current_irc_server_model() else {
-            return Ok(());
+            anyhow::bail!("Not connected");
         };
 
         let channel = match channel {
             Some(c) => c,
             None => match irc_model.get_current_channel() {
                 Some(c) => c.to_string(),
-                None => return Ok(()), // no channel to part
+                None => anyhow::bail!("No channel to part"), // no channel to part
             },
         };
 
@@ -199,23 +200,23 @@ impl Session {
         in_id: usize,
         connection_config: ConnectionConfig,
         login_config: LoginConfig,
-    ) -> Result<(), String> {
+    ) -> anyhow::Result<()> {
         if connection_config.address.is_empty() {
-            return Err("Connection address is empty".to_string());
+            anyhow::bail!("Connection address is empty");
         }
 
         let mut client = clown_core::client::Client::new(login_config);
 
         let receiver = client
             .message_receiver()
-            .ok_or_else(|| "Failed to get message receiver".to_string())?;
+            .ok_or_else(|| anyhow!("Failed to get message receiver"))?;
 
         let command_sender = client.command_sender();
 
         let (error_sender, error_receiver) = mpsc::channel(10);
 
         if self.retry == 0 {
-            return Err("No retries left".to_string());
+            anyhow::bail!("No retries left");
         }
 
         self.retry -= 1;
@@ -223,7 +224,7 @@ impl Session {
         let connection = self
             .connections
             .get_mut(in_id)
-            .ok_or_else(|| format!("Wrong ID {}", in_id))?;
+            .ok_or_else(|| anyhow!("Wrong ID {}", in_id))?;
 
         *connection = Some(IRCConnection {
             command_sender,

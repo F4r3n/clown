@@ -45,7 +45,7 @@ impl Draw for CInput {
         }
         // keep 2 for borders and 1 for cursor
         let width = area.width.max(3) - 3;
-        let scroll = self.input.set_visual_scroll(width as usize);
+        let scroll = self.input.compute_visual_scroll(width as usize);
         #[cfg(feature = "spell-checker")]
         let input = if self.spell_checker.is_some() {
             let mut spans = Vec::new();
@@ -363,7 +363,7 @@ impl InputWidget {
     }
 
     /// Adjust horizontal scroll so the cursor stays visible within the given width.
-    pub fn set_visual_scroll(&mut self, width: usize) -> usize {
+    pub fn compute_visual_scroll(&mut self, width: usize) -> usize {
         let cursor_col = UnicodeWidthStr::width(&self.value[..self.cursor_position]);
         if cursor_col < self.visual_scroll {
             self.visual_scroll = cursor_col;
@@ -379,8 +379,8 @@ impl InputWidget {
     }
 
     fn append_value(&mut self, content: String) {
-        self.value.push_str(&content);
-        self.cursor_position = self.value.len();
+        self.value.insert_str(self.cursor_position, &content);
+        self.cursor_position += content.len();
     }
 
     fn delete_char_before_cursor(&mut self) {
@@ -432,7 +432,7 @@ impl InputWidget {
             .chars()
             .zip(word.chars())
             .take_while(|(a, b)| a == b)
-            .map(|v| v.0.len_utf8())
+            .map(|(a, _)| a.len_utf8())
             .sum();
 
         if start + count < self.cursor_position {
@@ -450,7 +450,7 @@ impl InputWidget {
         if skip_spaces {
             for c in self.value[..self.cursor_position].chars().rev() {
                 if c.is_whitespace() {
-                    cursor_pos = cursor_pos.saturating_sub(1);
+                    cursor_pos = cursor_pos.saturating_sub(c.len_utf8());
                 } else {
                     break;
                 }
@@ -704,7 +704,7 @@ mod tests {
         w.value = "abcdefghijkl".to_string();
         w.cursor_position = 10;
 
-        let new_scroll = w.set_visual_scroll(5);
+        let new_scroll = w.compute_visual_scroll(5);
 
         // Cursor column is 10 → must scroll so cursor is at the far right
         // scroll = cursor_col + 1 - width = 10 + 1 - 5 = 6
