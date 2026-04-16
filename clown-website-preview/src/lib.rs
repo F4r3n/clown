@@ -1,6 +1,7 @@
 use image::DynamicImage;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use std::sync::Arc;
+
 #[derive(Clone)]
 pub struct MetaData {
     image_url: String,
@@ -37,12 +38,9 @@ impl MetaData {
             {
                 if let Some(selector) = tag.query_selector(parser, "meta") {
                     for handle in selector {
-                        println!("handle");
                         if let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) {
                             let attributes = tag.attributes();
-                            println!("{attributes:?}");
 
-                            // Extract attributes as strings
                             let property = attributes
                                 .get("property")
                                 .flatten()
@@ -89,7 +87,7 @@ fn parse_html(text: &str, is_meta: bool) -> Result<MetaData, ParserError> {
     MetaData::try_parse(text)
 }
 
-fn convert_bytes_to_image(bytes: bytes::Bytes) -> Option<Arc<DynamicImage>> {
+fn convert_bytes_to_image(bytes: Vec<u8>) -> Option<Arc<DynamicImage>> {
     if let Ok(image_reader) = image::ImageReader::new(Cursor::new(bytes)).with_guessed_format()
         && let Ok(image) = image_reader.decode()
     {
@@ -101,12 +99,18 @@ fn convert_bytes_to_image(bytes: bytes::Bytes) -> Option<Arc<DynamicImage>> {
 
 const MAX_BYTES: usize = 64 * 1024; // safety cap (64 KB)
 
-async fn fetch_head_html(resp: &mut reqwest::Response) -> Result<String, reqwest::Error> {
+fn fetch_head_html(reader: &mut dyn Read) -> Result<String, std::io::Error> {
     let mut buf = Vec::new();
+    let mut chunk = [0u8; 4096];
 
-    while let Some(chunk) = resp.chunk().await? {
+    loop {
+        let n = reader.read(&mut chunk)?;
+        if n == 0 {
+            break;
+        }
+
         let previous_size = buf.len();
-        buf.extend_from_slice(&chunk);
+        buf.extend_from_slice(&chunk[..n]);
 
         // Stop if </head> is found
         if let Some(b) = buf.get(previous_size.saturating_sub(7)..)
@@ -124,45 +128,45 @@ async fn fetch_head_html(resp: &mut reqwest::Response) -> Result<String, reqwest
     Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
-pub async fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
-    let client = reqwest::Client::new();
-    let mut resp = client
-        .get(endpoint)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
-    let headers = resp.headers();
-    let has_meta = headers
+pub fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
+    let resp = ureq::get(endpoint).call().map_err(|e| e.to_string())?;
+
+    let content_type = resp
+        .headers()
         .get("content-type")
-        .and_then(|ct| ct.to_str().ok())
-        .map_or_else(|| false, |ct| !ct.starts_with("image"));
+        .map(|v| v.to_str().ok())
+        .flatten();
+
+    let has_meta = !content_type.is_some_and(|v| v.starts_with("image"));
 
     let metadata = if has_meta {
-        let head = fetch_head_html(&mut resp)
-            .await
-            .map_err(|e| e.to_string())?;
+        let mut reader = resp.into_body().into_reader();
+        let head = fetch_head_html(&mut reader).map_err(|e| e.to_string())?;
         let mut m = parse_html(&head, has_meta).map_err(|e| e.to_string())?;
+
         if !m.image_url.is_empty() {
-            m.image = convert_bytes_to_image(
-                client
-                    .get(m.image_url.clone())
-                    .send()
-                    .await
-                    .map_err(|e| e.to_string())?
-                    .bytes()
-                    .await
-                    .map_err(|e| e.to_string())?,
-            );
+            let img_resp = ureq::get(&m.image_url).call().map_err(|e| e.to_string())?;
+            let mut img_bytes = Vec::new();
+            img_resp
+                .into_body()
+                .into_reader()
+                .read_to_end(&mut img_bytes)
+                .map_err(|e| e.to_string())?;
+            m.image = convert_bytes_to_image(img_bytes);
         }
         m
     } else {
-        let bytes_request = resp.bytes().await.map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new();
+        resp.into_body()
+            .into_reader()
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
 
         MetaData {
             image_url: String::from(endpoint),
             title: String::from(""),
             description: String::from(""),
-            image: convert_bytes_to_image(bytes_request),
+            image: convert_bytes_to_image(bytes),
         }
     };
 
@@ -221,14 +225,14 @@ mod tests {
         };
         let img = meta.take_image();
         assert!(img.is_some());
-        assert!(meta.take_image().is_none()); // should now be taken
+        assert!(meta.take_image().is_none());
     }
 
-    #[tokio::test]
-    async fn test_get_url_preview_with_meta_and_image() {
+    #[test]
+    fn test_get_url_preview_with_meta_and_image() {
         let server = MockServer::start();
         let image_url = format!("{}/image.png", server.base_url());
-        // Mock HTML response with OG tags
+
         let html_mock = server.mock(|when, then| {
             when.method(GET).path("/page");
             then.status(200)
@@ -241,7 +245,6 @@ mod tests {
                 ));
         });
 
-        // Mock image response
         let img_bytes: &[u8] = b"\x89PNG\r\n\x1a\n\
         \x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\
         \x08\x06\x00\x00\x00\x1f\x15\xc4\x89\
@@ -255,7 +258,7 @@ mod tests {
         });
 
         let url = format!("{}/page", server.base_url());
-        let result = get_url_preview(&url).await;
+        let result = get_url_preview(&url);
         assert!(result.is_ok());
 
         let meta = result.unwrap();
@@ -266,11 +269,10 @@ mod tests {
         image_mock.assert();
     }
 
-    #[tokio::test]
-    async fn test_get_url_preview_with_image_direct() {
+    #[test]
+    fn test_get_url_preview_with_image_direct() {
         let server = MockServer::start();
 
-        // Mock direct image URL
         let img_bytes = vec![255u8; 10];
         let mock = server.mock(|when, then| {
             when.method(GET).path("/image.png");
@@ -280,7 +282,7 @@ mod tests {
         });
 
         let url = format!("{}/image.png", server.base_url());
-        let result = get_url_preview(&url).await;
+        let result = get_url_preview(&url);
         assert!(result.is_ok());
 
         let meta = result.unwrap();
@@ -290,13 +292,13 @@ mod tests {
         mock.assert();
     }
 
-    #[tokio::test]
-    #[ignore] // ignored by default
+    #[test]
+    #[ignore]
     #[allow(clippy::print_stdout)]
-    async fn test_get_url_preview_real_url() {
+    fn test_get_url_preview_real_url() {
         let url = "https://github.com";
 
-        let result = get_url_preview(url).await;
+        let result = get_url_preview(url);
 
         assert!(result.is_ok(), "Failed to fetch URL: {:?}", result.err());
 
@@ -305,7 +307,6 @@ mod tests {
         println!("Image URL: {}", meta.image_url);
         println!("Description: {}", meta.description);
 
-        // Basic sanity checks
         assert!(!meta.image_url.is_empty());
         assert!(!meta.title.is_empty() || !meta.description.is_empty());
         assert!(meta.image.is_some());

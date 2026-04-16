@@ -7,16 +7,20 @@ use tracing::info;
 pub struct SpellChecker {
     dict: Option<dict::Dictionary>,
 }
-use std::{io::Write, path::PathBuf};
+use std::{
+    io::{Read, Write},
+    path::PathBuf,
+};
 
 impl SpellChecker {
     async fn download_file(url: &str, to: &PathBuf) -> anyhow::Result<PathBuf> {
-        let mut response = reqwest::get(url).await?;
+        let mut reader = ureq::get(url).call()?.into_body().into_reader();
         to.parent().map(std::fs::create_dir_all);
         let mut file = std::fs::File::create(to)?;
+        let mut buf = [0u8; 4096];
 
-        while let Some(chunk) = response.chunk().await? {
-            file.write_all(&chunk)?;
+        while let Ok(size) = reader.read(&mut buf[..]) {
+            file.write_all(&buf)?;
         }
         Ok(to.to_path_buf())
     }

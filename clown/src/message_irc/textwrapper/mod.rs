@@ -145,7 +145,7 @@ pub fn wrap_spans<'a>(
     }
 
     let spans = to_spans(content, start_style);
-    //println!("{:?}", spans);
+
     let mut lines: Vec<WrappedLine<'a>> = vec![WrappedLine::default()];
     let mut current_width = 0;
     let mut just_wrapped = false;

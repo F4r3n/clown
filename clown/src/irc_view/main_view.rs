@@ -36,8 +36,6 @@ use tracing::error;
 pub enum MessageError {
     #[error("The message should have a source")]
     MissingSource,
-    #[error("The message is not processed")]
-    UnknownMessage,
 }
 
 const LOG_FLUSH_CHECK_TIMER: u64 = 10;
@@ -542,7 +540,7 @@ impl MainView<'_> {
                         ));
                     }
                     _ => {
-                        tracing::error!(error = %MessageError::UnknownMessage);
+                        //tracing::error!(error = %MessageError::UnknownMessage);
                     }
                 },
                 Response::Unknown(content) => {
