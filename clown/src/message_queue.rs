@@ -39,9 +39,8 @@ pub struct MessageQueue {
 impl std::iter::Iterator for MessageQueue {
     type Item = MessageEvent;
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.qtimed.is_empty()
-            && let Some(item) = self.qtimed.peek()
-            && std::time::Instant::now() > item.0.time
+        if let Some(item) = self.qtimed.peek()
+            && std::time::Instant::now() >= item.0.time
         {
             return self.qtimed.pop().map(|reverved| reverved.0.event);
         }
@@ -53,7 +52,7 @@ impl std::iter::Iterator for MessageQueue {
 impl MessageQueue {
     pub fn new() -> Self {
         Self {
-            qnow: VecDeque::new(),
+            qnow: VecDeque::with_capacity(100), //At the start of a connection a bunch of messages are comming
             qtimed: BinaryHeap::new(),
         }
     }
