@@ -19,7 +19,7 @@ pub struct Outgoing {
 impl Outgoing {
     pub async fn receive_message<W>(
         &mut self,
-        writer: &mut BufWriter<W>,
+        mut writer: &mut BufWriter<W>,
         server_message: ServerMessage,
     ) -> Result<(), IRCIOError>
     where
@@ -27,15 +27,11 @@ impl Outgoing {
     {
         match server_message.reply() {
             Response::Cmd(Command::Ping(token)) => {
-                writer
-                    .write_all(Command::Pong(token).as_bytes().as_slice())
-                    .await?;
+                Command::Pong(token).write(&mut writer).await?;
                 writer.flush().await?;
             }
             Response::Cmd(Command::Cap(_)) => {
-                writer
-                    .write_all(Command::Cap("END".into()).as_bytes().as_slice())
-                    .await?;
+                Command::Cap("END".into()).write(&mut writer).await?;
                 writer.flush().await?;
             }
             _ => {}
@@ -61,37 +57,33 @@ impl Outgoing {
         W: AsyncWrite + Unpin,
     {
         let mut buffer = String::new();
+        let mut receiver = self.receiver.take().ok_or(IRCIOError::Uninitialized)?;
         loop {
             tokio::select! {
                 response = reader.read_line(&mut buffer) => {
                     match response {
                         Ok(0) => break, // Connection closed
                         Ok(_) => {
-                            let line = buffer.trim_end().to_string();
-                            buffer.clear();
-
-
+                            let line = buffer.trim_end();
                             if let Ok(message) = create_message(line.as_bytes())
                             {
                                 let server_message = ServerMessage::new(message);
                                 self.receive_message(&mut writer, server_message).await?;
                             }
-
+                            buffer.clear();
                         }
                         Err(e) => {
                             return Err(IRCIOError::IO(e));
                         }
                     }
                 }
-                command = match self.receiver.as_mut() {
-                    Some(receiver) => receiver.inner.recv(),
-                    None => break, // Receiver not set, break the loop
-                } => {
-                    if let Some(cmd) = command {
-                        writer.write_all(cmd.as_bytes().as_slice()).await?;
-                        writer.flush().await?;
-                    } else {
-                        break; // Command channel closed
+                cmd = receiver.inner.recv() => {
+                    match cmd {
+                        Some(cmd)=> {
+                            cmd.write(&mut writer).await?;
+                            writer.flush().await?;
+                        }
+                        None => break
                     }
                 }
             }
@@ -110,7 +102,7 @@ impl Outgoing {
         });
         (
             CommandSender {
-                inner: Some(command_sender),
+                inner: command_sender,
             },
             MessageReceiver {
                 inner: message_receiver,
@@ -119,26 +111,19 @@ impl Outgoing {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct CommandSender {
-    pub inner: Option<mpsc::UnboundedSender<Command>>,
+    pub inner: mpsc::UnboundedSender<Command>,
 }
 
 impl CommandSender {
     pub fn send(&mut self, in_command: Command) -> Result<(), IRCIOError> {
-        if let Some(inner) = &self.inner {
-            inner
-                .send(in_command)
-                .map_err(|_| IRCIOError::SendCommand)?
-        }
-        Ok(())
+        self.inner
+            .send(in_command)
+            .map_err(|_| IRCIOError::SendCommand)
     }
 
     pub fn is_closed(&self) -> bool {
-        if let Some(inner) = &self.inner {
-            inner.is_closed()
-        } else {
-            true
-        }
+        self.inner.is_closed()
     }
 }

@@ -21,6 +21,8 @@ pub enum IRCIOError {
     SendMessage,
     #[error("unknown data store error")]
     Unknown,
+    #[error("Uninitialized")]
+    Uninitialized,
 }
 
 #[derive(Error, Debug)]

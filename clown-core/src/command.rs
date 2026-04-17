@@ -1,6 +1,6 @@
 use phf::phf_map;
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
-
 pub struct CommandReceiver {
     pub inner: mpsc::UnboundedReceiver<Command>,
 }
@@ -124,42 +124,114 @@ pub enum Command {
     Unknown(String),
 }
 impl Command {
-    pub fn as_bytes(&self) -> Vec<u8> {
-        match &self {
+    pub async fn write<W>(&self, writer: &mut BufWriter<W>) -> Result<(), std::io::Error>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        match self {
             Command::PrivMsg(channel, message) => {
-                format!("PRIVMSG {channel} :{message}\r\n").into_bytes()
+                writer.write_all(b"PRIVMSG ").await?;
+                writer.write_all(channel.as_bytes()).await?;
+                writer.write_all(b" :").await?;
+                writer.write_all(message.as_bytes()).await?;
             }
-            Command::Join(channel) => format!("JOIN {channel}\r\n").into_bytes(),
-            Command::Part(channel, Some(reason)) => {
-                format!("PART {channel} :{reason}\r\n").into_bytes()
+            Command::Join(channel) => {
+                writer.write_all(b"JOIN ").await?;
+                writer.write_all(channel.as_bytes()).await?;
             }
-            Command::Part(channel, None) => format!("PART {channel}\r\n").into_bytes(),
+            Command::Part(channel, reason) => {
+                writer.write_all(b"PART ").await?;
+                writer.write_all(channel.as_bytes()).await?;
+                if let Some(r) = reason {
+                    writer.write_all(b" :").await?;
+                    writer.write_all(r.as_bytes()).await?;
+                }
+            }
             Command::Notice(target, message) => {
-                format!("NOTICE {target} :{message}\r\n").into_bytes()
+                writer.write_all(b"NOTICE ").await?;
+                writer.write_all(target.as_bytes()).await?;
+                writer.write_all(b" :").await?;
+                writer.write_all(message.as_bytes()).await?;
             }
-            Command::Topic(channel, topic) => format!("TOPIC {channel} :{topic}\r\n").into_bytes(),
-            Command::Mode(target, mode) => format!("MODE {target} {mode}\r\n").into_bytes(),
-            Command::Who(mask) => format!("WHO {mask}\r\n").into_bytes(),
-            Command::List(Some(channel)) => format!("LIST {channel}\r\n").into_bytes(),
-            Command::List(None) => "LIST\r\n".to_string().into_bytes(),
-            Command::Invite(nick, channel) => format!("INVITE {nick} {channel}\r\n").into_bytes(),
-            Command::Kick(channel, nick, Some(reason)) => {
-                format!("KICK {channel} {nick} :{reason}\r\n").into_bytes()
+            Command::Topic(channel, topic) => {
+                writer.write_all(b"TOPIC ").await?;
+                writer.write_all(channel.as_bytes()).await?;
+                writer.write_all(b" :").await?;
+                writer.write_all(topic.as_bytes()).await?;
             }
-            Command::Kick(channel, nick, None) => format!("KICK {channel} {nick}\r\n").into_bytes(),
-            Command::Nick(nickname) => format!("NICK {nickname}\r\n").into_bytes(),
-            Command::Pass(pass) => format!("PASS {pass}\r\n").into_bytes(),
+            Command::Mode(target, mode) => {
+                writer.write_all(b"MODE ").await?;
+                writer.write_all(target.as_bytes()).await?;
+                writer.write_all(b" ").await?;
+                writer.write_all(mode.as_bytes()).await?;
+            }
+            Command::Who(mask) => {
+                writer.write_all(b"WHO ").await?;
+                writer.write_all(mask.as_bytes()).await?;
+            }
+            Command::List(channel) => {
+                writer.write_all(b"LIST").await?;
+                if let Some(c) = channel {
+                    writer.write_all(b" ").await?;
+                    writer.write_all(c.as_bytes()).await?;
+                }
+            }
+            Command::Invite(nick, channel) => {
+                writer.write_all(b"INVITE ").await?;
+                writer.write_all(nick.as_bytes()).await?;
+                writer.write_all(b" ").await?;
+                writer.write_all(channel.as_bytes()).await?;
+            }
+            Command::Kick(channel, nick, reason) => {
+                writer.write_all(b"KICK ").await?;
+                writer.write_all(channel.as_bytes()).await?;
+                writer.write_all(b" ").await?;
+                writer.write_all(nick.as_bytes()).await?;
+                if let Some(r) = reason {
+                    writer.write_all(b" :").await?;
+                    writer.write_all(r.as_bytes()).await?;
+                }
+            }
+            Command::Nick(nickname) => {
+                writer.write_all(b"NICK ").await?;
+                writer.write_all(nickname.as_bytes()).await?;
+            }
+            Command::Pass(pass) => {
+                writer.write_all(b"PASS ").await?;
+                writer.write_all(pass.as_bytes()).await?;
+            }
             Command::User(username, realname) => {
-                format!("USER {username} 0 * {realname}\r\n").into_bytes()
+                writer.write_all(b"USER ").await?;
+                writer.write_all(username.as_bytes()).await?;
+                writer.write_all(b" 0 * :").await?;
+                writer.write_all(realname.as_bytes()).await?;
             }
-            Command::Ping(token) => format!("PING {token}\r\n").into_bytes(),
-            Command::Pong(token) => format!("PONG {token}\r\n").into_bytes(),
-            Command::Cap(cap) => format!("CAP {cap}\r\n").into_bytes(),
-            Command::Quit(Some(reason)) => format!("QUIT {reason}\r\n").into_bytes(),
-            Command::Quit(None) => "QUIT\r\n".to_string().into_bytes(),
-            Command::Unknown(un) => format!("Unkwnon {un}\r\n").into_bytes(),
-            Command::Error(un) => format!("Error {un}\r\n").into_bytes(),
+            Command::Ping(token) => {
+                writer.write_all(b"PING ").await?;
+                writer.write_all(token.as_bytes()).await?;
+            }
+            Command::Pong(token) => {
+                writer.write_all(b"PONG ").await?;
+                writer.write_all(token.as_bytes()).await?;
+            }
+            Command::Cap(cap) => {
+                writer.write_all(b"CAP ").await?;
+                writer.write_all(cap.as_bytes()).await?;
+            }
+            Command::Quit(reason) => {
+                writer.write_all(b"QUIT").await?;
+                if let Some(r) = reason {
+                    writer.write_all(b" :").await?;
+                    writer.write_all(r.as_bytes()).await?;
+                }
+            }
+            Command::Unknown(un) => {
+                writer.write_all(un.as_bytes()).await?;
+            }
+            Command::Error(_) => {}
         }
+        // Every IRC message ends with CRLF
+        writer.write_all(b"\r\n").await
     }
 }
 
