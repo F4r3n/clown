@@ -29,16 +29,16 @@ impl ServerMessage {
 
     pub fn reply(&self) -> Response {
         if let Some(command) = self.message.command_name() {
-            let params = self.message.parameters().collect::<Vec<&str>>();
+            let params = self.message.parameters();
 
             if let Ok(command_number) = command.parse() {
                 Response::Rpl(ResponseBuilder::get_reply(
                     command_number,
-                    &params,
+                    params,
                     self.message.trailing(),
                 ))
             } else {
-                CommandBuilder::get_command(command, &params, self.message.trailing())
+                CommandBuilder::get_command(command, params, self.message.trailing())
                     .map(Response::Cmd)
                     .unwrap_or(Response::Unknown(format!("{:?}", self.message)))
             }

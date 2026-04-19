@@ -238,94 +238,103 @@ impl Command {
 pub struct CommandBuilder;
 
 impl CommandBuilder {
+    fn tokenize(parameters: &str) -> impl Iterator<Item = &str> {
+        parameters
+            .split_ascii_whitespace()
+            .filter(|v| !v.is_empty())
+    }
+
     //USER alice 0 * :Alice Example
-    fn user(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
-        parameters.first().map(|target| {
+    fn user(parameters: &str, trailing: Option<&str>) -> Option<Command> {
+        let mut parameters = Self::tokenize(parameters);
+        parameters.next().map(|target| {
             Command::User(target.to_string(), trailing.unwrap_or_default().to_string())
         })
     }
 
     //Command: PONG
     //Parameters: [<server>] <token>
-    fn pong(parameters: &[&str]) -> Option<Command> {
-        Some(Command::Pong(
-            parameters.last().map(|v| v.to_string()).unwrap_or_default(),
-        ))
+    fn pong(parameters: &str) -> Option<Command> {
+        let parameters = Self::tokenize(parameters);
+        parameters.last().map(|v| Command::Pong(v.to_string()))
     }
 
-    fn nick(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
-        if !parameters.is_empty() {
-            Some(Command::Nick(
-                parameters.last().map(|v| v.to_string()).unwrap_or_default(),
-            ))
+    fn nick(parameter: &str, trailing: Option<&str>) -> Option<Command> {
+        if !parameter.is_empty() {
+            Some(Command::Nick(parameter.to_string()))
         } else {
             trailing.map(|trailing| Command::Nick(trailing.to_string()))
         }
     }
 
-    fn join(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
-        if !parameters.is_empty() {
-            Some(Command::Join(
-                parameters.last().map(|v| v.to_string()).unwrap_or_default(),
-            ))
-        } else {
-            trailing.map(|trailing| Command::Join(trailing.to_string()))
+    fn join(parameters: &str, _: Option<&str>) -> Option<Command> {
+        if parameters.is_empty() {
+            return None;
         }
+        Some(Command::Join(parameters.to_string()))
     }
 
     fn quit(trailing: Option<&str>) -> Option<Command> {
         Some(Command::Quit(trailing.map(|v| v.to_string())))
     }
 
-    fn make_command_1<F>(parameters: &[&str], trailing: Option<&str>, ctor: F) -> Option<Command>
+    fn make_command_1<F>(parameters: &str, trailing: Option<&str>, ctor: F) -> Option<Command>
     where
         F: Fn(String) -> Command,
     {
         if !parameters.is_empty() {
-            Some(ctor(
-                parameters.last().map(|v| v.to_string()).unwrap_or_default(),
-            ))
+            Some(ctor(parameters.to_string()))
         } else {
             trailing.map(|trailing| ctor(trailing.to_string()))
         }
     }
 
-    fn make_command_2<F>(parameters: &[&str], trailing: Option<&str>, ctor: F) -> Option<Command>
+    fn make_command_2<F>(
+        parameter: Option<&str>,
+        trailing: Option<&str>,
+        ctor: F,
+    ) -> Option<Command>
     where
         F: Fn(String, String) -> Command,
     {
-        parameters
-            .first()
-            .map(|target| ctor(target.to_string(), trailing.unwrap_or_default().to_string()))
+        parameter.map(|target| ctor(target.to_string(), trailing.unwrap_or_default().to_string()))
     }
 
     // PART <channel> [:reason]
-    fn part(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
-        if let Some(channel) = parameters.first() {
-            let reason = trailing.map(|v| v.to_string());
-            Some(Command::Part(channel.to_string(), reason))
-        } else {
-            None
+    fn part(parameters: &str, trailing: Option<&str>) -> Option<Command> {
+        if parameters.is_empty() {
+            return None;
         }
+        let reason = trailing.map(|v| v.to_string());
+        Some(Command::Part(parameters.to_string(), reason))
     }
 
     // NOTICE <target> :<message>
-    fn notice(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
-        parameters.first().map(|first| {
-            Command::Notice(first.to_string(), trailing.unwrap_or_default().to_string())
-        })
+    fn notice(parameters: &str, trailing: Option<&str>) -> Option<Command> {
+        if parameters.is_empty() {
+            return None;
+        }
+        Some(Command::Notice(
+            parameters.to_string(),
+            trailing.unwrap_or_default().to_string(),
+        ))
     }
 
     // TOPIC <channel> :<topic>
-    fn topic(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
-        parameters.first().map(|first| {
-            Command::Topic(first.to_string(), trailing.unwrap_or_default().to_string())
-        })
+    fn topic(parameters: &str, trailing: Option<&str>) -> Option<Command> {
+        if parameters.is_empty() {
+            return None;
+        }
+        Some(Command::Topic(
+            parameters.to_string(),
+            trailing.unwrap_or_default().to_string(),
+        ))
     }
 
     // MODE <target> <mode>
-    fn mode(parameters: &[&str]) -> Option<Command> {
-        if let [first, others @ ..] = parameters {
+    fn mode(parameters: &str) -> Option<Command> {
+        let parameters = Self::tokenize(parameters).collect::<Vec<&str>>();
+        if let [first, others @ ..] = parameters.as_slice() {
             Some(Command::Mode(first.to_string(), others.join(" ")))
         } else {
             None
@@ -333,15 +342,16 @@ impl CommandBuilder {
     }
 
     // WHO <mask>
-    fn who(parameters: &[&str]) -> Option<Command> {
-        parameters
-            .first()
-            .map(|mask| Command::Who(mask.to_string()))
+    fn who(parameters: &str) -> Option<Command> {
+        if parameters.is_empty() {
+            return None;
+        }
+        Some(Command::Who(parameters.to_string()))
     }
 
     // LIST [<channel>]
-    fn list(parameters: &[&str]) -> Option<Command> {
-        if let Some(channel) = parameters.first() {
+    fn list(parameters: &str) -> Option<Command> {
+        if let Some(channel) = Self::tokenize(parameters).next() {
             Some(Command::List(Some(channel.to_string())))
         } else {
             Some(Command::List(None))
@@ -349,8 +359,9 @@ impl CommandBuilder {
     }
 
     // INVITE <nick> <channel>
-    fn invite(parameters: &[&str]) -> Option<Command> {
-        if let [first, others] = parameters {
+    fn invite(parameters: &str) -> Option<Command> {
+        let parameters: Vec<&str> = Self::tokenize(parameters).collect::<Vec<&str>>();
+        if let [first, others] = parameters.as_slice() {
             Some(Command::Invite(first.to_string(), others.to_string()))
         } else {
             None
@@ -358,8 +369,11 @@ impl CommandBuilder {
     }
 
     // KICK <channel> <nick> [:reason]
-    fn kick(parameters: &[&str], trailing: Option<&str>) -> Option<Command> {
-        if let [channel, nick] = parameters {
+    fn kick(parameters: &str, trailing: Option<&str>) -> Option<Command> {
+        let mut parameters = Self::tokenize(parameters);
+        if let Some(channel) = parameters.next()
+            && let Some(nick) = parameters.next()
+        {
             Some(Command::Kick(
                 channel.to_string(),
                 nick.to_string(),
@@ -372,10 +386,12 @@ impl CommandBuilder {
 
     pub fn get_command(
         command_name: &str,
-        parameters: &[&str],
+        parameters: Option<&str>,
         trailing: Option<&str>,
     ) -> Option<Command> {
-        if let Some(command_name) = COMMAND_NAME.get(command_name) {
+        if let Some(command_name) = COMMAND_NAME.get(command_name)
+            && let Some(parameters) = parameters
+        {
             match command_name {
                 CommandName::Nick => CommandBuilder::nick(parameters, trailing),
                 CommandName::Pass => {
@@ -388,7 +404,8 @@ impl CommandBuilder {
                 CommandName::Pong => CommandBuilder::pong(parameters),
                 CommandName::User => CommandBuilder::user(parameters, trailing),
                 CommandName::PrivMsg => {
-                    CommandBuilder::make_command_2(parameters, trailing, Command::PrivMsg)
+                    let mut parameters = Self::tokenize(parameters);
+                    CommandBuilder::make_command_2(parameters.next(), trailing, Command::PrivMsg)
                 }
                 CommandName::Join => CommandBuilder::join(parameters, trailing),
                 CommandName::Part => CommandBuilder::part(parameters, trailing),

@@ -151,15 +151,16 @@ impl Connection {
     }
 
     pub async fn connect(&self) -> Result<IRCStream, ConnectionError> {
-        let _result = rustls::crypto::ring::default_provider().install_default();
-        let stream = if self.connection_config.port == 6697 {
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .map_err(|_| ConnectionError::Unknown)?;
+        if self.connection_config.port == 6697 {
             self.establish_stream_tls(&self.connection_config.address, self.connection_config.port)
-                .await?
+                .await
         } else {
             self.establish_stream(&self.connection_config.address, self.connection_config.port)
-                .await?
-        };
-        Ok(stream)
+                .await
+        }
     }
 }
 

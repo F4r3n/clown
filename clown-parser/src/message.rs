@@ -17,7 +17,7 @@ pub enum ParsingError {
 pub struct IRCMessage<'s> {
     source: Option<Source<'s>>,
     command: Option<&'s [u8]>,
-    parameters: Vec<&'s [u8]>,
+    parameters: Option<&'s [u8]>,
     trailing: Option<&'s [u8]>,
 }
 
@@ -68,11 +68,9 @@ impl Message {
         irc.command.and_then(|value| str::from_utf8(value).ok())
     }
 
-    pub fn parameters(&self) -> impl Iterator<Item = &str> {
+    pub fn parameters(&self) -> Option<&str> {
         let irc = self.borrow_internal();
-        irc.parameters
-            .iter()
-            .map(|value| str::from_utf8(value).unwrap_or_default())
+        irc.parameters.and_then(|value| str::from_utf8(value).ok())
     }
 
     pub fn source(&self) -> Option<&str> {
@@ -99,8 +97,8 @@ fn parse_message(buf: &[u8]) -> Result<IRCMessage<'_>, ParsingError> {
     };
 
     let (buf, parameters) = match parse_parameters(buf) {
-        Ok((buf, parameters)) => (buf, parameters),
-        Err(_) => (buf, vec![]),
+        Ok((buf, parameters)) => (buf, Some(parameters)),
+        Err(_) => (buf, None),
     };
 
     let (_buf, trailing) = match parse_trailing(buf) {
@@ -144,7 +142,7 @@ mod tests {
             ))
         );
         assert_eq!(msg.command, Some(&b"PRIVMSG"[..]));
-        assert_eq!(msg.parameters, vec![&b"#chan"[..]]);
+        assert_eq!(msg.parameters, Some(&b"#chan"[..]));
         assert_eq!(msg.trailing, Some(&b"hello world"[..]));
     }
 
@@ -163,7 +161,7 @@ mod tests {
         let msg = create_message(input).unwrap();
         let internal = msg.borrow_internal();
         assert_eq!(internal.command, Some(&b"PRIVMSG"[..]));
-        assert_eq!(internal.parameters, vec![&b"#chan"[..]]);
+        assert_eq!(internal.parameters, Some(&b"#chan"[..]));
         assert_eq!(internal.trailing, Some(&b"hello world"[..]));
     }
 }

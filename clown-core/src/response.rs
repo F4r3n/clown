@@ -283,11 +283,13 @@ pub struct ResponseBuilder;
 impl ResponseBuilder {
     pub fn get_reply(
         reply_number: u16,
-        parameters: &[&str],
+        parameters: Option<&str>,
         trailing: Option<&str>,
     ) -> ResponseNumber {
         use ResponseNumber::*;
-        let string_to_send = trailing.map_or_else(|| parameters.join(" "), |t| t.to_string());
+        let string_to_send = trailing
+            .map_or_else(|| parameters.unwrap_or_default(), |t| t)
+            .to_string();
         match reply_number {
             1 => Welcome(string_to_send),
             2 => YourHost(string_to_send),
@@ -363,11 +365,21 @@ impl ResponseBuilder {
             324 => ChannelModeIs(string_to_send),
             325 => UniqueOpIs(string_to_send),
             331 => NoTopic(string_to_send),
-            332 => match parameters.last() {
-                Some(param) => Topic(param.to_string(), string_to_send),
-                _ => Unknown(reply_number, string_to_send),
-            },
-            333 => {
+            332 if let Some(parameters) = parameters => {
+                let parameters = parameters
+                    .split_ascii_whitespace()
+                    .filter(|v| !v.is_empty())
+                    .collect::<Vec<&str>>();
+                match parameters.last() {
+                    Some(param) => Topic(param.to_string(), string_to_send),
+                    _ => Unknown(reply_number, string_to_send),
+                }
+            }
+            333 if let Some(parameters) = parameters => {
+                let parameters = parameters
+                    .split_ascii_whitespace()
+                    .filter(|v| !v.is_empty())
+                    .collect::<Vec<&str>>();
                 if let Some(channel) = parameters.get(1)
                     && let Some(nick) = parameters.get(2)
                     && let Some(setat) = parameters.get(3).and_then(|v| v.parse::<u64>().ok())
@@ -385,14 +397,20 @@ impl ResponseBuilder {
             349 => EndOfExceptionList(string_to_send),
             351 => Version(string_to_send),
             352 => WhoReply(string_to_send),
-            353 => NameReply(
-                parameters.get(1).unwrap_or(&"").to_string(),
-                parameters.get(2).unwrap_or(&"").to_string(),
-                string_to_send
+            353 if let Some(parameters) = parameters => {
+                let mut parameters = parameters
                     .split_ascii_whitespace()
-                    .map(|v| v.to_string())
-                    .collect::<Vec<String>>(),
-            ),
+                    .filter(|v| !v.is_empty());
+                parameters.next();
+                NameReply(
+                    parameters.next().unwrap_or(&"").to_string(),
+                    parameters.next().unwrap_or(&"").to_string(),
+                    string_to_send
+                        .split_ascii_whitespace()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<String>>(),
+                )
+            }
             354 => WhoReplyExtended(string_to_send),
             361 => KillDone(string_to_send),
             362 => Closing(string_to_send),

@@ -16,7 +16,7 @@ pub fn parse_command(buf: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
 }
 
 /// Parse IRC parameters into a Vec<&[u8]>
-pub fn parse_parameters(input: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
+pub fn parse_parameters(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let pos_colon = input
         .windows(2)
         .position(|w| w == b" :")
@@ -24,11 +24,8 @@ pub fn parse_parameters(input: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
 
     let (input, parsed) =
         take_while_m_n(0, pos_colon, |c| c != b'\r' && c != b'\n' && c != 0)(input)?;
-    let params = parsed
-        .split(|v| *v == b' ')
-        .filter(|v| !v.is_empty())
-        .collect();
-    Ok((input, params))
+
+    Ok((input, parsed.trim_ascii_start()))
 }
 
 /// Parse IRC parameters into a Vec<&[u8]>
@@ -74,7 +71,7 @@ mod tests {
     fn test_parse_parameters_middle() {
         let input = b" param1 param2 :trailing param\r\n";
         let (rest, params) = parse_parameters(input).unwrap();
-        assert_eq!(params, vec![&b"param1"[..], &b"param2"[..]]);
+        assert_eq!(params, &b"param1 param2"[..]);
         assert_eq!(rest, b" :trailing param\r\n");
     }
 
@@ -101,7 +98,7 @@ mod tests {
     fn test_parse_colon_middle() {
         let input = b" param:1 param2 :trailing param\r\n";
         let (rest, params) = parse_parameters(input).unwrap();
-        assert_eq!(params, vec![&b"param:1"[..], &b"param2"[..]]);
+        assert_eq!(params, &b"param:1 param2"[..]);
         assert_eq!(rest, b" :trailing param\r\n");
     }
 }

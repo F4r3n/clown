@@ -51,13 +51,14 @@ impl Client {
         command_sender.send(crate::command::Command::User(
             self.login_config
                 .username
-                .clone()
-                .unwrap_or_else(|| self.login_config.nickname.clone()),
+                .as_ref()
+                .unwrap_or_else(|| &self.login_config.nickname)
+                .to_string(),
             self.login_config
                 .real_name
-                .clone()
-                .unwrap_or_else(|| self.login_config.nickname.clone())
-                .clone(),
+                .as_ref()
+                .unwrap_or_else(|| &self.login_config.nickname)
+                .to_string(),
         ))?;
 
         Ok(())
