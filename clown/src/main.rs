@@ -100,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
     let mut current_view = Views::Main(main_view::MainView::new());
 
     let mut events = EventHandler::new();
-    EventHandler::enable_mouse_event()?;
+    //EventHandler::enable_mouse_event()?;
     let mut terminal = tui::init()?;
 
     list_messages.push_message(MessageEvent::AddMessageViewInfo(
@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
-    EventHandler::disable_mouse_event()?;
+    //EventHandler::disable_mouse_event()?;
 
     tui::restore()?;
     Ok(())

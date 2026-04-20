@@ -308,8 +308,33 @@ impl Completion {
                         start.saturating_add(full_phrase.len() - end.len() - 1),
                     );
                 }
+                ["/me", ..] => {
+                    if let Some(list) =
+                        self.input_completion
+                            .list(self.server_id, &self.current_channel, last)
+                    {
+                        self.state = Some(CompletionState {
+                            list,
+                            kind: CompletionKind::Nickname,
+                            start_character_pos: start,
+                            index_list: 0,
+                        });
+                    }
+                }
                 _ => {
-                    if let Some(list) = self.input_completion.list_command(end) {
+                    if phrase.ends_with(" ") && slice.len() >= 1 {
+                        if let Some(list) =
+                            self.input_completion
+                                .list(self.server_id, &self.current_channel, last)
+                        {
+                            self.state = Some(CompletionState {
+                                list,
+                                kind: CompletionKind::Nickname,
+                                start_character_pos: start,
+                                index_list: 0,
+                            });
+                        }
+                    } else if let Some(list) = self.input_completion.list_command(end) {
                         self.apply_state(list, CompletionKind::Command, start.saturating_add(1));
                     }
                 }
@@ -370,6 +395,35 @@ impl Completion {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_insert_command_nick() {
+        let mut comp = Completion::default();
+
+        comp.input_completion.add_command("me".into());
+
+        comp.input_completion.add_users(
+            ServerID::new(0),
+            "#test",
+            &vec!["tata".to_string(), "titi".to_string()],
+        );
+        comp.current_channel = "#test".to_string();
+        comp.server_id = Some(ServerID::new(0));
+
+        // Normal user completion (not first word)
+        comp.set_completion(0, 5, "/me t");
+        assert_eq!(
+            comp.get_next_completion(false),
+            Some((0, "tata".to_string()))
+        );
+
+        comp.reset();
+        comp.set_completion(0, 13, "/me tata hey tata");
+        assert_eq!(
+            comp.get_next_completion(false),
+            Some((0, "tata".to_string()))
+        );
+    }
 
     #[test]
     fn test_insert() {
