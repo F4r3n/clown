@@ -261,7 +261,7 @@ impl MainView<'_> {
                     let server_id = status.as_ref().map(|s| s.server_id);
 
                     let channel =
-                        channel.or_else(|| status.and_then(|s| s.channel.map(str::to_string)));
+                        channel.or_else(|| status.and_then(|s| s.channel.map(|v| v.to_string())));
 
                     if let Some(channel) = channel {
                         if channel.starts_with('#')
@@ -285,31 +285,33 @@ impl MainView<'_> {
                     ))
                 }
             }
-        } else {
-            let mut channel = None;
-            let result = if let Some(cstatus) = session.get_current_status()
-                && let Some(status_channel) = cstatus.channel
-            {
-                channel = Some(status_channel.to_string());
-
+        } else if let Some(cstatus) = session.get_current_status().map(|v| v.to_owned())
+            && let Some(status_channel) = cstatus.channel
+        {
+            let content = content.to_string();
+            if status_channel.eq_ignore_ascii_case(&cstatus.nickname) {
                 Some(MessageEvent::PrivMsg(
                     cstatus.server_id,
                     cstatus.nickname.to_string(),
                     status_channel.to_string(),
-                    content.to_string(),
+                    content,
                 ))
             } else {
-                None
-            };
-            if let Some(channel) = channel
-                && let Err(e) = session.send_command_current_server(
-                    clown_core::command::Command::PrivMsg(channel, content.to_string()),
-                )
-            {
-                return Some(MessageEvent::from_error(e));
+                match session.send_command_current_server(clown_core::command::Command::PrivMsg(
+                    status_channel.to_string(),
+                    content.to_string(),
+                )) {
+                    Err(e) => Some(MessageEvent::from_error(e)),
+                    _ => Some(MessageEvent::PrivMsg(
+                        cstatus.server_id,
+                        cstatus.nickname.to_string(),
+                        status_channel.to_string(),
+                        content,
+                    )),
+                }
             }
-
-            result
+        } else {
+            None
         }
     }
 

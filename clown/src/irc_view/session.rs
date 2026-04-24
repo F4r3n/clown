@@ -7,10 +7,24 @@ use clown_core::command::Command;
 use clown_core::conn::ConnectionConfig;
 use clown_core::message::ServerMessage;
 use tokio::sync::mpsc;
+
 pub struct SessionStatus<'a> {
     pub server_id: ServerID,
-    pub channel: Option<&'a str>,
-    pub nickname: &'a str,
+    pub channel: Option<std::borrow::Cow<'a, str>>,
+    pub nickname: std::borrow::Cow<'a, str>,
+}
+
+impl SessionStatus<'_> {
+    pub fn to_owned(&self) -> SessionStatus<'static> {
+        SessionStatus {
+            server_id: self.server_id.clone(),
+            channel: self
+                .channel
+                .as_ref()
+                .map(|s| std::borrow::Cow::Owned(s.to_string())),
+            nickname: std::borrow::Cow::Owned(self.nickname.to_string()),
+        }
+    }
 }
 
 pub struct Session {
@@ -177,8 +191,10 @@ impl Session {
     pub fn get_current_status<'a>(&'a self) -> Option<SessionStatus<'a>> {
         self.get_current_irc_server_model().map(|v| SessionStatus {
             server_id: v.get_server_id(),
-            channel: v.get_current_channel(),
-            nickname: v.get_current_nick(),
+            channel: v
+                .get_current_channel()
+                .map(|v| std::borrow::Cow::Borrowed(v)),
+            nickname: std::borrow::Cow::Borrowed(v.get_current_nick()),
         })
     }
 
