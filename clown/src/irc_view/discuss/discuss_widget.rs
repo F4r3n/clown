@@ -1,5 +1,5 @@
 use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
-use super::servers_messages::{Range, ServersMessages};
+use super::servers_messages::{Messages, Range, ServersMessages};
 use crate::component::Draw;
 use crate::message_irc::textwrapper::wrap_content;
 use crate::model::ServerID;
@@ -92,6 +92,28 @@ impl DiscussWidget {
         }
     }
 
+    fn find_viewport_start(&self, messages: &Messages) -> (usize, usize) {
+        let message_count = messages.len();
+        let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
+
+        let mut start_message_index = 0;
+        let mut rows_from_bottom = 0;
+        let mut rows_to_skip_in_message = 0;
+
+        for (i, line) in messages.iter().rev().enumerate() {
+            let total_rows = line.wrapped_line_count(self.content_width);
+            if rows_from_bottom + total_rows >= target_visual_top {
+                start_message_index = message_count.saturating_sub(1).saturating_sub(i);
+                rows_to_skip_in_message =
+                    (rows_from_bottom + total_rows).saturating_sub(target_visual_top);
+                break;
+            }
+            rows_from_bottom += total_rows;
+        }
+
+        (start_message_index, rows_to_skip_in_message)
+    }
+
     pub fn get_current_line_index_character(
         &self,
         mouse_pos_y: u16,
@@ -116,27 +138,8 @@ impl DiscussWidget {
             .messages
             .get_messages(self.current_server_id, &self.current_channel)
         {
-            let message_count = messages.len();
-
-            let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
-
-            let mut start_message_index = 0;
-            let mut rows_from_bottom = 0;
-            let mut rows_to_skip_in_message = 0;
-
-            for (i, line) in messages.iter().rev().enumerate() {
-                let total_rows = line.wrapped_line_count(self.content_width);
-
-                if rows_from_bottom + total_rows >= target_visual_top {
-                    start_message_index = message_count.saturating_sub(1).saturating_sub(i);
-
-                    rows_to_skip_in_message =
-                        (rows_from_bottom + total_rows).saturating_sub(target_visual_top);
-                    break;
-                }
-
-                rows_from_bottom += total_rows;
-            }
+            let (start_message_index, mut rows_to_skip_in_message) =
+                self.find_viewport_start(messages);
 
             for (line_index, line) in messages.iter().enumerate().skip(start_message_index) {
                 let total_line_rows = line.wrapped_line_count(self.content_width);
@@ -193,27 +196,8 @@ impl DiscussWidget {
             .messages
             .get_messages(self.current_server_id, &self.current_channel)
         {
-            let message_count = messages.len();
-
-            let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
-
-            let mut start_message_index = 0;
-            let mut rows_from_bottom = 0;
-            let mut rows_to_skip_in_message = 0;
-
-            for (i, line) in messages.iter().rev().enumerate() {
-                let total_rows = line.wrapped_line_count(self.content_width);
-
-                if rows_from_bottom + total_rows >= target_visual_top {
-                    start_message_index = message_count.saturating_sub(1).saturating_sub(i);
-
-                    rows_to_skip_in_message =
-                        (rows_from_bottom + total_rows).saturating_sub(target_visual_top);
-                    break;
-                }
-
-                rows_from_bottom += total_rows;
-            }
+            let (start_message_index, mut rows_to_skip_in_message) =
+                self.find_viewport_start(messages);
 
             let mut visible_rows_total = 0;
 
@@ -257,6 +241,8 @@ impl DiscussWidget {
         visible_rows
     }
 
+    //Does not properly get the number of lines
+    //but because its called each rendering time, better be fast
     fn get_fake_total_lines(&self) -> usize {
         if self.content_width == 0 {
             return 0;
@@ -294,9 +280,7 @@ impl DiscussWidget {
         let channel = channel.to_lowercase();
 
         self.messages.add_message(server_id, &channel, in_message);
-        if channel.eq_ignore_ascii_case(&self.current_channel)
-            && server_id == self.current_server_id
-        {
+        if channel == self.current_channel && server_id == self.current_server_id {
             self.add_line_scroll();
         }
 
@@ -473,11 +457,10 @@ impl Draw for DiscussWidget {
 
         let time_size = self.time_size;
         let offset = self.scroll_offset;
-        let visible_length;
-        {
-            let visible_rows = self.collect_visible_rows(Some(model));
-            visible_length = visible_rows.len();
+        let visible_rows = self.collect_visible_rows(Some(model));
 
+        let visible_length = visible_rows.len();
+        {
             let table = Table::new(
                 visible_rows,
                 [

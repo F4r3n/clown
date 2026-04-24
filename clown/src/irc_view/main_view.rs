@@ -138,154 +138,212 @@ impl MainView<'_> {
     ) -> Option<MessageEvent> {
         if let Some(parsed_message) = command::parse_command(content) {
             match parsed_message {
-                command::ClientCommand::Connect => Some(MessageEvent::Connect(
-                    ServerID::new(0), /*TODO: command should return the id */
-                )),
-                command::ClientCommand::Quit(message) => {
-                    session.send_command_all_server(Command::Quit(message.clone()));
-
-                    Some(MessageEvent::QuitAll(message))
-                }
-                command::ClientCommand::Help => Some(help()),
+                command::ClientCommand::Connect => Self::handle_cmd_connect(),
+                command::ClientCommand::Quit(message) => Self::handle_cmd_quit(message, session),
+                command::ClientCommand::Help => Self::handle_cmd_help(),
                 command::ClientCommand::Nick(new_nick) => {
-                    if let Err(e) =
-                        session.send_command_current_server(Command::Nick(new_nick.clone()))
-                    {
-                        return Some(MessageEvent::from_error(e));
-                    }
-
-                    if let Some(id) = session.get_current_server_id() {
-                        if !session.is_connected(id)
-                            && let Err(e) = model.set_nickname(id, new_nick.clone())
-                        {
-                            tracing::error!(error = %e, "Impossible to save");
-                        }
-                    }
-
-                    None
+                    Self::handle_cmd_nick(new_nick, model, session)
                 }
-                command::ClientCommand::Topic(topic) => {
-                    if let Err(e) = session.send_command_topic(topic) {
-                        return Some(MessageEvent::from_error(e));
-                    }
-
-                    None
-                }
-                command::ClientCommand::Spell(language) => {
-                    Some(MessageEvent::SpellChecker(language))
-                }
-                command::ClientCommand::Join(channel) => {
-                    if let Err(e) = session.send_command_join(channel) {
-                        return Some(MessageEvent::from_error(e));
-                    }
-
-                    None
-                }
+                command::ClientCommand::Topic(topic) => Self::handle_cmd_topic(topic, session),
+                command::ClientCommand::Spell(language) => Self::handle_cmd_spell(language),
+                command::ClientCommand::Join(channel) => Self::handle_cmd_join(channel, session),
                 command::ClientCommand::Part(channel, reason) => {
-                    if let Err(e) = session.send_command_part(channel, reason) {
-                        return Some(MessageEvent::from_error(e));
-                    }
-
-                    None
+                    Self::handle_cmd_part(channel, reason, session)
                 }
                 command::ClientCommand::Action(content) => {
-                    if let Err(e) = session.send_command_action(content.to_string()) {
-                        return Some(MessageEvent::from_error(e));
-                    }
-                    if let Some(status) = session.get_current_status()
-                        && let Some(status_channel) = status.channel
-                    {
-                        Some(MessageEvent::ActionMsg(
-                            status.server_id,
-                            status.nickname.to_string(),
-                            status_channel.to_string(),
-                            content,
-                        ))
-                    } else {
-                        None
-                    }
+                    Self::handle_cmd_action(content, session)
                 }
                 command::ClientCommand::PrivMSG(channel, content) => {
-                    if let Err(e) = session.send_command_current_server(
-                        clown_core::command::Command::PrivMsg(channel.clone(), content.clone()),
-                    ) {
-                        return Some(MessageEvent::from_error(e));
-                    }
-                    session.get_current_status().map(|v| {
-                        MessageEvent::PrivMsg(v.server_id, v.nickname.to_string(), channel, content)
-                    })
+                    Self::handle_cmd_privmsg(channel, content, session)
                 }
                 command::ClientCommand::Config(config_command_type, path, value) => {
-                    match config_command_type {
-                        command::ConfigCommand::Get => {
-                            match model.get_config_value(&path, value.as_deref()) {
-                                Ok(result) => Some(MessageEvent::AddMessageViewInfo(
-                                    None,
-                                    None,
-                                    crate::message_irc::message_content::MessageKind::Info,
-                                    format!("{path} {result}"),
-                                )),
-                                Err(e) => Some(MessageEvent::AddMessageViewInfo(
-                                    None,
-                                    None,
-                                    crate::message_irc::message_content::MessageKind::Error,
-                                    format!("{path} {e}"),
-                                )),
-                            }
-                        }
-                        command::ConfigCommand::Add | command::ConfigCommand::Set => {
-                            if let Some(value) = value {
-                                match model.set_config_value(&path, value) {
-                                    Ok(_) => Some(MessageEvent::SettingsDidChange),
-                                    Err(e) => Some(MessageEvent::AddMessageViewInfo(
-                                        None,
-                                        None,
-                                        crate::message_irc::message_content::MessageKind::Error,
-                                        format!("{} {}", path, e),
-                                    )),
-                                }
-                            } else {
-                                Some(MessageEvent::AddMessageViewInfo(
-                                    None,
-                                    None,
-                                    crate::message_irc::message_content::MessageKind::Error,
-                                    "No values to set".to_string(),
-                                ))
-                            }
-                        }
-                    }
+                    Self::handle_cmd_config(config_command_type, path, value, model)
                 }
                 command::ClientCommand::CloseBuffer(channel) => {
-                    let status = session.get_current_status();
-
-                    let server_id = status.as_ref().map(|s| s.server_id);
-
-                    let channel =
-                        channel.or_else(|| status.and_then(|s| s.channel.map(|v| v.to_string())));
-
-                    if let Some(channel) = channel {
-                        if channel.starts_with('#')
-                            && let Err(e) = session.send_command_part(Some(channel.clone()), None)
-                        {
-                            return Some(MessageEvent::from_error(e));
-                        }
-
-                        Some(MessageEvent::CloseBuffer(server_id, channel))
-                    } else {
-                        None
-                    }
+                    Self::handle_cmd_close_buffer(channel, session)
                 }
-
                 command::ClientCommand::Unknown(command_name) => {
+                    Self::handle_cmd_unknown(command_name)
+                }
+            }
+        } else {
+            Self::handle_plain_text(content, session)
+        }
+    }
+
+    fn handle_cmd_connect() -> Option<MessageEvent> {
+        Some(MessageEvent::Connect(
+            ServerID::new(0), /*TODO: command should return the id */
+        ))
+    }
+
+    fn handle_cmd_quit(message: Option<String>, session: &mut Session) -> Option<MessageEvent> {
+        session.send_command_all_server(Command::Quit(message.clone()));
+        Some(MessageEvent::QuitAll(message))
+    }
+
+    fn handle_cmd_help() -> Option<MessageEvent> {
+        Some(help())
+    }
+
+    fn handle_cmd_nick(
+        new_nick: String,
+        model: &mut Model,
+        session: &mut Session,
+    ) -> Option<MessageEvent> {
+        if let Err(e) = session.send_command_current_server(Command::Nick(new_nick.clone())) {
+            return Some(MessageEvent::from_error(e));
+        }
+
+        if let Some(id) = session.get_current_server_id() {
+            if !session.is_connected(id)
+                && let Err(e) = model.set_nickname(id, new_nick.clone())
+            {
+                tracing::error!(error = %e, "Impossible to save");
+            }
+        }
+
+        None
+    }
+
+    fn handle_cmd_topic(topic: String, session: &mut Session) -> Option<MessageEvent> {
+        if let Err(e) = session.send_command_topic(topic) {
+            return Some(MessageEvent::from_error(e));
+        }
+        None
+    }
+
+    fn handle_cmd_spell(language: Option<String>) -> Option<MessageEvent> {
+        Some(MessageEvent::SpellChecker(language))
+    }
+
+    fn handle_cmd_join(channel: String, session: &mut Session) -> Option<MessageEvent> {
+        if let Err(e) = session.send_command_join(channel) {
+            return Some(MessageEvent::from_error(e));
+        }
+        None
+    }
+
+    fn handle_cmd_part(
+        channel: Option<String>,
+        reason: Option<String>,
+        session: &mut Session,
+    ) -> Option<MessageEvent> {
+        if let Err(e) = session.send_command_part(channel, reason) {
+            return Some(MessageEvent::from_error(e));
+        }
+        None
+    }
+
+    fn handle_cmd_action(content: String, session: &mut Session) -> Option<MessageEvent> {
+        if let Err(e) = session.send_command_action(content.to_string()) {
+            return Some(MessageEvent::from_error(e));
+        }
+        if let Some(status) = session.get_current_status()
+            && let Some(status_channel) = status.channel
+        {
+            Some(MessageEvent::ActionMsg(
+                status.server_id,
+                status.nickname.to_string(),
+                status_channel.to_string(),
+                content,
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn handle_cmd_privmsg(
+        channel: String,
+        content: String,
+        session: &mut Session,
+    ) -> Option<MessageEvent> {
+        if let Err(e) = session.send_command_current_server(clown_core::command::Command::PrivMsg(
+            channel.clone(),
+            content.clone(),
+        )) {
+            return Some(MessageEvent::from_error(e));
+        }
+        session
+            .get_current_status()
+            .map(|v| MessageEvent::PrivMsg(v.server_id, v.nickname.to_string(), channel, content))
+    }
+
+    fn handle_cmd_config(
+        config_command_type: command::ConfigCommand,
+        path: String,
+        value: Option<String>,
+        model: &mut Model,
+    ) -> Option<MessageEvent> {
+        match config_command_type {
+            command::ConfigCommand::Get => match model.get_config_value(&path, value.as_deref()) {
+                Ok(result) => Some(MessageEvent::AddMessageViewInfo(
+                    None,
+                    None,
+                    crate::message_irc::message_content::MessageKind::Info,
+                    format!("{path} {result}"),
+                )),
+                Err(e) => Some(MessageEvent::AddMessageViewInfo(
+                    None,
+                    None,
+                    crate::message_irc::message_content::MessageKind::Error,
+                    format!("{path} {e}"),
+                )),
+            },
+            command::ConfigCommand::Add | command::ConfigCommand::Set => {
+                if let Some(value) = value {
+                    match model.set_config_value(&path, value) {
+                        Ok(_) => Some(MessageEvent::SettingsDidChange),
+                        Err(e) => Some(MessageEvent::AddMessageViewInfo(
+                            None,
+                            None,
+                            crate::message_irc::message_content::MessageKind::Error,
+                            format!("{} {}", path, e),
+                        )),
+                    }
+                } else {
                     Some(MessageEvent::AddMessageViewInfo(
                         None,
                         None,
                         crate::message_irc::message_content::MessageKind::Error,
-                        format!("Unknown command {}", command_name.unwrap_or_default()),
+                        "No values to set".to_string(),
                     ))
                 }
             }
-        } else if let Some(cstatus) = session.get_current_status().map(|v| v.to_owned())
+        }
+    }
+
+    fn handle_cmd_close_buffer(
+        channel: Option<String>,
+        session: &mut Session,
+    ) -> Option<MessageEvent> {
+        let status = session.get_current_status();
+        let server_id = status.as_ref().map(|s| s.server_id);
+        let channel = channel.or_else(|| status.and_then(|s| s.channel.map(|v| v.to_string())));
+
+        if let Some(channel) = channel {
+            if channel.starts_with('#')
+                && let Err(e) = session.send_command_part(Some(channel.clone()), None)
+            {
+                return Some(MessageEvent::from_error(e));
+            }
+            Some(MessageEvent::CloseBuffer(server_id, channel))
+        } else {
+            None
+        }
+    }
+
+    fn handle_cmd_unknown(command_name: Option<String>) -> Option<MessageEvent> {
+        Some(MessageEvent::AddMessageViewInfo(
+            None,
+            None,
+            crate::message_irc::message_content::MessageKind::Error,
+            format!("Unknown command {}", command_name.unwrap_or_default()),
+        ))
+    }
+
+    fn handle_plain_text(content: &str, session: &mut Session) -> Option<MessageEvent> {
+        if let Some(cstatus) = session.get_current_status().map(|v| v.to_owned())
             && let Some(status_channel) = cstatus.channel
         {
             let content = content.to_string();
@@ -662,7 +720,9 @@ impl widget_view::WidgetView for MainView<'_> {
                 self.has_focus = false;
             }
             Event::Crossterm(crossterm::event::Event::Paste(_)) => {
-                self.input.handle_events(event);
+                if let Some(message) = self.input.handle_events(event) {
+                    messages.push_message(message);
+                }
             }
             Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => {
                 if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row) {
@@ -803,6 +863,7 @@ impl widget_view::WidgetView for MainView<'_> {
             | MessageEvent::ReplaceUser(id, ..)
             | MessageEvent::PrivMsg(id, ..)
             | MessageEvent::UpdateUsers(id, ..)
+            | MessageEvent::Notice(id, ..)
             | MessageEvent::SetTopic(id, ..) => {
                 if let Err(e) = self.log(
                     model.get_connection_config(*id).as_ref(),

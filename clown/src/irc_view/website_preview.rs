@@ -50,7 +50,7 @@ impl WebsitePreview {
             false
         }
     }
-    fn get_metadata(&mut self, in_picker: &Picker) -> Option<MetaData> {
+    fn get_metadata(&mut self) -> Option<MetaData> {
         if self.metadata.is_some() {
             return self.metadata.clone();
         }
@@ -71,7 +71,7 @@ impl WebsitePreview {
             if let Some(meta) = &mut self.metadata
                 && let Some(dyn_image) = meta.take_image()
             {
-                self.image = Some(in_picker.new_resize_protocol((*dyn_image).clone()));
+                self.image = Some(self.picker.new_resize_protocol((*dyn_image).clone()));
             }
 
             self.metadata.clone()
@@ -97,7 +97,7 @@ impl Draw for WebsitePreview {
         frame: &mut Frame<'_>,
         area: Rect,
     ) {
-        if let Some(meta) = self.get_metadata(&self.picker.clone()) {
+        if let Some(meta) = self.get_metadata() {
             if self.need_redraw {
                 self.need_redraw = false;
             }

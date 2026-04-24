@@ -17,7 +17,7 @@ pub struct SessionStatus<'a> {
 impl SessionStatus<'_> {
     pub fn to_owned(&self) -> SessionStatus<'static> {
         SessionStatus {
-            server_id: self.server_id.clone(),
+            server_id: self.server_id,
             channel: self
                 .channel
                 .as_ref()
@@ -180,8 +180,8 @@ impl Session {
         {
             let channel = channel.to_string();
             self.send_command_current_server(clown_core::command::Command::PrivMsg(
-                channel.to_string(),
-                format!("\x01ACTION {}\x01", content.clone()),
+                channel,
+                format!("\x01ACTION {}\x01", content),
             ))
         } else {
             anyhow::bail!("Not connected")

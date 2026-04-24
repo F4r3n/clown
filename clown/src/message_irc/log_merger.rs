@@ -51,7 +51,7 @@ pub fn merge_logs(log_location: PathBuf) -> anyhow::Result<()> {
         // merge everyting to the last file
         //first create a copy of the current
 
-        let original = log_location.join(target_filename.clone());
+        let original = log_location.join(&target_filename);
         let backup = log_location.join(format!("{}.back", target_filename));
         let temp = log_location.join(format!("{}.temp", target_filename));
 

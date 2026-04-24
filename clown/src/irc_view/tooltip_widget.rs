@@ -162,9 +162,9 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
             #[cfg(feature = "website-preview")]
             MessageEvent::HoverURL(content) => {
                 if !self.is_open()
-                    && let Some(picker) = self.picker.clone()
+                    && let Some(picker) = self.picker.as_ref()
                 {
-                    let mut preview = WebsitePreview::from_url(content, picker);
+                    let mut preview = WebsitePreview::from_url(content, picker.clone());
                     preview.fetch_preview();
                     self.set_message(Box::new(preview));
                     self.need_redraw = true;
