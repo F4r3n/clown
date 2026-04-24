@@ -517,17 +517,23 @@ impl MessageLogger {
                 )?;
             }
 
-            MessageEvent::Notice(_, source, target, content)
-            | MessageEvent::PrivMsg(_, source, target, content) => {
-                self.write_to_target(
-                    server_address,
-                    Some(target),
-                    LoggedMessage::Message {
-                        source: Cow::Borrowed(source),
-                        content: Cow::Borrowed(content),
-                    },
-                    false,
-                )?;
+            MessageEvent::Notice(server_id, source, target, content)
+            | MessageEvent::PrivMsg(server_id, source, target, content) => {
+                if let Some(irc_model) = irc_model.as_ref()
+                    && let Some(irc_server) = irc_model.get_server(*server_id)
+                {
+                    let target = irc_server.get_target(source, target);
+
+                    self.write_to_target(
+                        server_address,
+                        Some(target),
+                        LoggedMessage::Message {
+                            source: Cow::Borrowed(source),
+                            content: Cow::Borrowed(content),
+                        },
+                        false,
+                    )?;
+                }
             }
 
             MessageEvent::ActionMsg(_, source, target, content) => {
