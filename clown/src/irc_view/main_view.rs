@@ -778,7 +778,7 @@ impl widget_view::WidgetView for MainView<'_> {
                     Some(*server_id),
                     None,
                     crate::message_irc::message_content::MessageKind::Info,
-                    format!("Try to connect to {}...", addr),
+                    format!("Try to connect to '{}'...", addr),
                 ));
                 let server_name = model.get_name(*server_id).to_string();
                 messages.push_message(MessageEvent::SelectChannel(

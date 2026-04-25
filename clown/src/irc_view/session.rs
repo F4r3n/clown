@@ -104,7 +104,7 @@ impl Session {
         if let Some(connection) = self.connections.get_mut(in_id.as_usize()) {
             *connection = None;
         }
-        self.model.clear_server(in_id);
+        //self.model.clear_server(in_id);
     }
 
     pub fn pull_all_server_message(&mut self) -> impl Iterator<Item = (ServerID, ServerMessage)> {

@@ -510,6 +510,7 @@ impl crate::component::EventHandler for DiscussWidget {
     ) -> Option<MessageEvent> {
         match event {
             MessageEvent::AddMessageViewInfo(server_id, channel, kind, in_content) => {
+                tracing::debug!("Has received a message {in_content}");
                 for content in in_content.split('\n') {
                     if let Some(message) = MessageContent::from_kind(
                         kind.clone(),
@@ -661,19 +662,12 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::JoinServer(server_id) => {
-                let server_name = model.get_name(*server_id).to_string();
-
                 self.add_server_group(
                     Some(*server_id),
                     model
                         .get_connection_config(*server_id)
                         .as_ref()
                         .map(|v| v.address.clone()),
-                );
-                self.add_line(
-                    Some(*server_id),
-                    &server_name,
-                    MessageContent::info(format!("{} has joined", server_name)),
                 );
 
                 None
