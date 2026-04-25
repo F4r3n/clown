@@ -360,7 +360,7 @@ impl CommandBuilder {
 
     // INVITE <nick> <channel>
     fn invite(parameters: &str) -> Option<Command> {
-        let parameters: Vec<&str> = Self::tokenize(parameters).collect::<Vec<&str>>();
+        let parameters = Self::tokenize(parameters).collect::<Vec<&str>>();
         if let [first, others] = parameters.as_slice() {
             Some(Command::Invite(first.to_string(), others.to_string()))
         } else {

@@ -366,11 +366,11 @@ impl ResponseBuilder {
             325 => UniqueOpIs(string_to_send),
             331 => NoTopic(string_to_send),
             332 if let Some(parameters) = parameters => {
-                let parameters = parameters
+                let parameter = parameters
                     .split_ascii_whitespace()
                     .filter(|v| !v.is_empty())
-                    .collect::<Vec<&str>>();
-                match parameters.last() {
+                    .last();
+                match parameter {
                     Some(param) => Topic(param.to_string(), string_to_send),
                     _ => Unknown(reply_number, string_to_send),
                 }

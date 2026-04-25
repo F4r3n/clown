@@ -24,9 +24,9 @@ impl MetaData {
         let parser = dom.parser();
 
         let mut meta = MetaData {
-            image_url: String::from(""),
-            title: String::from(""),
-            description: String::from(""),
+            image_url: String::new(),
+            title: String::new(),
+            description: String::new(),
             image: None,
         };
 
