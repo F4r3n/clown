@@ -308,8 +308,7 @@ impl UsersWidget {
 impl Draw for UsersWidget {
     fn render(
         &mut self,
-        model: &crate::model::Model,
-        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
+        ctx: &mut crate::context::Ctx,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -317,10 +316,13 @@ impl Draw for UsersWidget {
             self.need_redraw = false;
         }
         self.area = area;
-        if let Some(irc_model) = irc_model {
-            self.list_state
-                .render(model, irc_model, &self.list_sections, frame, area);
-        };
+        self.list_state.render(
+            &ctx.model,
+            &ctx.session.model,
+            &self.list_sections,
+            frame,
+            area,
+        );
     }
 }
 //#channel
@@ -449,8 +451,7 @@ impl crate::component::EventHandler for UsersWidget {
     }
     fn handle_actions(
         &mut self,
-        _model: &crate::model::Model,
-        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
+        ctx: &mut crate::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -461,18 +462,14 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::ReplaceUser(server_id, old, new) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
-                {
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id) {
                     self.replace_user(irc_server, old, new);
                     self.need_redraw = true;
                 }
                 None
             }
             MessageEvent::Quit(server_id, user, _reason) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
-                {
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id) {
                     self.remove_user_all_joined_channels(irc_server, user);
                     self.need_redraw = true;
                 }
@@ -480,9 +477,7 @@ impl crate::component::EventHandler for UsersWidget {
             }
             MessageEvent::PrivMsg(server_id, source, target, _)
             | MessageEvent::ActionMsg(server_id, source, target, _) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
-                {
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id) {
                     let target = irc_server.get_target(source, target);
 
                     self.add_user_global_section(Some(*server_id), target);
@@ -493,9 +488,10 @@ impl crate::component::EventHandler for UsersWidget {
             }
             MessageEvent::AddMessageViewInfo(server_id, channel, _, _) => {
                 if let Some(server_id) = server_id
-                    && let Some(irc_model) = irc_model
-                    && let Some(server_name) =
-                        irc_model.get_server_name_from_channel(*server_id, channel.as_deref())
+                    && let Some(server_name) = ctx
+                        .session
+                        .model
+                        .get_server_name_from_channel(*server_id, channel.as_deref())
                 {
                     self.highlight_user(Some(*server_id), server_name);
                 }
@@ -503,9 +499,7 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::Part(server_id, channel, user) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
-                {
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id) {
                     if irc_server.is_main_user(user) {
                         self.remove_all_users_section(Some(*server_id), channel);
                     } else {
@@ -517,12 +511,11 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::JoinServer(server_id) => {
-                if let Some(irc_model) = irc_model {
-                    let server_name = irc_model.get_server_name(*server_id).to_string();
+                let server_name = ctx.session.model.get_server_name(*server_id).to_string();
 
-                    self.add_section_index(Some(*server_id), server_name);
-                    self.need_redraw = true;
-                }
+                self.add_section_index(Some(*server_id), server_name);
+                self.need_redraw = true;
+
                 None
             }
             MessageEvent::Join(server_id, channel, user) => {
@@ -551,6 +544,7 @@ impl crate::component::EventHandler for UsersWidget {
 
     fn handle_events(
         &mut self,
+        _ctx: &mut crate::context::Ctx,
         event: &crate::event_handler::Event,
     ) -> Option<crate::message_event::MessageEvent> {
         if let Some(key) = event.get_key()
@@ -601,17 +595,30 @@ mod tests {
 
     struct WidgetTest {
         pub users_widget: UsersWidget,
-        pub irc_model: Option<IrcModel>,
+        pub ctx: crate::context::Ctx,
+    }
+
+    fn mock_ctx() -> crate::context::Ctx {
+        ctx_with_model(IrcModel::new(0))
+    }
+
+    fn ctx_with_model(irc_model: IrcModel) -> crate::context::Ctx {
+        let length = irc_model.servers.len();
+        let mut session = crate::irc_view::session::Session::new(length);
+        session.model = irc_model;
+        crate::context::Ctx {
+            model: crate::model::Model::new_empty_config(),
+            session,
+            messages: crate::irc_view::discuss::servers_messages::ServersMessages::new(
+                std::path::Path::new("").to_path_buf(),
+            ),
+        }
     }
 
     impl WidgetTest {
         fn handle_action(&mut self, action: &MessageEvent) {
-            let model = crate::model::Model::new_empty_config();
-            self.users_widget
-                .handle_actions(&model, self.irc_model.as_ref(), action);
-            if let Some(irc_model) = self.irc_model.as_mut() {
-                irc_model.handle_action(action);
-            }
+            self.users_widget.handle_actions(&mut self.ctx, action);
+            self.ctx.session.handle_action(action);
         }
 
         fn join_server(&mut self) {
@@ -675,15 +682,15 @@ mod tests {
         let user_name = "farine";
         let channel = "#rust";
         let server_name = "IRC-Server";
-        let irc_model = Some(crate::irc_view::irc_model::IrcModel::new_single_server(
+        let irc_model = crate::irc_view::irc_model::IrcModel::new_single_server(
             1,
             TEST_SERVER_ID,
             server_name.into(),
             user_name.to_string(),
-        ));
+        );
 
         let mut widget_test = WidgetTest {
-            irc_model,
+            ctx: ctx_with_model(irc_model),
             users_widget,
         };
 
@@ -751,7 +758,7 @@ mod tests {
         irc_model.init_server(TEST_SERVER_ID, "TEST".into(), user_name.to_string());
 
         let mut widget_test = WidgetTest {
-            irc_model: Some(irc_model),
+            ctx: ctx_with_model(irc_model),
             users_widget,
         };
 
@@ -783,15 +790,15 @@ mod tests {
         let users_widget = UsersWidget::new();
         let user_name = "farine";
         let channel = "#rust";
-        let irc_model = Some(crate::irc_view::irc_model::IrcModel::new_single_server(
+        let irc_model = crate::irc_view::irc_model::IrcModel::new_single_server(
             1,
             TEST_SERVER_ID,
             "TEST".into(),
             user_name.to_string(),
-        ));
+        );
 
         let mut widget_test = WidgetTest {
-            irc_model,
+            ctx: ctx_with_model(irc_model),
             users_widget,
         };
 
@@ -840,11 +847,11 @@ mod tests {
     #[test]
     fn test_close_buffer_logic() {
         let mut widget = UsersWidget::new();
+        let mut ctx = mock_ctx();
 
         // 1. Add a channel and a user
         widget.handle_actions(
-            &crate::model::Model::new_empty_config(),
-            None,
+            &mut ctx,
             &MessageEvent::Join(TEST_SERVER_ID, "#rust".to_string(), "alice".to_string()),
         );
 
@@ -852,8 +859,7 @@ mod tests {
 
         // 2. Close the channel buffer
         widget.handle_actions(
-            &crate::model::Model::new_empty_config(),
-            None,
+            &mut ctx,
             &MessageEvent::CloseBuffer(Some(TEST_SERVER_ID), "#rust".to_string()),
         );
 

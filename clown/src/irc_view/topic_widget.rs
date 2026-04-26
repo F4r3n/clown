@@ -12,17 +12,15 @@ pub struct TopicWidget {
 impl Draw for TopicWidget {
     fn render(
         &mut self,
-        _model: &crate::model::Model,
-        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
+        ctx: &mut crate::context::Ctx,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
         if self.need_redraw {
             self.need_redraw = false;
         }
-
-        if let Some(model) = irc_model
-            && let Some(server_model) = model.get_current_server()
+        let model = &ctx.session.model;
+        if let Some(server_model) = model.get_current_server()
             && let Some(channel) = server_model.get_current_channel()
             && let Some(topic) = self.get_topic(server_model.get_server_id(), channel)
         {
@@ -68,8 +66,7 @@ impl EventHandler for TopicWidget {
     }
     fn handle_actions(
         &mut self,
-        _model: &crate::model::Model,
-        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
+        _ctx: &mut crate::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -91,7 +88,11 @@ impl EventHandler for TopicWidget {
             _ => None,
         }
     }
-    fn handle_events(&mut self, _event: &crate::event_handler::Event) -> Option<MessageEvent> {
+    fn handle_events(
+        &mut self,
+        _ctx: &mut crate::context::Ctx,
+        _event: &crate::event_handler::Event,
+    ) -> Option<MessageEvent> {
         None
     }
 }
@@ -115,7 +116,8 @@ mod tests {
 
         // Simulate joining a server with ID 2
         let event = MessageEvent::JoinServer(server_id);
-        widget.handle_actions(&mock_model(), None, &event);
+        let mut ctx = mock_ctx();
+        widget.handle_actions(&mut ctx, &event);
 
         // Vector should be resized to 3 to accommodate index 2
         assert_eq!(widget.topic_collection.len(), 3);
@@ -144,8 +146,10 @@ mod tests {
         let mut widget = TopicWidget::new();
         let server_id = ServerID::new(0);
 
+        let mut ctx = mock_ctx();
+
         // 1. Initialize the server slot first
-        widget.handle_actions(&mock_model(), None, &MessageEvent::JoinServer(server_id));
+        widget.handle_actions(&mut ctx, &MessageEvent::JoinServer(server_id));
 
         // 2. Mock the SetTopic event with an Option source (Some)
         let event_with_source = MessageEvent::SetTopic(
@@ -155,7 +159,7 @@ mod tests {
             "Crusty but trusty".to_string(),
         );
 
-        widget.handle_actions(&mock_model(), None, &event_with_source);
+        widget.handle_actions(&mut ctx, &event_with_source);
         assert_eq!(
             widget.get_topic(server_id, "#rust"),
             Some("Crusty but trusty")
@@ -169,7 +173,7 @@ mod tests {
             "New Topic No Source".to_string(),
         );
 
-        widget.handle_actions(&mock_model(), None, &event_no_source);
+        widget.handle_actions(&mut ctx, &event_no_source);
         assert_eq!(
             widget.get_topic(server_id, "#rust"),
             Some("New Topic No Source")
@@ -184,8 +188,13 @@ mod tests {
     }
 
     // Helper to satisfy the Draw/EventHandler traits in tests
-    fn mock_model() -> crate::model::Model {
-        // You'll need to implement a basic mock or Default for your Model
-        crate::model::Model::new_empty_config()
+    fn mock_ctx() -> crate::context::Ctx {
+        crate::context::Ctx {
+            model: crate::model::Model::new_empty_config(),
+            session: crate::irc_view::session::Session::new(0),
+            messages: crate::irc_view::discuss::servers_messages::ServersMessages::new(
+                std::path::Path::new("").to_path_buf(),
+            ),
+        }
     }
 }

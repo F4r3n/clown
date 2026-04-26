@@ -13,7 +13,6 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
-use std::path::PathBuf;
 use std::time::Duration;
 #[derive(Debug)]
 struct Hovered {
@@ -38,7 +37,6 @@ pub struct DiscussWidget {
     follow_last: bool,
     area: Rect,
     content_width: usize,
-    messages: ServersMessages,
     current_channel: String,
     current_server_id: Option<ServerID>,
 
@@ -49,11 +47,10 @@ pub struct DiscussWidget {
 }
 
 impl DiscussWidget {
-    pub fn new(log_folder: PathBuf) -> Self {
+    pub fn new() -> Self {
         Self {
             current_channel: String::new(),
             current_server_id: None,
-            messages: ServersMessages::new(log_folder),
             scroll_offset: 0,
             max_visible_height: 10,
             follow_last: true,
@@ -73,12 +70,19 @@ impl DiscussWidget {
         self.follow_last = true;
     }
 
-    fn get_range_from_mouse(&self, row: u16, col: u16) -> Option<Range> {
+    fn get_range_from_mouse(
+        &self,
+        messages: &ServersMessages,
+        row: u16,
+        col: u16,
+    ) -> Option<Range> {
         let mouse_position = ratatui::prelude::Position::new(col, row);
 
         if self.area.contains(mouse_position) {
-            if let Some((index, character)) = self.get_current_line_index_character(row, col) {
-                self.messages.get_word_pos(
+            if let Some((index, character)) =
+                self.get_current_line_index_character(messages, row, col)
+            {
+                messages.get_word_pos(
                     self.current_server_id,
                     &self.current_channel,
                     index,
@@ -116,6 +120,7 @@ impl DiscussWidget {
 
     pub fn get_current_line_index_character(
         &self,
+        messages: &ServersMessages,
         mouse_pos_y: u16,
         mouse_pos_x: u16,
     ) -> Option<(usize, usize)> {
@@ -134,9 +139,7 @@ impl DiscussWidget {
 
         let mut visible_rows_total = 0;
 
-        if let Some(messages) = self
-            .messages
-            .get_messages(self.current_server_id, &self.current_channel)
+        if let Some(messages) = messages.get_messages(self.current_server_id, &self.current_channel)
         {
             let (start_message_index, mut rows_to_skip_in_message) =
                 self.find_viewport_start(messages);
@@ -186,15 +189,17 @@ impl DiscussWidget {
         None
     }
 
-    fn collect_visible_rows<'a>(&'a mut self, model: Option<&crate::model::Model>) -> Vec<Row<'a>> {
+    fn collect_visible_rows<'a>(
+        &'a mut self,
+        messages: &'a ServersMessages,
+        model: &crate::model::Model,
+    ) -> Vec<Row<'a>> {
         let mut visible_rows = Vec::new();
         if self.content_width == 0 {
             return visible_rows;
         }
 
-        if let Some(messages) = self
-            .messages
-            .get_messages(self.current_server_id, &self.current_channel)
+        if let Some(messages) = messages.get_messages(self.current_server_id, &self.current_channel)
         {
             let (start_message_index, mut rows_to_skip_in_message) =
                 self.find_viewport_start(messages);
@@ -214,9 +219,7 @@ impl DiscussWidget {
                 if rows_to_take == 0 && rows_remaining == 0 {
                     break;
                 }
-                let color = line
-                    .get_source()
-                    .and_then(|s| model.map(|v| v.get_color(s)));
+                let color = line.get_source().map(|s| model.get_color(s));
                 let rows = line
                     .create_rows(
                         self.content_width as u16,
@@ -243,12 +246,12 @@ impl DiscussWidget {
 
     //Does not properly get the number of lines
     //but because its called each rendering time, better be fast
-    fn get_fake_total_lines(&self) -> usize {
+    fn get_fake_total_lines(&self, messages: &ServersMessages) -> usize {
         if self.content_width == 0 {
             return 0;
         }
 
-        self.messages
+        messages
             .get_messages(self.current_server_id, &self.current_channel)
             .map(|msgs| {
                 msgs.iter()
@@ -258,9 +261,14 @@ impl DiscussWidget {
             .unwrap_or(0)
     }
 
-    pub fn has_message(&self, server_id: Option<ServerID>, channel: &str) -> bool {
+    pub fn has_message(
+        &self,
+        messages: &ServersMessages,
+        server_id: Option<ServerID>,
+        channel: &str,
+    ) -> bool {
         let channel = channel.to_lowercase();
-        self.messages.has_messages(server_id, &channel)
+        messages.has_messages(server_id, &channel)
     }
 
     fn add_line_scroll(&mut self) {
@@ -273,13 +281,14 @@ impl DiscussWidget {
 
     pub fn add_line(
         &mut self,
+        messages: &mut ServersMessages,
         server_id: Option<ServerID>,
         channel: &str,
         in_message: MessageContent,
     ) {
         let channel = channel.to_lowercase();
 
-        self.messages.add_message(server_id, &channel, in_message);
+        messages.add_message(server_id, &channel, in_message);
         if channel == self.current_channel && server_id == self.current_server_id {
             self.add_line_scroll();
         }
@@ -289,25 +298,23 @@ impl DiscussWidget {
 
     pub fn add_server_group(
         &mut self,
+        messages: &mut ServersMessages,
         server_id: Option<ServerID>,
         server_address: Option<String>,
     ) {
-        self.messages.add_server_group(server_id, server_address);
+        messages.add_server_group(server_id, server_address);
     }
 
-    pub fn add_line_current(&mut self, in_message: MessageContent) {
-        self.messages
-            .add_message(self.current_server_id, &self.current_channel, in_message);
+    pub fn add_line_current(&mut self, messages: &mut ServersMessages, in_message: MessageContent) {
+        messages.add_message(self.current_server_id, &self.current_channel, in_message);
         self.add_line_scroll();
 
         self.redraw = true;
     }
 
     //How many lines I can scroll up
-    fn possible_scroll_up(&mut self, offset: usize) -> usize {
-        if let Some(messages) = self
-            .messages
-            .get_messages(self.current_server_id, &self.current_channel)
+    fn possible_scroll_up(&mut self, messages: &ServersMessages, offset: usize) -> usize {
+        if let Some(messages) = messages.get_messages(self.current_server_id, &self.current_channel)
         {
             let current_visible = self.scroll_offset.saturating_add(self.max_visible_height);
             let mut total_rows = 0;
@@ -329,20 +336,17 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
-    fn scroll_up_logs(&mut self) {
-        if self.possible_scroll_up(1) > 0 || self.read_log(1) > 0 {
+    fn scroll_up_logs(&mut self, messages: &mut ServersMessages) {
+        if self.possible_scroll_up(messages, 1) > 0 || self.read_log(messages, 1) > 0 {
             self.scroll_up_no_check();
         }
     }
 
-    fn read_log(&mut self, number_lines: usize) -> usize {
+    fn read_log(&mut self, messages: &mut ServersMessages, number_lines: usize) -> usize {
         if let Some(server_id) = self.current_server_id {
             //cannot scroll up, maybe open the logs
-            self.messages.open_log(server_id, &self.current_channel);
-            match self
-                .messages
-                .read_log(number_lines, server_id, &self.current_channel)
-            {
+            messages.open_log(server_id, &self.current_channel);
+            match messages.read_log(number_lines, server_id, &self.current_channel) {
                 Ok(v) => v,
                 Err(e) => {
                     tracing::error!("Cannot read logs: {e}");
@@ -354,8 +358,8 @@ impl DiscussWidget {
         }
     }
 
-    fn scroll_page_up(&mut self) -> usize {
-        let offset = self.possible_scroll_up(self.max_visible_height);
+    fn scroll_page_up(&mut self, messages: &mut ServersMessages) -> usize {
+        let offset = self.possible_scroll_up(messages, self.max_visible_height);
         if offset > 0 {
             self.scroll_offset = self.scroll_offset.saturating_add(offset);
             self.follow_last = false;
@@ -364,10 +368,11 @@ impl DiscussWidget {
         offset
     }
 
-    fn scroll_page_up_logs(&mut self) {
-        let offset = self.scroll_page_up();
+    fn scroll_page_up_logs(&mut self, messages: &mut ServersMessages) {
+        let offset = self.scroll_page_up(messages);
         if offset < self.max_visible_height {
-            let log_offset = self.read_log(self.max_visible_height.saturating_sub(offset));
+            let log_offset =
+                self.read_log(messages, self.max_visible_height.saturating_sub(offset));
             if log_offset > 0 {
                 self.scroll_offset = self.scroll_offset.saturating_add(log_offset);
                 self.follow_last = false;
@@ -415,13 +420,7 @@ impl DiscussWidget {
 }
 
 impl Draw for DiscussWidget {
-    fn render(
-        &mut self,
-        model: &crate::model::Model,
-        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
-        frame: &mut Frame<'_>,
-        area: Rect,
-    ) {
+    fn render(&mut self, ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
         if self.redraw {
             self.redraw = false;
         }
@@ -453,11 +452,11 @@ impl Draw for DiscussWidget {
             .unwrap_or(0);
 
         self.content_width = content_width as usize;
-        let number_lines = self.get_fake_total_lines();
+        let number_lines = self.get_fake_total_lines(&ctx.messages);
 
         let time_size = self.time_size;
         let offset = self.scroll_offset;
-        let visible_rows = self.collect_visible_rows(Some(model));
+        let visible_rows = self.collect_visible_rows(&ctx.messages, &ctx.model);
 
         let visible_length = visible_rows.len();
         {
@@ -504,8 +503,7 @@ impl crate::component::EventHandler for DiscussWidget {
 
     fn handle_actions(
         &mut self,
-        model: &crate::model::Model,
-        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
+        ctx: &mut crate::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -518,14 +516,20 @@ impl crate::component::EventHandler for DiscussWidget {
                         content.to_string(),
                     ) {
                         if let Some(server_id) = server_id {
-                            if let Some(irc_model) = irc_model
-                                && let Some(server_name) = irc_model
-                                    .get_server_name_from_channel(*server_id, channel.as_deref())
+                            if let Some(server_name) = ctx
+                                .session
+                                .model
+                                .get_server_name_from_channel(*server_id, channel.as_deref())
                             {
-                                self.add_line(Some(*server_id), server_name, message);
+                                self.add_line(
+                                    &mut ctx.messages,
+                                    Some(*server_id),
+                                    server_name,
+                                    message,
+                                );
                             }
                         } else {
-                            self.add_line_current(message);
+                            self.add_line_current(&mut ctx.messages, message);
                         }
                     }
                 }
@@ -538,17 +542,21 @@ impl crate::component::EventHandler for DiscussWidget {
                         "{} has changed topic for {} to \"{}\"",
                         source, channel, content
                     );
-                    self.add_line(Some(*server_id), channel, MessageContent::info(data));
+                    self.add_line(
+                        &mut ctx.messages,
+                        Some(*server_id),
+                        channel,
+                        MessageContent::info(data),
+                    );
                 }
 
                 None
             }
             MessageEvent::Quit(server_id, user, reason) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
-                {
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id) {
                     for channel in irc_server.get_all_joined_channel(user) {
                         self.add_line(
+                            &mut ctx.messages,
                             Some(*server_id),
                             channel,
                             MessageContent::info(
@@ -560,8 +568,9 @@ impl crate::component::EventHandler for DiscussWidget {
                         );
                     }
 
-                    if self.has_message(Some(*server_id), user) {
+                    if self.has_message(&ctx.messages, Some(*server_id), user) {
                         self.add_line(
+                            &mut ctx.messages,
                             Some(*server_id),
                             user,
                             MessageContent::info(
@@ -579,12 +588,14 @@ impl crate::component::EventHandler for DiscussWidget {
 
             MessageEvent::Part(server_id, channel, user) => {
                 self.add_line(
+                    &mut ctx.messages,
                     Some(*server_id),
                     channel,
                     MessageContent::info(format!("{} has left {}", user, channel)),
                 );
-                if self.has_message(Some(*server_id), user) {
+                if self.has_message(&ctx.messages, Some(*server_id), user) {
                     self.add_line(
+                        &mut ctx.messages,
                         Some(*server_id),
                         user,
                         MessageContent::info(format!("{} has left {}", user, channel)),
@@ -594,8 +605,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::PrivMsg(server_id, source, target, content) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id)
                     && let Some(current_channel) = irc_server.get_current_channel()
                 {
                     let target = irc_server.get_target(source, target);
@@ -604,6 +614,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         && !target.eq_ignore_ascii_case(current_channel)
                     {
                         self.add_line(
+                            &mut ctx.messages,
                             Some(*server_id),
                             current_channel,
                             MessageContent::privmsg(target.to_string(), content.clone()),
@@ -614,6 +625,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         self.should_highlight(irc_server.get_current_nick(), content);
 
                     self.add_line(
+                        &mut ctx.messages,
                         Some(*server_id),
                         target,
                         if is_highlight {
@@ -632,12 +644,11 @@ impl crate::component::EventHandler for DiscussWidget {
                 }
             }
             MessageEvent::Notice(server_id, source, target, content) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
-                {
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id) {
                     let target = irc_server.get_target(source, target);
 
                     self.add_line(
+                        &mut ctx.messages,
                         Some(*server_id),
                         target,
                         MessageContent::notice(Some(source.clone()), content.clone()),
@@ -647,12 +658,11 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::ActionMsg(server_id, source, target, content) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
-                {
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id) {
                     let target = irc_server.get_target(source, target);
 
                     self.add_line(
+                        &mut ctx.messages,
                         Some(*server_id),
                         target,
                         MessageContent::action(source.clone(), content.clone()),
@@ -663,8 +673,9 @@ impl crate::component::EventHandler for DiscussWidget {
             }
             MessageEvent::JoinServer(server_id) => {
                 self.add_server_group(
+                    &mut ctx.messages,
                     Some(*server_id),
-                    model
+                    ctx.model
                         .get_connection_config(*server_id)
                         .as_ref()
                         .map(|v| v.address.clone()),
@@ -673,11 +684,10 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::Join(server_id, channel, source) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
-                {
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id) {
                     let main = irc_server.is_main_user(source);
                     self.add_line(
+                        &mut ctx.messages,
                         Some(*server_id),
                         channel,
                         if main {
@@ -690,7 +700,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::SettingsDidChange => {
-                if model.get_discuss_config().left_bar.time {
+                if ctx.model.get_discuss_config().left_bar.time {
                     self.time_size = TIME_LENGTH;
                 } else {
                     self.time_size = 0;
@@ -698,11 +708,10 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::ReplaceUser(server_id, old, new) => {
-                if let Some(irc_model) = irc_model
-                    && let Some(irc_server) = irc_model.get_server(*server_id)
-                {
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id) {
                     for channel in irc_server.get_all_joined_channel(old) {
                         self.add_line(
+                            &mut ctx.messages,
                             Some(*server_id),
                             channel,
                             MessageContent::info(format!(
@@ -712,7 +721,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         );
                     }
 
-                    self.messages.rename(Some(*server_id), old, new);
+                    ctx.messages.rename(Some(*server_id), old, new);
                     if self.current_channel.eq_ignore_ascii_case(old) {
                         self.current_channel = new.to_ascii_lowercase();
                     }
@@ -727,7 +736,11 @@ impl crate::component::EventHandler for DiscussWidget {
         }
     }
 
-    fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
+    fn handle_events(
+        &mut self,
+        ctx: &mut crate::context::Ctx,
+        event: &crate::event_handler::Event,
+    ) -> Option<MessageEvent> {
         if let crate::event_handler::Event::Crossterm(cross) = &event {
             match cross {
                 crossterm::event::Event::Resize(_x, _y) => {
@@ -740,15 +753,17 @@ impl crate::component::EventHandler for DiscussWidget {
                         None
                     }
                     crossterm::event::MouseEventKind::ScrollUp => {
-                        self.scroll_up_logs();
+                        self.scroll_up_logs(&mut ctx.messages);
                         None
                     }
                     crossterm::event::MouseEventKind::Down(button) => {
                         if button == MouseButton::Left {
-                            if let Some(range) =
-                                self.get_range_from_mouse(mouse_event.row, mouse_event.column)
-                            {
-                                self.messages
+                            if let Some(range) = self.get_range_from_mouse(
+                                &ctx.messages,
+                                mouse_event.row,
+                                mouse_event.column,
+                            ) {
+                                ctx.messages
                                     .get_url_from_range(
                                         self.current_server_id,
                                         &self.current_channel,
@@ -764,9 +779,11 @@ impl crate::component::EventHandler for DiscussWidget {
                     }
                     #[cfg(feature = "website-preview")]
                     crossterm::event::MouseEventKind::Moved => {
-                        if let Some(range) =
-                            self.get_range_from_mouse(mouse_event.row, mouse_event.column)
-                        {
+                        if let Some(range) = self.get_range_from_mouse(
+                            &ctx.messages,
+                            mouse_event.row,
+                            mouse_event.column,
+                        ) {
                             let mut should_clear = false;
                             let result = if let Some(last_hovered) = &mut self.last_hovered
                                 && range.eq(&last_hovered.range)
@@ -774,7 +791,7 @@ impl crate::component::EventHandler for DiscussWidget {
                                 if std::time::Instant::now().duration_since(last_hovered.time)
                                     > Duration::from_secs(2)
                                 {
-                                    if let Some(url) = self.messages.get_url_from_range(
+                                    if let Some(url) = ctx.messages.get_url_from_range(
                                         self.current_server_id,
                                         &self.current_channel,
                                         &last_hovered.range,
@@ -807,7 +824,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 },
                 crossterm::event::Event::Key(key_event) => match key_event.code {
                     KeyCode::PageUp => {
-                        self.scroll_page_up_logs();
+                        self.scroll_page_up_logs(&mut ctx.messages);
                         None
                     }
                     KeyCode::PageDown => {
@@ -827,7 +844,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         if std::time::Instant::now().duration_since(last_hovered.time)
                             > Duration::from_secs(2)
                         {
-                            if let Some(url) = self.messages.get_url_from_range(
+                            if let Some(url) = ctx.messages.get_url_from_range(
                                 self.current_server_id,
                                 &self.current_channel,
                                 &last_hovered.range,
@@ -860,29 +877,40 @@ impl crate::component::EventHandler for DiscussWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::Model;
+
     const TEST_SERVER_ID: ServerID = ServerID::new(0);
+
+    fn new_messages() -> ServersMessages {
+        ServersMessages::new(std::path::Path::new("").to_path_buf())
+    }
+
     #[test]
     fn test_find_index() {
         pub const TEXT_START: usize = TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH;
 
-        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
+        let mut messages = new_messages();
+        let mut discuss = DiscussWidget::new();
         discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
-        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
+        discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
 
         discuss.content_width = 4;
         discuss.max_visible_height = 4;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "test",
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "test",
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "test",
             MessageContent::message(None, "HELLO".to_string()),
@@ -892,86 +920,93 @@ mod tests {
         assert_eq!(discuss.scroll_offset, 0);
         let mouse_x = TEXT_START as u16;
         assert_eq!(
-            discuss.get_current_line_index_character(0, mouse_x),
+            discuss.get_current_line_index_character(&messages, 0, mouse_x),
             Some((1, 0))
         );
         assert_eq!(
-            discuss.get_current_line_index_character(2, mouse_x),
+            discuss.get_current_line_index_character(&messages, 2, mouse_x),
             Some((2, 0))
         );
         assert_eq!(
-            discuss.get_current_line_index_character(1, mouse_x),
+            discuss.get_current_line_index_character(&messages, 1, mouse_x),
             Some((1, 4))
         );
 
         assert_eq!(
-            discuss.get_current_line_index_character(3, mouse_x),
+            discuss.get_current_line_index_character(&messages, 3, mouse_x),
             Some((2, 4))
         );
-        assert_eq!(discuss.get_current_line_index_character(4, mouse_x), None);
+        assert_eq!(
+            discuss.get_current_line_index_character(&messages, 4, mouse_x),
+            None
+        );
 
         discuss.scroll_offset = 1;
         discuss.area.width = (TEXT_START + discuss.content_width) as u16;
         assert_eq!(
-            discuss.get_current_line_index_character(0, mouse_x),
+            discuss.get_current_line_index_character(&messages, 0, mouse_x),
             Some((0, 4))
         );
         assert_eq!(
-            discuss.get_current_line_index_character(1, mouse_x),
+            discuss.get_current_line_index_character(&messages, 1, mouse_x),
             Some((1, 0))
         );
         assert_eq!(
-            discuss.get_current_line_index_character(2, mouse_x),
+            discuss.get_current_line_index_character(&messages, 2, mouse_x),
             Some((1, 4))
         );
 
         assert_eq!(
-            discuss.get_current_line_index_character(3, mouse_x),
+            discuss.get_current_line_index_character(&messages, 3, mouse_x),
             Some((2, 0))
         );
         assert_eq!(
-            discuss.get_current_line_index_character(4, mouse_x),
+            discuss.get_current_line_index_character(&messages, 4, mouse_x),
             Some((2, 4))
         );
         assert_eq!(
-            discuss.get_current_line_index_character(0, (TEXT_START + 100) as u16),
+            discuss.get_current_line_index_character(&messages, 0, (TEXT_START + 100) as u16),
             None
         );
     }
 
     #[test]
     fn test_can_scroll_up() {
-        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
+        let mut messages = new_messages();
+        let mut discuss = DiscussWidget::new();
         discuss.set_current_channel(Some(TEST_SERVER_ID), "");
 
         discuss.content_width = 5;
         discuss.max_visible_height = 3;
-        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
+        discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "",
             MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "",
             MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "",
             MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.scroll_offset = 0;
-        assert_eq!(discuss.possible_scroll_up(10), 10);
-        assert_eq!(discuss.possible_scroll_up(100), 12);
+        assert_eq!(discuss.possible_scroll_up(&messages, 10), 10);
+        assert_eq!(discuss.possible_scroll_up(&messages, 100), 12);
     }
 
     #[test]
     fn test_should_hightlight() {
         let current_nick = "nickname".to_string();
 
-        let discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
+        let discuss = DiscussWidget::new();
         assert!(discuss.should_highlight(&current_nick, "my nickname is "));
         assert!(!discuss.should_highlight(&current_nick, "my nicknameis "));
         assert!(discuss.should_highlight(&current_nick, "nickname"));
@@ -982,69 +1017,78 @@ mod tests {
 
     #[test]
     fn test_render_rows() {
-        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
+        let mut messages = new_messages();
+        let model = Model::new_empty_config();
+        let mut discuss = DiscussWidget::new();
         discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
-        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
+        discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
 
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "test",
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "test",
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "test",
             MessageContent::message(None, "HELLO".to_string()),
         );
 
         discuss.content_width = 10;
-        assert_eq!(discuss.collect_visible_rows(None).len(), 3);
+        assert_eq!(discuss.collect_visible_rows(&messages, &model).len(), 3);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
-        assert_eq!(discuss.collect_visible_rows(None).len(), 6);
+        assert_eq!(discuss.collect_visible_rows(&messages, &model).len(), 6);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows(None);
+        let rows = discuss.collect_visible_rows(&messages, &model);
         assert_eq!(rows.len(), 2);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 1;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows(None);
+        let rows = discuss.collect_visible_rows(&messages, &model);
         assert_eq!(rows.len(), 2);
     }
 
     #[test]
     fn test_fake_nb_rows() {
-        let mut discuss = DiscussWidget::new(std::path::Path::new("").to_path_buf());
+        let mut messages = new_messages();
+        let mut discuss = DiscussWidget::new();
         discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
-        discuss.add_server_group(Some(TEST_SERVER_ID), Some("".into()));
+        discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
 
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "test",
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "test",
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
+            &mut messages,
             Some(TEST_SERVER_ID),
             "test",
             MessageContent::message(None, "HELLO".to_string()),
         );
 
         discuss.content_width = 10;
-        assert_eq!(discuss.get_fake_total_lines(), 3);
+        assert_eq!(discuss.get_fake_total_lines(&messages), 3);
     }
 }

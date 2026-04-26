@@ -1,6 +1,6 @@
 pub mod color_user;
 mod command;
-mod discuss;
+pub mod discuss;
 pub mod irc_model;
 pub mod main_view;
 

@@ -72,7 +72,7 @@ impl MainView<'_> {
         //list_components.push()
         let log_dir = crate::project_path::ProjectPath::log_dir()
             .unwrap_or(std::env::current_dir().unwrap_or(std::path::Path::new("").to_path_buf()));
-        let mut discuss_widget = discuss_widget::DiscussWidget::new(log_dir.clone());
+        let mut discuss_widget = discuss_widget::DiscussWidget::new();
         discuss_widget.set_current_channel(None, "Global");
         let messages_display = Component::new("messages", discuss_widget);
         let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
@@ -132,42 +132,47 @@ impl MainView<'_> {
 
     fn update_input(
         &mut self,
-        model: &mut Model,
-        session: &mut Session,
+        ctx: &mut crate::context::Ctx,
         content: &str,
     ) -> Option<MessageEvent> {
         if let Some(parsed_message) = command::parse_command(content) {
             match parsed_message {
                 command::ClientCommand::Connect => Self::handle_cmd_connect(),
-                command::ClientCommand::Quit(message) => Self::handle_cmd_quit(message, session),
+                command::ClientCommand::Quit(message) => {
+                    Self::handle_cmd_quit(message, &mut ctx.session)
+                }
                 command::ClientCommand::Help => Self::handle_cmd_help(),
                 command::ClientCommand::Nick(new_nick) => {
-                    Self::handle_cmd_nick(new_nick, model, session)
+                    Self::handle_cmd_nick(new_nick, &mut ctx.model, &mut ctx.session)
                 }
-                command::ClientCommand::Topic(topic) => Self::handle_cmd_topic(topic, session),
+                command::ClientCommand::Topic(topic) => {
+                    Self::handle_cmd_topic(topic, &mut ctx.session)
+                }
                 command::ClientCommand::Spell(language) => Self::handle_cmd_spell(language),
-                command::ClientCommand::Join(channel) => Self::handle_cmd_join(channel, session),
+                command::ClientCommand::Join(channel) => {
+                    Self::handle_cmd_join(channel, &mut ctx.session)
+                }
                 command::ClientCommand::Part(channel, reason) => {
-                    Self::handle_cmd_part(channel, reason, session)
+                    Self::handle_cmd_part(channel, reason, &mut ctx.session)
                 }
                 command::ClientCommand::Action(content) => {
-                    Self::handle_cmd_action(content, session)
+                    Self::handle_cmd_action(content, &mut ctx.session)
                 }
                 command::ClientCommand::PrivMSG(channel, content) => {
-                    Self::handle_cmd_privmsg(channel, content, session)
+                    Self::handle_cmd_privmsg(channel, content, &mut ctx.session)
                 }
                 command::ClientCommand::Config(config_command_type, path, value) => {
-                    Self::handle_cmd_config(config_command_type, path, value, model)
+                    Self::handle_cmd_config(config_command_type, path, value, &mut ctx.model)
                 }
                 command::ClientCommand::CloseBuffer(channel) => {
-                    Self::handle_cmd_close_buffer(channel, session)
+                    Self::handle_cmd_close_buffer(channel, &mut ctx.session)
                 }
                 command::ClientCommand::Unknown(command_name) => {
                     Self::handle_cmd_unknown(command_name)
                 }
             }
         } else {
-            Self::handle_plain_text(content, session)
+            Self::handle_plain_text(content, &mut ctx.session)
         }
     }
 
@@ -373,21 +378,16 @@ impl MainView<'_> {
         }
     }
 
-    fn handle_irc(
-        &mut self,
-        model: &mut Model,
-        session: &mut Session,
-        messages: &mut MessageQueue,
-    ) {
-        if model.running_state == RunningState::Start {
-            model.running_state = RunningState::Running;
+    fn handle_irc(&mut self, ctx: &mut crate::context::Ctx, messages: &mut MessageQueue) {
+        if ctx.model.running_state == RunningState::Start {
+            ctx.model.running_state = RunningState::Running;
 
-            for id in model.is_autojoin() {
+            for id in ctx.model.is_autojoin() {
                 messages.push_message(MessageEvent::Connect(id));
             }
         } else {
             let mut to_delete = vec![];
-            for (server_id, msg) in session.pull_all_server_error() {
+            for (server_id, msg) in ctx.session.pull_all_server_error() {
                 messages.push_message(MessageEvent::AddMessageViewInfo(
                     Some(server_id),
                     None,
@@ -403,8 +403,8 @@ impl MainView<'_> {
             }
 
             for server_id in to_delete {
-                if session.is_irc_finished(server_id) {
-                    session.clear_connection(server_id);
+                if ctx.session.is_irc_finished(server_id) {
+                    ctx.session.clear_connection(server_id);
                 }
             }
         }
@@ -414,12 +414,11 @@ impl MainView<'_> {
 
     fn handle_tick(
         &mut self,
-        model: &mut Model,
-        session: &mut Session,
+        ctx: &mut crate::context::Ctx,
         event: &Event,
         messages: &mut MessageQueue,
     ) {
-        self.handle_irc(model, session, messages);
+        self.handle_irc(ctx, messages);
         if self.log_instant.elapsed() > std::time::Duration::from_secs(LOG_FLUSH_CHECK_TIMER) {
             if let Err(e) = self.flush_log() {
                 tracing::error!(error = %e, "Log flush failed");
@@ -427,20 +426,15 @@ impl MainView<'_> {
             self.log_instant = std::time::Instant::now();
         }
         for mut child in self.children() {
-            if let Some(message) = child.handle_events(event) {
+            if let Some(message) = child.handle_events(ctx, event) {
                 messages.push_message(message);
             }
         }
     }
 
-    fn update_pull_irc(
-        &mut self,
-        model: &mut Model,
-        session: &mut Session,
-        messages: &mut MessageQueue,
-    ) {
+    fn update_pull_irc(&mut self, ctx: &mut crate::context::Ctx, messages: &mut MessageQueue) {
         let mut server_to_init = vec![];
-        for (server_id, recieved) in session.pull_all_server_message() {
+        for (server_id, recieved) in ctx.session.pull_all_server_message() {
             let reply = recieved.reply();
             let source = recieved.source().map(|v| v.to_string());
 
@@ -470,10 +464,11 @@ impl MainView<'_> {
                     }
                     Command::Nick(new_user) => {
                         if let Some(source) = source
-                            && let Some(nickname) = model.get_nickname(server_id)
+                            && let Some(nickname) = ctx.model.get_nickname(server_id)
                         {
                             if source.eq_ignore_ascii_case(nickname) {
-                                if let Err(e) = model.set_nickname(server_id, new_user.clone()) {
+                                if let Err(e) = ctx.model.set_nickname(server_id, new_user.clone())
+                                {
                                     tracing::error!(error = %e, "Impossible to save");
                                 }
                             }
@@ -616,10 +611,11 @@ impl MainView<'_> {
         }
 
         for id in server_to_init {
-            session.reset_retry();
-            if model.is_autojoin_by_id(id) {
-                for channel in model.get_channels(id) {
-                    if let Err(e) = session
+            ctx.session.reset_retry();
+            if ctx.model.is_autojoin_by_id(id) {
+                for channel in ctx.model.get_channels(id) {
+                    if let Err(e) = ctx
+                        .session
                         .send_command(id, clown_core::command::Command::Join(channel.to_string()))
                     {
                         messages.push_message(e.into());
@@ -643,7 +639,7 @@ impl widget_view::WidgetView for MainView<'_> {
         }
         false
     }
-    fn view(&mut self, model: &mut Model, session: &mut Session, frame: &mut Frame<'_>) {
+    fn view(&mut self, ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>) {
         if self.need_redraw {
             self.need_redraw = false;
         }
@@ -651,7 +647,11 @@ impl widget_view::WidgetView for MainView<'_> {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(if model.is_topic_ui_enabled() { 1 } else { 0 }), // Topic area
+                Constraint::Length(if ctx.model.is_topic_ui_enabled() {
+                    1
+                } else {
+                    0
+                }), // Topic area
                 Constraint::Percentage(100), // Messages area
                 Constraint::Length(2),       // Input area
             ])
@@ -662,39 +662,37 @@ impl widget_view::WidgetView for MainView<'_> {
                 .direction(Direction::Horizontal)
                 .constraints([
                     Constraint::Percentage(100), // Messages
-                    Constraint::Min(if model.is_users_ui_enabled() { 15 } else { 0 }), // List Users
+                    Constraint::Min(if ctx.model.is_users_ui_enabled() {
+                        15
+                    } else {
+                        0
+                    }), // List Users
                 ])
                 .split(*message_area_layout);
 
             if let Some(message_area) = top_layout.first() {
-                self.messages_display
-                    .render(model, Some(&session.model), frame, *message_area);
-                self.tooltip_widget
-                    .render(model, Some(&session.model), frame, *message_area);
+                self.messages_display.render(ctx, frame, *message_area);
+                self.tooltip_widget.render(ctx, frame, *message_area);
             }
 
             if let Some(list_users) = top_layout.get(1) {
-                self.list_users_view
-                    .render(model, Some(&session.model), frame, *list_users);
+                self.list_users_view.render(ctx, frame, *list_users);
             }
         }
 
         // Render widgets
         if let Some(input_area) = main_layout.get(2) {
-            self.input
-                .render(model, Some(&session.model), frame, *input_area);
+            self.input.render(ctx, frame, *input_area);
         }
 
         if let Some(topic_area) = main_layout.first() {
-            self.topic_view
-                .render(model, Some(&session.model), frame, *topic_area);
+            self.topic_view.render(ctx, frame, *topic_area);
         }
     }
 
     fn handle_event(
         &mut self,
-        model: &mut Model,
-        session: &mut Session,
+        ctx: &mut crate::context::Ctx,
         event: &Event,
         messages: &mut MessageQueue,
     ) {
@@ -704,7 +702,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 // Pass event to focused widget
                 if self.has_focus {
                     for child in self.children().iter_mut() {
-                        if let Some(new_message) = child.handle_events(event) {
+                        if let Some(new_message) = child.handle_events(ctx, event) {
                             messages.push_message(new_message);
                         }
                     }
@@ -720,7 +718,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 self.has_focus = false;
             }
             Event::Crossterm(crossterm::event::Event::Paste(_)) => {
-                if let Some(message) = self.input.handle_events(event) {
+                if let Some(message) = self.input.handle_events(ctx, event) {
                     messages.push_message(message);
                 }
             }
@@ -728,7 +726,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row) {
                     for child in self.children().iter_mut() {
                         if child.get_id().eq(&id)
-                            && let Some(new_message) = child.handle_events(event)
+                            && let Some(new_message) = child.handle_events(ctx, event)
                         {
                             messages.push_message(new_message);
                         }
@@ -736,7 +734,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 }
             }
             Event::Tick => {
-                self.handle_tick(model, session, event, messages);
+                self.handle_tick(ctx, event, messages);
             }
             _ => {}
         };
@@ -744,15 +742,14 @@ impl widget_view::WidgetView for MainView<'_> {
 
     fn update(
         &mut self,
-        model: &mut Model,
-        session: &mut Session,
+        ctx: &mut crate::context::Ctx,
         msg: MessageEvent,
         messages: &mut MessageQueue,
     ) {
         match &msg {
             MessageEvent::MessageInput(content) => {
                 for m in content.split(['\r', '\n']).filter(|s| !s.is_empty()) {
-                    if let Some(v) = self.update_input(model, session, m) {
+                    if let Some(v) = self.update_input(ctx, m) {
                         messages.push_message(v);
                     }
                 }
@@ -770,7 +767,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 return;
             }
             MessageEvent::Connect(server_id) => {
-                let addr = model.get_address(*server_id).unwrap_or("No address");
+                let addr = ctx.model.get_address(*server_id).unwrap_or("No address");
 
                 messages.push_message(MessageEvent::JoinServer(*server_id));
 
@@ -780,17 +777,18 @@ impl widget_view::WidgetView for MainView<'_> {
                     crate::message_irc::message_content::MessageKind::Info,
                     format!("Try to connect to '{}'...", addr),
                 ));
-                let server_name = model.get_name(*server_id).to_string();
+                let server_name = ctx.model.get_name(*server_id).to_string();
                 messages.push_message(MessageEvent::SelectChannel(
                     Some(*server_id),
                     server_name.clone(),
                 ));
 
-                if let Some(conn_cfg) = model.get_connection_config(*server_id)
-                    && let Some(login_cfg) = model.get_login_config(*server_id)
+                if let Some(conn_cfg) = ctx.model.get_connection_config(*server_id)
+                    && let Some(login_cfg) = ctx.model.get_login_config(*server_id)
                 {
-                    if session.is_irc_finished(*server_id) {
-                        if let Err(e) = session.init_connection(*server_id, conn_cfg, login_cfg) {
+                    if ctx.session.is_irc_finished(*server_id) {
+                        if let Err(e) = ctx.session.init_connection(*server_id, conn_cfg, login_cfg)
+                        {
                             tracing::error!(error =%e);
                             messages.push_message(MessageEvent::AddMessageViewInfo(
                                 Some(*server_id),
@@ -799,8 +797,9 @@ impl widget_view::WidgetView for MainView<'_> {
                                 e.to_string(),
                             ));
                         } else {
-                            let nick = model.get_nickname(*server_id).unwrap_or("No Nick");
-                            session.init_irc_model(nick.to_string(), *server_id, server_name);
+                            let nick = ctx.model.get_nickname(*server_id).unwrap_or("No Nick");
+                            ctx.session
+                                .init_irc_model(nick.to_string(), *server_id, server_name);
                         }
                     } else {
                         messages.push_message(MessageEvent::AddMessageViewInfo(
@@ -821,9 +820,10 @@ impl widget_view::WidgetView for MainView<'_> {
                 return;
             }
             MessageEvent::DisConnect(server_id) => {
-                if !session.is_irc_finished(*server_id) {
-                    if let Err(e) =
-                        session.send_command(*server_id, clown_core::command::Command::Quit(None))
+                if !ctx.session.is_irc_finished(*server_id) {
+                    if let Err(e) = ctx
+                        .session
+                        .send_command(*server_id, clown_core::command::Command::Quit(None))
                     {
                         messages.push_message(e.into());
                     }
@@ -837,22 +837,22 @@ impl widget_view::WidgetView for MainView<'_> {
                 }
             }
             MessageEvent::PullIRC => {
-                self.update_pull_irc(model, session, messages);
+                self.update_pull_irc(ctx, messages);
                 return;
             }
             MessageEvent::QuitAll(reason) => {
-                for id in session.iter_valid_connection_id() {
-                    if let Some(nickname) = model.get_nickname(id)
+                for id in ctx.session.iter_valid_connection_id() {
+                    if let Some(nickname) = ctx.model.get_nickname(id)
                         && let Err(e) = self.log(
-                            model.get_connection_config(id).as_ref(),
-                            Some(&session.model),
+                            ctx.model.get_connection_config(id).as_ref(),
+                            Some(&ctx.session.model),
                             &MessageEvent::Quit(id, nickname.to_string(), reason.clone()),
                         )
                     {
                         tracing::error!(error = %e, "Cannot write logs");
                     }
                 }
-                model.running_state = RunningState::Done;
+                ctx.model.running_state = RunningState::Done;
             }
             // Handle Logging for IRC events
             MessageEvent::ActionMsg(id, ..)
@@ -866,8 +866,8 @@ impl widget_view::WidgetView for MainView<'_> {
             | MessageEvent::Notice(id, ..)
             | MessageEvent::SetTopic(id, ..) => {
                 if let Err(e) = self.log(
-                    model.get_connection_config(*id).as_ref(),
-                    Some(&session.model),
+                    ctx.model.get_connection_config(*id).as_ref(),
+                    Some(&ctx.session.model),
                     &msg,
                 ) {
                     tracing::error!(error = %e, "Cannot write logs");
@@ -877,10 +877,10 @@ impl widget_view::WidgetView for MainView<'_> {
         }
 
         for child in self.children().iter_mut() {
-            if let Some(new_msg) = child.handle_actions(model, Some(&session.model), &msg) {
+            if let Some(new_msg) = child.handle_actions(ctx, &msg) {
                 messages.push_message(new_msg);
             }
         }
-        session.handle_action(&msg);
+        ctx.session.handle_action(&msg);
     }
 }

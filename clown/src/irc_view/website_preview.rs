@@ -90,13 +90,7 @@ impl DrawToolTip for WebsitePreview {
 
 #[cfg(feature = "website-preview")]
 impl Draw for WebsitePreview {
-    fn render(
-        &mut self,
-        _model: &crate::model::Model,
-        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
-        frame: &mut Frame<'_>,
-        area: Rect,
-    ) {
+    fn render(&mut self, _ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
         if let Some(meta) = self.get_metadata() {
             if self.need_redraw {
                 self.need_redraw = false;

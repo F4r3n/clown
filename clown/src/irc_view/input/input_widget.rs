@@ -4,7 +4,6 @@ use super::history::InputHistory;
 use {super::spell_checker::SpellChecker, crate::message_irc::message_content::MessageKind};
 
 use crate::component::Draw;
-use crate::irc_view::irc_model::IrcModel;
 use crate::message_event::MessageEvent;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -32,13 +31,7 @@ pub struct CInput {
 }
 
 impl Draw for CInput {
-    fn render(
-        &mut self,
-        _model: &crate::model::Model,
-        _irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
-        frame: &mut Frame<'_>,
-        area: Rect,
-    ) {
+    fn render(&mut self, _ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
         if self.redraw {
             self.redraw = false;
@@ -76,8 +69,7 @@ impl crate::component::EventHandler for CInput {
     }
     fn handle_actions(
         &mut self,
-        model: &crate::model::Model,
-        irc_model: Option<&IrcModel>,
+        ctx: &mut crate::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -112,7 +104,7 @@ impl crate::component::EventHandler for CInput {
             }
             MessageEvent::SettingsDidChange => {
                 //self.set_completion_config_list(Model::list_fields_config().into_iter());
-                let (empty, middle) = model.get_completion_behaviour();
+                let (empty, middle) = ctx.model.get_completion_behaviour();
                 self.completion.set_completion_behaviour(
                     empty.map(|v| v.to_string()).unwrap_or_default(),
                     middle.map(|v| v.to_string()).unwrap_or_default(),
@@ -129,16 +121,14 @@ impl crate::component::EventHandler for CInput {
                 None
             }
             MessageEvent::Part(server_id, channel, user) => {
-                if let Some(irc_model) = irc_model {
-                    if irc_model.is_main_user(*server_id, user) {
-                        self.completion
-                            .input_completion
-                            .remove_channel(*server_id, channel);
-                    } else {
-                        self.completion
-                            .input_completion
-                            .disable_user(*server_id, channel, user);
-                    }
+                if ctx.session.model.is_main_user(*server_id, user) {
+                    self.completion
+                        .input_completion
+                        .remove_channel(*server_id, channel);
+                } else {
+                    self.completion
+                        .input_completion
+                        .disable_user(*server_id, channel, user);
                 }
 
                 None
@@ -147,7 +137,11 @@ impl crate::component::EventHandler for CInput {
         }
     }
 
-    fn handle_events(&mut self, event: &crate::event_handler::Event) -> Option<MessageEvent> {
+    fn handle_events(
+        &mut self,
+        _ctx: &mut crate::context::Ctx,
+        event: &crate::event_handler::Event,
+    ) -> Option<MessageEvent> {
         match event {
             crate::event_handler::Event::Crossterm(event) => {
                 if let Some(key_event) = event.as_key_event() {

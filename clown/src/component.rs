@@ -1,25 +1,21 @@
-use crate::irc_view::irc_model;
+use crate::event_handler::Event;
 use crate::message_event::MessageEvent;
-use crate::{event_handler::Event, model::Model};
 use ratatui::{Frame, layout::Rect};
 use std::ops::{Deref, DerefMut};
 
 pub trait Draw {
-    fn render(
-        &mut self,
-        model: &Model,
-        irc_model: Option<&irc_model::IrcModel>,
-        frame: &mut Frame<'_>,
-        area: Rect,
-    );
+    fn render(&mut self, ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect);
 }
 
 pub trait EventHandler {
-    fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>;
+    fn handle_events(
+        &mut self,
+        ctx: &mut crate::context::Ctx,
+        event: &Event,
+    ) -> Option<MessageEvent>;
     fn handle_actions(
         &mut self,
-        model: &Model,
-        irc_model: Option<&irc_model::IrcModel>,
+        ctx: &mut crate::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent>;
     fn need_redraw(&self) -> bool;
@@ -44,11 +40,15 @@ impl<'a, T> Component<'a, T> {
         &self.id
     }
 
-    pub fn handle_events(&mut self, event: &Event) -> Option<MessageEvent>
+    pub fn handle_events(
+        &mut self,
+        ctx: &mut crate::context::Ctx,
+        event: &Event,
+    ) -> Option<MessageEvent>
     where
         T: EventHandler,
     {
-        self.inner.handle_events(event)
+        self.inner.handle_events(ctx, event)
     }
 
     pub fn need_redraw(&self) -> bool
@@ -60,26 +60,20 @@ impl<'a, T> Component<'a, T> {
 
     pub fn handle_actions(
         &mut self,
-        model: &Model,
-        irc_model: Option<&irc_model::IrcModel>,
+        ctx: &mut crate::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent>
     where
         T: EventHandler,
     {
-        self.inner.handle_actions(model, irc_model, event)
+        self.inner.handle_actions(ctx, event)
     }
 
-    pub fn render(
-        &mut self,
-        model: &Model,
-        irc_model: Option<&irc_model::IrcModel>,
-        frame: &mut Frame<'_>,
-        area: Rect,
-    ) where
+    pub fn render(&mut self, ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect)
+    where
         T: Draw,
     {
-        self.inner.render(model, irc_model, frame, area);
+        self.inner.render(ctx, frame, area);
     }
 
     pub fn to_child_mut<'b>(&'b mut self) -> Component<'b, Child<'b>>
@@ -125,8 +119,12 @@ impl DerefMut for Child<'_> {
 }
 
 impl EventHandler for Child<'_> {
-    fn handle_events(&mut self, event: &Event) -> Option<MessageEvent> {
-        self.deref_mut().handle_events(event)
+    fn handle_events(
+        &mut self,
+        ctx: &mut crate::context::Ctx,
+        event: &Event,
+    ) -> Option<MessageEvent> {
+        self.deref_mut().handle_events(ctx, event)
     }
 
     fn get_area(&self) -> Rect {
@@ -135,11 +133,10 @@ impl EventHandler for Child<'_> {
 
     fn handle_actions(
         &mut self,
-        model: &Model,
-        irc_model: Option<&irc_model::IrcModel>,
+        ctx: &mut crate::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
-        self.deref_mut().handle_actions(model, irc_model, event)
+        self.deref_mut().handle_actions(ctx, event)
     }
 
     fn need_redraw(&self) -> bool {
