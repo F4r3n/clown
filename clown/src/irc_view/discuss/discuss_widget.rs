@@ -510,11 +510,9 @@ impl crate::component::EventHandler for DiscussWidget {
             MessageEvent::AddMessageViewInfo(server_id, channel, kind, in_content) => {
                 tracing::debug!("Has received a message {in_content}");
                 for content in in_content.split('\n') {
-                    if let Some(message) = MessageContent::from_kind(
-                        kind.clone(),
-                        channel.clone(),
-                        content.to_string(),
-                    ) {
+                    if let Some(message) =
+                        MessageContent::from_kind(*kind, channel.clone(), content.to_string())
+                    {
                         if let Some(server_id) = server_id {
                             if let Some(server_name) = ctx
                                 .session
@@ -587,20 +585,21 @@ impl crate::component::EventHandler for DiscussWidget {
             }
 
             MessageEvent::Part(server_id, channel, user) => {
-                self.add_line(
-                    &mut ctx.messages,
-                    Some(*server_id),
-                    channel,
-                    MessageContent::info(format!("{} has left {}", user, channel)),
-                );
+                let msg = format!("{} has left {}", user, channel);
                 if self.has_message(&ctx.messages, Some(*server_id), user) {
                     self.add_line(
                         &mut ctx.messages,
                         Some(*server_id),
                         user,
-                        MessageContent::info(format!("{} has left {}", user, channel)),
+                        MessageContent::info(msg.clone()),
                     );
                 }
+                self.add_line(
+                    &mut ctx.messages,
+                    Some(*server_id),
+                    channel,
+                    MessageContent::info(msg),
+                );
 
                 None
             }

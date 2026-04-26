@@ -8,6 +8,12 @@ use ratatui::{
 };
 use std::borrow::Cow;
 
+const SPACES: &str = "                  "; //Max 18 spaces
+
+fn spaces(n: usize) -> &'static str {
+    &SPACES[..n.min(SPACES.len())]
+}
+
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct WordPos {
     byte_start: usize,
@@ -23,7 +29,7 @@ impl WordPos {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum MessageKind {
     Error,
     Info,
@@ -210,7 +216,7 @@ impl MessageContent {
                     width = time_length
                 ))
             } else {
-                Cell::from("")
+                Cell::default()
             },
             Cell::from(format!(
                 "{:<width$}",
@@ -219,22 +225,19 @@ impl MessageContent {
             ))
             .style(nickname_style),
             Cell::from("┃ ").style(separator_style),
-            Cell::from(""),
+            Cell::default(),
         ]);
 
         if wrapped.len() > 1 {
+            let time_pad = spaces(time_length);
+            let nick_pad = spaces(nickname_length);
             visible_rows.extend(
                 std::iter::repeat_with(|| {
                     [
-                        if time_length > 0 {
-                            Cell::from(format!("{:<width$}", " ", width = time_length))
-                        } else {
-                            Cell::from("")
-                        },
-                        Cell::from(format!("{:<width$}", " ", width = nickname_length))
-                            .style(nickname_style),
+                        Cell::from(time_pad),
+                        Cell::from(nick_pad).style(nickname_style),
                         Cell::from("┃ ").style(separator_style),
-                        Cell::from(""),
+                        Cell::default(),
                     ]
                 })
                 .take(wrapped.len() - 1),

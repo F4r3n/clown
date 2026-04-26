@@ -69,5 +69,13 @@ spell-checker = ["dep:clown-spell", "dep:ureq"]
 name = "message_parser"
 harness = false
 
+[[bench]]
+name = "textwrapper"
+harness = false
+
+[[bench]]
+name = "message_content"
+harness = false
+
 [lints]
 workspace = true
