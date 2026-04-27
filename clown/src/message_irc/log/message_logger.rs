@@ -1,5 +1,5 @@
+use super::log_parser;
 use crate::message_event::MessageEvent;
-use crate::message_irc::log_parser;
 use ahash::AHashMap;
 use std::borrow::Cow;
 use std::{
@@ -445,7 +445,7 @@ impl MessageLogger {
     pub fn write_message(
         &mut self,
         server_address: &str,
-        irc_model: Option<&crate::irc_view::irc_model::IrcModel>,
+        irc_model: Option<&crate::state::irc_model::IrcModel>,
         message: &MessageEvent,
     ) -> anyhow::Result<()> {
         match message {

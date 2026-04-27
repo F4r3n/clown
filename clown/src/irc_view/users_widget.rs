@@ -1,4 +1,5 @@
-use crate::{component::Draw, model::ServerID};
+use crate::component::Draw;
+use crate::state::server_id::ServerID;
 
 use crossterm::event::KeyModifiers;
 use ratatui::{
@@ -127,7 +128,7 @@ impl UsersWidget {
 
     fn replace_user(
         &mut self,
-        irc_model: &crate::irc_view::irc_model::IrcServerModel,
+        irc_model: &crate::state::irc_model::IrcServerModel,
         old: &str,
         new: &str,
     ) {
@@ -172,7 +173,7 @@ impl UsersWidget {
 
     fn remove_user_all_joined_channels(
         &mut self,
-        irc_model: &crate::irc_view::irc_model::IrcServerModel,
+        irc_model: &crate::state::irc_model::IrcServerModel,
         user: &str,
     ) {
         for section in self.list_sections.iter_mut() {
@@ -308,7 +309,7 @@ impl UsersWidget {
 impl Draw for UsersWidget {
     fn render(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -402,8 +403,8 @@ impl ListStateWidget {
     // Dont need to add all the uers to display if we dont show it
     fn render(
         &mut self,
-        model: &crate::model::Model,
-        irc_model: &crate::irc_view::irc_model::IrcModel,
+        model: &crate::state::model::Model,
+        irc_model: &crate::state::irc_model::IrcModel,
         sections: &[Section],
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
@@ -451,7 +452,7 @@ impl crate::component::EventHandler for UsersWidget {
     }
     fn handle_actions(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -544,7 +545,7 @@ impl crate::component::EventHandler for UsersWidget {
 
     fn handle_events(
         &mut self,
-        _ctx: &mut crate::context::Ctx,
+        _ctx: &mut crate::state::context::Ctx,
         event: &crate::event_handler::Event,
     ) -> Option<crate::message_event::MessageEvent> {
         if let Some(key) = event.get_key()
@@ -589,25 +590,25 @@ impl crate::component::EventHandler for UsersWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{component::EventHandler, irc_view::irc_model::IrcModel};
+    use crate::{component::EventHandler, state::irc_model::IrcModel};
 
     const TEST_SERVER_ID: ServerID = ServerID::new(0);
 
     struct WidgetTest {
         pub users_widget: UsersWidget,
-        pub ctx: crate::context::Ctx,
+        pub ctx: crate::state::context::Ctx,
     }
 
-    fn mock_ctx() -> crate::context::Ctx {
+    fn mock_ctx() -> crate::state::context::Ctx {
         ctx_with_model(IrcModel::new(0))
     }
 
-    fn ctx_with_model(irc_model: IrcModel) -> crate::context::Ctx {
+    fn ctx_with_model(irc_model: IrcModel) -> crate::state::context::Ctx {
         let length = irc_model.servers.len();
-        let mut session = crate::irc_view::session::Session::new(length);
+        let mut session = crate::state::session::Session::new(length);
         session.model = irc_model;
-        crate::context::Ctx {
-            model: crate::model::Model::new_empty_config(),
+        crate::state::context::Ctx {
+            model: crate::state::model::Model::new_empty_config(),
             session,
             messages: crate::irc_view::discuss::servers_messages::ServersMessages::new(
                 std::path::Path::new("").to_path_buf(),
@@ -682,7 +683,7 @@ mod tests {
         let user_name = "farine";
         let channel = "#rust";
         let server_name = "IRC-Server";
-        let irc_model = crate::irc_view::irc_model::IrcModel::new_single_server(
+        let irc_model = crate::state::irc_model::IrcModel::new_single_server(
             1,
             TEST_SERVER_ID,
             server_name.into(),
@@ -754,7 +755,7 @@ mod tests {
         let users_widget = UsersWidget::new();
         let user_name = "farine";
         let channel = "#rust";
-        let mut irc_model = crate::irc_view::irc_model::IrcModel::new(1);
+        let mut irc_model = crate::state::irc_model::IrcModel::new(1);
         irc_model.init_server(TEST_SERVER_ID, "TEST".into(), user_name.to_string());
 
         let mut widget_test = WidgetTest {
@@ -790,7 +791,7 @@ mod tests {
         let users_widget = UsersWidget::new();
         let user_name = "farine";
         let channel = "#rust";
-        let irc_model = crate::irc_view::irc_model::IrcModel::new_single_server(
+        let irc_model = crate::state::irc_model::IrcModel::new_single_server(
             1,
             TEST_SERVER_ID,
             "TEST".into(),

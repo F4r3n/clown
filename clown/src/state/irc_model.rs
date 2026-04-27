@@ -1,7 +1,7 @@
 use ahash::AHashMap;
 
 use crate::message_event::MessageEvent;
-use crate::model::ServerID;
+use crate::state::server_id::ServerID;
 #[derive(Debug, PartialEq, Clone)]
 pub struct User {
     name: String,

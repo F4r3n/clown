@@ -1,30 +1,28 @@
 mod async_task;
 mod component;
-mod config;
 mod event_handler;
 mod irc_view;
 mod message_event;
 mod message_irc;
 mod message_queue;
-mod model;
 mod project_path;
+mod state;
 mod tui;
 mod widget_view;
 use crate::irc_view::discuss::servers_messages::ServersMessages;
 use crate::irc_view::main_view;
-use crate::irc_view::session::Session;
 use crate::project_path::ProjectPath;
+use crate::state::model::{Model, RunningState};
+use crate::state::session::Session;
 use event_handler::Event;
 use event_handler::EventHandler;
 use message_event::MessageEvent;
 use message_irc::message_content::MessageKind;
 use message_queue::MessageQueue;
-use model::{Model, RunningState};
 use ratatui::Frame;
 use shadow_rs::shadow;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
-pub mod context;
 
 pub enum Views<'a> {
     Main(main_view::MainView<'a>),
@@ -79,13 +77,13 @@ async fn main() -> anyhow::Result<()> {
 
     if args.merge_logs {
         if let Some(log_location) = ProjectPath::log_dir() {
-            message_irc::log_merger::merge_logs(log_location)?;
+            message_irc::log::log_merger::merge_logs(log_location)?;
         }
         return Ok(());
     }
 
     let mut list_messages = message_queue::MessageQueue::new();
-    let model = match model::Model::try_new(args.config_name.clone()) {
+    let model = match state::model::Model::try_new(args.config_name.clone()) {
         Ok(n) => n,
         Err(e) => {
             list_messages.push_message(MessageEvent::AddMessageViewInfo(
@@ -101,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
     let log_dir = crate::project_path::ProjectPath::log_dir()
         .or_else(|| std::env::current_dir().ok())
         .ok_or_else(|| std::io::Error::other("could not determine log directory"))?;
-    let mut ctx = crate::context::Ctx {
+    let mut ctx = crate::state::context::Ctx {
         messages: ServersMessages::new(log_dir),
         session: Session::new(model.get_server_count()),
         model: model,
@@ -144,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn view(ctx: &mut crate::context::Ctx, views: &mut Views<'_>, frame: &mut Frame<'_>) {
+fn view(ctx: &mut crate::state::context::Ctx, views: &mut Views<'_>, frame: &mut Frame<'_>) {
     match views {
         Views::Main(view) => {
             view.view(ctx, frame);
@@ -153,7 +151,7 @@ fn view(ctx: &mut crate::context::Ctx, views: &mut Views<'_>, frame: &mut Frame<
 }
 
 fn handle_event(
-    ctx: &mut crate::context::Ctx,
+    ctx: &mut crate::state::context::Ctx,
     views: &mut Views<'_>,
     event: Event,
     out_messages: &mut MessageQueue,
@@ -173,7 +171,7 @@ fn need_redraw(model: &mut Model, views: &mut Views<'_>) -> bool {
 }
 
 async fn update(
-    ctx: &mut crate::context::Ctx,
+    ctx: &mut crate::state::context::Ctx,
     views: &mut Views<'_>,
     msg: MessageEvent,
     out_messages: &mut MessageQueue,

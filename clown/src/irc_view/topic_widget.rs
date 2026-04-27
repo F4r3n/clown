@@ -1,5 +1,5 @@
 use crate::component::{Draw, EventHandler};
-use crate::model::ServerID;
+use crate::state::server_id::ServerID;
 use ratatui::layout::Rect;
 use ratatui::text::Text;
 use ratatui::widgets::Paragraph;
@@ -12,7 +12,7 @@ pub struct TopicWidget {
 impl Draw for TopicWidget {
     fn render(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -66,7 +66,7 @@ impl EventHandler for TopicWidget {
     }
     fn handle_actions(
         &mut self,
-        _ctx: &mut crate::context::Ctx,
+        _ctx: &mut crate::state::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -90,7 +90,7 @@ impl EventHandler for TopicWidget {
     }
     fn handle_events(
         &mut self,
-        _ctx: &mut crate::context::Ctx,
+        _ctx: &mut crate::state::context::Ctx,
         _event: &crate::event_handler::Event,
     ) -> Option<MessageEvent> {
         None
@@ -188,10 +188,10 @@ mod tests {
     }
 
     // Helper to satisfy the Draw/EventHandler traits in tests
-    fn mock_ctx() -> crate::context::Ctx {
-        crate::context::Ctx {
-            model: crate::model::Model::new_empty_config(),
-            session: crate::irc_view::session::Session::new(0),
+    fn mock_ctx() -> crate::state::context::Ctx {
+        crate::state::context::Ctx {
+            model: crate::state::model::Model::new_empty_config(),
+            session: crate::state::session::Session::new(0),
             messages: crate::irc_view::discuss::servers_messages::ServersMessages::new(
                 std::path::Path::new("").to_path_buf(),
             ),

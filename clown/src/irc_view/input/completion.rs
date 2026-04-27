@@ -1,9 +1,7 @@
 use ahash::AHashMap;
 
-use crate::{
-    config::{Config, ValueParameter},
-    model::ServerID,
-};
+use crate::state::config::{Config, ValueParameter};
+use crate::state::server_id::ServerID;
 
 use super::trie::Trie;
 

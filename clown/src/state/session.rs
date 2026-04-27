@@ -1,6 +1,7 @@
-use crate::irc_view::irc_model::IrcServerModel;
-use crate::model::ServerID;
-use crate::{irc_view::irc_model::IrcModel, model::IRCConnection};
+use super::irc_model::IrcModel;
+use super::irc_model::IrcServerModel;
+use super::model::IRCConnection;
+use super::server_id::ServerID;
 use anyhow::anyhow;
 use clown_core::client::LoginConfig;
 use clown_core::command::Command;
@@ -167,7 +168,7 @@ impl Session {
             Some(c) => c,
             None => match irc_model.get_current_channel() {
                 Some(c) => c.to_string(),
-                None => anyhow::bail!("No channel to part"), // no channel to part
+                None => anyhow::bail!("No channel to part"),
             },
         };
 

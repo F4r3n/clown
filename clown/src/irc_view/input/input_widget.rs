@@ -31,7 +31,7 @@ pub struct CInput {
 }
 
 impl Draw for CInput {
-    fn render(&mut self, _ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
+    fn render(&mut self, _ctx: &mut crate::state::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
         self.area = area;
         if self.redraw {
             self.redraw = false;
@@ -69,7 +69,7 @@ impl crate::component::EventHandler for CInput {
     }
     fn handle_actions(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -139,7 +139,7 @@ impl crate::component::EventHandler for CInput {
 
     fn handle_events(
         &mut self,
-        _ctx: &mut crate::context::Ctx,
+        _ctx: &mut crate::state::context::Ctx,
         event: &crate::event_handler::Event,
     ) -> Option<MessageEvent> {
         match event {

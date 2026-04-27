@@ -1,25 +1,25 @@
-use self::command::help;
 use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
-use crate::irc_view::command;
-use crate::irc_view::command::ClientCommand;
 use crate::irc_view::discuss::discuss_widget;
+use crate::irc_view::input::command;
+use crate::irc_view::input::command::ClientCommand;
+use crate::irc_view::input::command::help;
 use crate::irc_view::input::input_widget;
 use crate::irc_view::input::input_widget::CInput;
-use crate::irc_view::irc_model::IrcModel;
-use crate::irc_view::session::Session;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
 use crate::message_event::MessageEvent;
-use crate::message_irc::message_logger;
-use crate::message_irc::message_logger::MessageLogger;
+use crate::message_irc::log::message_logger;
+use crate::message_irc::log::message_logger::MessageLogger;
 use crate::message_queue::MessageQueue;
-use crate::model::Model;
-use crate::model::RunningState;
-use crate::model::ServerID;
-use crate::model::StoredConfig;
+use crate::state::irc_model::IrcModel;
+use crate::state::model::Model;
+use crate::state::model::RunningState;
+use crate::state::model::StoredConfig;
+use crate::state::server_id::ServerID;
+use crate::state::session::Session;
 use crate::widget_view;
 use clown_core::command::Command;
 use clown_core::conn::ConnectionConfig;
@@ -132,7 +132,7 @@ impl MainView<'_> {
 
     fn update_input(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         content: &str,
     ) -> Option<MessageEvent> {
         if let Some(parsed_message) = command::parse_command(content) {
@@ -378,7 +378,7 @@ impl MainView<'_> {
         }
     }
 
-    fn handle_irc(&mut self, ctx: &mut crate::context::Ctx, messages: &mut MessageQueue) {
+    fn handle_irc(&mut self, ctx: &mut crate::state::context::Ctx, messages: &mut MessageQueue) {
         if ctx.model.running_state == RunningState::Start {
             ctx.model.running_state = RunningState::Running;
 
@@ -414,7 +414,7 @@ impl MainView<'_> {
 
     fn handle_tick(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &Event,
         messages: &mut MessageQueue,
     ) {
@@ -432,7 +432,11 @@ impl MainView<'_> {
         }
     }
 
-    fn update_pull_irc(&mut self, ctx: &mut crate::context::Ctx, messages: &mut MessageQueue) {
+    fn update_pull_irc(
+        &mut self,
+        ctx: &mut crate::state::context::Ctx,
+        messages: &mut MessageQueue,
+    ) {
         let mut server_to_init = vec![];
         for (server_id, recieved) in ctx.session.pull_all_server_message() {
             let reply = recieved.reply();
@@ -639,7 +643,7 @@ impl widget_view::WidgetView for MainView<'_> {
         }
         false
     }
-    fn view(&mut self, ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>) {
+    fn view(&mut self, ctx: &mut crate::state::context::Ctx, frame: &mut Frame<'_>) {
         if self.need_redraw {
             self.need_redraw = false;
         }
@@ -692,7 +696,7 @@ impl widget_view::WidgetView for MainView<'_> {
 
     fn handle_event(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &Event,
         messages: &mut MessageQueue,
     ) {
@@ -742,7 +746,7 @@ impl widget_view::WidgetView for MainView<'_> {
 
     fn update(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         msg: MessageEvent,
         messages: &mut MessageQueue,
     ) {

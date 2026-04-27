@@ -84,7 +84,7 @@ impl MessageQueue {
 mod test {
     use crate::message_event::MessageEvent;
     use crate::message_queue::MessageQueue;
-    use crate::model::ServerID;
+    use crate::state::server_id::ServerID;
     #[test]
     pub fn push_test() {
         let mut message_queue = MessageQueue::new();

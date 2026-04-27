@@ -1,6 +1,5 @@
-use crate::message_irc::message_logger::LoggedTimedMessage;
-
 use super::message_logger::LoggedMessage;
+use super::message_logger::LoggedTimedMessage;
 use anyhow::bail;
 use chrono::TimeZone;
 use nom::bytes::complete::tag;

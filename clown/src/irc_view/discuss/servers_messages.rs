@@ -1,9 +1,9 @@
-use crate::message_irc::message_content::MessageContent;
-use crate::message_irc::message_content::WordPos;
-use crate::message_irc::message_logger::{
+use crate::message_irc::log::message_logger::{
     LogReader, LoggedMessage, LoggedTimedMessage, MessageLogger,
 };
-use crate::model::ServerID;
+use crate::message_irc::message_content::MessageContent;
+use crate::message_irc::message_content::WordPos;
+use crate::state::server_id::ServerID;
 use ahash::AHashMap;
 
 use std::path::PathBuf;

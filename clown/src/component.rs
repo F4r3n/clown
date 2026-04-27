@@ -4,18 +4,18 @@ use ratatui::{Frame, layout::Rect};
 use std::ops::{Deref, DerefMut};
 
 pub trait Draw {
-    fn render(&mut self, ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect);
+    fn render(&mut self, ctx: &mut crate::state::context::Ctx, frame: &mut Frame<'_>, area: Rect);
 }
 
 pub trait EventHandler {
     fn handle_events(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &Event,
     ) -> Option<MessageEvent>;
     fn handle_actions(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent>;
     fn need_redraw(&self) -> bool;
@@ -42,7 +42,7 @@ impl<'a, T> Component<'a, T> {
 
     pub fn handle_events(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &Event,
     ) -> Option<MessageEvent>
     where
@@ -60,7 +60,7 @@ impl<'a, T> Component<'a, T> {
 
     pub fn handle_actions(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent>
     where
@@ -69,7 +69,7 @@ impl<'a, T> Component<'a, T> {
         self.inner.handle_actions(ctx, event)
     }
 
-    pub fn render(&mut self, ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect)
+    pub fn render(&mut self, ctx: &mut crate::state::context::Ctx, frame: &mut Frame<'_>, area: Rect)
     where
         T: Draw,
     {
@@ -121,7 +121,7 @@ impl DerefMut for Child<'_> {
 impl EventHandler for Child<'_> {
     fn handle_events(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &Event,
     ) -> Option<MessageEvent> {
         self.deref_mut().handle_events(ctx, event)
@@ -133,7 +133,7 @@ impl EventHandler for Child<'_> {
 
     fn handle_actions(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         self.deref_mut().handle_actions(ctx, event)

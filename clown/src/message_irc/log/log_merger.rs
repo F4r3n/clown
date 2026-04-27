@@ -1,6 +1,6 @@
 //This file is temporary to merge the hashes after a change
 
-use crate::message_irc::message_logger::{LogReader, MessageLogger};
+use super::message_logger::{LogReader, MessageLogger};
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug)]

@@ -2,7 +2,7 @@ use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use super::servers_messages::{Messages, Range, ServersMessages};
 use crate::component::Draw;
 use crate::message_irc::textwrapper::wrap_content;
-use crate::model::ServerID;
+use crate::state::server_id::ServerID;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use crossterm::event::KeyCode;
 use crossterm::event::MouseButton;
@@ -192,7 +192,7 @@ impl DiscussWidget {
     fn collect_visible_rows<'a>(
         &'a mut self,
         messages: &'a ServersMessages,
-        model: &crate::model::Model,
+        model: &crate::state::model::Model,
     ) -> Vec<Row<'a>> {
         let mut visible_rows = Vec::new();
         if self.content_width == 0 {
@@ -420,7 +420,7 @@ impl DiscussWidget {
 }
 
 impl Draw for DiscussWidget {
-    fn render(&mut self, ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
+    fn render(&mut self, ctx: &mut crate::state::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
         if self.redraw {
             self.redraw = false;
         }
@@ -503,7 +503,7 @@ impl crate::component::EventHandler for DiscussWidget {
 
     fn handle_actions(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &MessageEvent,
     ) -> Option<MessageEvent> {
         match event {
@@ -737,7 +737,7 @@ impl crate::component::EventHandler for DiscussWidget {
 
     fn handle_events(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         event: &crate::event_handler::Event,
     ) -> Option<MessageEvent> {
         if let crate::event_handler::Event::Crossterm(cross) = &event {
@@ -876,7 +876,7 @@ impl crate::component::EventHandler for DiscussWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Model;
+    use crate::state::model::Model;
 
     const TEST_SERVER_ID: ServerID = ServerID::new(0);
 

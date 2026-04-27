@@ -29,7 +29,7 @@ impl MessagePreview {
 }
 
 impl Draw for MessagePreview {
-    fn render(&mut self, _ctx: &mut crate::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
+    fn render(&mut self, _ctx: &mut crate::state::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(ratatui::widgets::Clear, area);
         let block = Block::default()
             .borders(Borders::ALL)
@@ -113,7 +113,7 @@ impl ToolTipDiscussWidget {
 impl Draw for ToolTipDiscussWidget {
     fn render(
         &mut self,
-        ctx: &mut crate::context::Ctx,
+        ctx: &mut crate::state::context::Ctx,
         frame: &mut ratatui::Frame<'_>,
         area: ratatui::prelude::Rect,
     ) {
@@ -147,7 +147,7 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
     }
     fn handle_actions(
         &mut self,
-        _ctx: &mut crate::context::Ctx,
+        _ctx: &mut crate::state::context::Ctx,
         event: &crate::message_event::MessageEvent,
     ) -> Option<crate::message_event::MessageEvent> {
         match event {
@@ -177,7 +177,7 @@ impl crate::component::EventHandler for ToolTipDiscussWidget {
 
     fn handle_events(
         &mut self,
-        _ctx: &mut crate::context::Ctx,
+        _ctx: &mut crate::state::context::Ctx,
         _event: &crate::event_handler::Event,
     ) -> Option<crate::message_event::MessageEvent> {
         if self.is_opened && !self.is_open() {

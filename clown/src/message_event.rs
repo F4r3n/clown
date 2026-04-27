@@ -1,4 +1,4 @@
-use crate::model::ServerID;
+use crate::state::server_id::ServerID;
 
 #[derive(PartialEq, Debug)]
 pub enum MessageEvent {
