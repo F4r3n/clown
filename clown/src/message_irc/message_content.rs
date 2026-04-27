@@ -11,7 +11,7 @@ use std::borrow::Cow;
 const SPACES: &str = "                  "; //Max 18 spaces
 
 fn spaces(n: usize) -> &'static str {
-    &SPACES[..n.min(SPACES.len())]
+    SPACES.get(..n).unwrap_or_default()
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
