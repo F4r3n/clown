@@ -28,27 +28,63 @@ impl SessionStatus<'_> {
     }
 }
 
+struct RetryState {
+    pub retry: usize,
+    pub time_before_next_retry: std::time::Duration,
+}
+
+struct ServerSlot {
+    status: RetryState,
+    connection: Option<IRCConnection>,
+}
+
+impl ServerSlot {
+    fn new() -> Self {
+        Self {
+            status: RetryState {
+                retry: 5,
+                time_before_next_retry: std::time::Duration::from_secs(5),
+            },
+            connection: None,
+        }
+    }
+}
+
 pub struct Session {
     pub model: IrcModel,
-    pub connections: Vec<Option<IRCConnection>>,
-    pub retry: usize,
+    servers: Vec<ServerSlot>,
 }
 
 impl Session {
     pub fn new(in_length: usize) -> Self {
         Self {
             model: IrcModel::new(in_length),
-            connections: std::iter::repeat_with(|| None).take(in_length).collect(),
-            retry: 5,
+            servers: std::iter::repeat_with(|| ServerSlot::new())
+                .take(in_length)
+                .collect(),
         }
     }
 
-    pub fn reset_retry(&mut self) {
-        self.retry = 5;
+    pub fn reset_retry(&mut self, id: ServerID) {
+        self.servers
+            .get_mut(id.as_usize())
+            .map(|v| v.status.retry = 0);
+    }
+
+    pub fn get_mut_connection(&mut self, id: ServerID) -> Option<&mut IRCConnection> {
+        self.servers
+            .get_mut(id.as_usize())
+            .and_then(|v| v.connection.as_mut())
+    }
+
+    pub fn get_connection(&self, id: ServerID) -> Option<&IRCConnection> {
+        self.servers
+            .get(id.as_usize())
+            .and_then(|v| v.connection.as_ref())
     }
 
     pub fn send_command(&mut self, in_id: ServerID, in_command: Command) -> anyhow::Result<()> {
-        if let Some(Some(connection)) = self.connections.get_mut(in_id.as_usize()) {
+        if let Some(connection) = self.get_mut_connection(in_id) {
             connection
                 .command_sender
                 .send(in_command)
@@ -60,7 +96,7 @@ impl Session {
 
     pub fn send_command_current_server(&mut self, in_command: Command) -> anyhow::Result<()> {
         if let Some(current_id) = self.model.current_id
-            && let Some(Some(connection)) = self.connections.get_mut(current_id.as_usize())
+            && let Some(connection) = self.get_mut_connection(current_id)
         {
             connection
                 .command_sender
@@ -72,29 +108,28 @@ impl Session {
     }
 
     pub fn is_connected(&self, in_id: ServerID) -> bool {
-        if let Some(connection) = self.connections.get(in_id.as_usize()) {
-            connection.is_some()
-        } else {
-            false
-        }
+        self.get_connection(in_id).is_some()
     }
 
-    pub fn send_command_all_server(&mut self, in_command: Command) {
-        for connection in self.connections.iter_mut().flatten() {
-            let _ = connection.command_sender.send(in_command.clone());
+    pub fn send_command_all_server(&mut self, in_command: Command) -> anyhow::Result<()> {
+        for connection in self.servers.iter_mut() {
+            if let Some(connection) = connection.connection.as_mut() {
+                connection.command_sender.send(in_command.clone())?;
+            }
         }
+        Ok(())
     }
 
     pub fn iter_valid_connection_id(&self) -> impl Iterator<Item = ServerID> {
-        self.connections
+        self.servers
             .iter()
             .enumerate()
-            .filter(|(_, v)| v.is_some())
+            .filter(|(_, v)| v.connection.is_some())
             .map(|(i, _)| ServerID::new(i))
     }
 
     pub fn is_irc_finished(&self, in_id: ServerID) -> bool {
-        if let Some(Some(connection)) = self.connections.get(in_id.as_usize()) {
+        if let Some(connection) = self.get_connection(in_id) {
             connection.task.is_finished()
         } else {
             true
@@ -102,43 +137,42 @@ impl Session {
     }
 
     pub fn clear_connection(&mut self, in_id: ServerID) {
-        if let Some(connection) = self.connections.get_mut(in_id.as_usize()) {
-            *connection = None;
+        if let Some(server_slot) = self.servers.get_mut(in_id.as_usize()) {
+            server_slot.connection = None;
         }
-        //self.model.clear_server(in_id);
+    }
+
+    pub fn get_duration_before_retry(&self, in_id: ServerID) -> Option<std::time::Duration> {
+        self.servers
+            .get(in_id.as_usize())
+            .map(|s| s.status.time_before_next_retry)
     }
 
     pub fn pull_all_server_message(&mut self) -> impl Iterator<Item = (ServerID, ServerMessage)> {
-        self.connections
-            .iter_mut()
-            .enumerate()
-            .flat_map(|(i, conn)| {
-                conn.iter_mut().flat_map(move |conn| {
-                    std::iter::from_fn(move || {
-                        conn.message_reciever
-                            .inner
-                            .try_recv()
-                            .ok()
-                            .map(|msg| (ServerID::new(i), msg))
-                    })
+        self.servers.iter_mut().enumerate().flat_map(|(i, conn)| {
+            conn.connection.iter_mut().flat_map(move |conn| {
+                std::iter::from_fn(move || {
+                    conn.message_reciever
+                        .inner
+                        .try_recv()
+                        .ok()
+                        .map(|msg| (ServerID::new(i), msg))
                 })
             })
+        })
     }
 
     pub fn pull_all_server_error(&mut self) -> impl Iterator<Item = (ServerID, String)> {
-        self.connections
-            .iter_mut()
-            .enumerate()
-            .flat_map(|(i, conn)| {
-                conn.iter_mut().flat_map(move |conn| {
-                    std::iter::from_fn(move || {
-                        conn.error_receiver
-                            .try_recv()
-                            .ok()
-                            .map(|msg| (ServerID::new(i), msg))
-                    })
+        self.servers.iter_mut().enumerate().flat_map(|(i, slot)| {
+            slot.connection.iter_mut().flat_map(move |conn| {
+                std::iter::from_fn(move || {
+                    conn.error_receiver
+                        .try_recv()
+                        .ok()
+                        .map(|msg| (ServerID::new(i), msg))
                 })
             })
+        })
     }
 
     pub fn send_command_topic(&mut self, topic: String) -> anyhow::Result<()> {
@@ -235,18 +269,16 @@ impl Session {
 
         let (error_sender, error_receiver) = mpsc::channel(10);
 
-        if self.retry == 0 {
+        let server = self
+            .servers
+            .get_mut(in_id.as_usize())
+            .ok_or_else(|| anyhow!("Wrong ID {}", in_id))?;
+        if server.status.retry == 0 {
             anyhow::bail!("No retries left");
         }
 
-        self.retry -= 1;
-
-        let connection = self
-            .connections
-            .get_mut(in_id.as_usize())
-            .ok_or_else(|| anyhow!("Wrong ID {}", in_id))?;
-
-        *connection = Some(IRCConnection {
+        server.status.retry -= 1;
+        server.connection = Some(IRCConnection {
             command_sender,
             error_receiver,
             _error_sender: error_sender.clone(),

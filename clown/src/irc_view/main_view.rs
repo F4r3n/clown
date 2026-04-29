@@ -183,7 +183,8 @@ impl MainView<'_> {
     }
 
     fn handle_cmd_quit(message: Option<String>, session: &mut Session) -> Option<MessageEvent> {
-        session.send_command_all_server(Command::Quit(message.clone()));
+        //TODO: manage error during quit
+        let _ = session.send_command_all_server(Command::Quit(message.clone()));
         Some(MessageEvent::QuitAll(message))
     }
 
@@ -395,16 +396,14 @@ impl MainView<'_> {
                     msg,
                 ));
                 to_delete.push(server_id);
-
-                messages.push_message_with_time(
-                    MessageEvent::Connect(server_id),
-                    std::time::Duration::from_secs(5),
-                );
             }
 
             for server_id in to_delete {
                 if ctx.session.is_irc_finished(server_id) {
                     ctx.session.clear_connection(server_id);
+                }
+                if let Some(time) = ctx.session.get_duration_before_retry(server_id) {
+                    messages.push_message_with_time(MessageEvent::Connect(server_id), time);
                 }
             }
         }
@@ -615,7 +614,7 @@ impl MainView<'_> {
         }
 
         for id in server_to_init {
-            ctx.session.reset_retry();
+            ctx.session.reset_retry(id);
             if ctx.model.is_autojoin_by_id(id) {
                 for channel in ctx.model.get_channels(id) {
                     if let Err(e) = ctx
