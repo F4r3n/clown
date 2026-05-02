@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use clown_core::client::LoginConfig;
 use clown_core::conn::ConnectionConfig;
 
-use crate::irc_view::color_user::ColorGenerator;
 use super::server_id::ServerID;
+use crate::irc_view::color_user::ColorGenerator;
 use crate::project_path::ProjectPath;
 use anyhow::Result;
 use anyhow::bail;
@@ -1033,6 +1033,15 @@ impl Config {
         self.servers
             .get(in_id.as_usize())
             .map(|v| v.connection.address.as_str())
+    }
+
+    pub fn find_id_from_name(&self, in_name: &str) -> Option<ServerID> {
+        for (id, server) in self.servers.iter().enumerate() {
+            if server.name.eq_ignore_ascii_case(in_name) {
+                return Some(ServerID::new(id));
+            }
+        }
+        None
     }
 
     pub fn get_name(&self, in_id: ServerID) -> &str {

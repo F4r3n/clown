@@ -111,13 +111,17 @@ impl Session {
         self.get_connection(in_id).is_some()
     }
 
-    pub fn send_command_all_server(&mut self, in_command: Command) -> anyhow::Result<()> {
-        for connection in self.servers.iter_mut() {
-            if let Some(connection) = connection.connection.as_mut() {
-                connection.command_sender.send(in_command.clone())?;
-            }
-        }
-        Ok(())
+    pub fn send_command_all_server(
+        &mut self,
+        in_command: Command,
+    ) -> impl Iterator<Item = anyhow::Result<()>> {
+        self.servers.iter_mut().filter_map(move |v| {
+            v.connection.as_mut().map(|conn| {
+                conn.command_sender
+                    .send(in_command.clone())
+                    .map_err(Into::into)
+            })
+        })
     }
 
     pub fn iter_valid_connection_id(&self) -> impl Iterator<Item = ServerID> {

@@ -16,7 +16,7 @@ pub enum ClientCommand {
         message = "connect",
         detailed_message = "To connect to the server, if already connected does nothing"
     )]
-    Connect,
+    Connect(Option<String>),
     #[strum(message = "quit", detailed_message = "To quit the server and the app")]
     Quit(Option<String>),
     #[strum(message = "nick", detailed_message = "To change your nickname")]
@@ -75,7 +75,7 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
     if let Some(next) = in_content.trim_ascii_start().strip_prefix('/') {
         if let Some((command, args)) = get_next_word(next) {
             match command.to_lowercase().as_str() {
-                "connect" => Some(ClientCommand::Connect),
+                "connect" => Some(ClientCommand::Connect(args.map(|v| v.to_string()))),
                 "quit" => Some(ClientCommand::Quit(args.map(|v| v.to_string()))),
                 "topic" => Some(args.map_or(ClientCommand::Unknown(None), |v| {
                     ClientCommand::Topic(v.to_string())
@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn parse_connect() {
         let cmd = parse_command("/connect");
-        assert!(matches!(cmd, Some(ClientCommand::Connect)));
+        assert!(matches!(cmd, Some(ClientCommand::Connect(None))));
     }
 
     #[test]

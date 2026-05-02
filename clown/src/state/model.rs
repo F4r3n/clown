@@ -129,6 +129,10 @@ impl Model {
         self.get_config().get_name(in_id)
     }
 
+    pub fn find_id_from_name(&self, name: &str) -> Option<ServerID> {
+        self.get_config().find_id_from_name(name)
+    }
+
     pub fn get_completion_behaviour(&self) -> (Option<&str>, Option<&str>) {
         (
             self.get_config().completion.in_message.suffix.as_deref(),

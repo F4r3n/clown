@@ -137,7 +137,9 @@ impl MainView<'_> {
     ) -> Option<MessageEvent> {
         if let Some(parsed_message) = command::parse_command(content) {
             match parsed_message {
-                command::ClientCommand::Connect => Self::handle_cmd_connect(),
+                command::ClientCommand::Connect(server_name) => {
+                    Self::handle_cmd_connect(server_name, &ctx.model)
+                }
                 command::ClientCommand::Quit(message) => {
                     Self::handle_cmd_quit(message, &mut ctx.session)
                 }
@@ -176,15 +178,20 @@ impl MainView<'_> {
         }
     }
 
-    fn handle_cmd_connect() -> Option<MessageEvent> {
+    fn handle_cmd_connect(server_name: Option<String>, model: &Model) -> Option<MessageEvent> {
         Some(MessageEvent::Connect(
-            ServerID::new(0), /*TODO: command should return the id */
+            server_name
+                .and_then(|v| model.find_id_from_name(&v))
+                .unwrap_or(ServerID::new(0)),
         ))
     }
 
     fn handle_cmd_quit(message: Option<String>, session: &mut Session) -> Option<MessageEvent> {
-        //TODO: manage error during quit
-        let _ = session.send_command_all_server(Command::Quit(message.clone()));
+        for error in session.send_command_all_server(Command::Quit(message.clone())) {
+            if let Err(e) = error {
+                tracing::error!("Cannot send quit: {e}");
+            }
+        }
         Some(MessageEvent::QuitAll(message))
     }
 
