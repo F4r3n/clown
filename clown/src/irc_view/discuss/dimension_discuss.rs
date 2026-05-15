@@ -1,3 +1,3 @@
-pub const TIME_LENGTH: usize = 8;
-pub const NICKNAME_LENGTH: usize = 10;
-pub const SEPARATOR_LENGTH: usize = 2;
+pub const TIME_LENGTH: u16 = 8;
+pub const NICKNAME_LENGTH: u16 = 10;
+pub const SEPARATOR_LENGTH: u16 = 2;

@@ -43,7 +43,7 @@ pub struct DiscussWidget {
     last_hovered: Option<Hovered>,
     redraw: bool,
 
-    time_size: usize,
+    display_time: bool,
 }
 
 impl DiscussWidget {
@@ -59,7 +59,7 @@ impl DiscussWidget {
             content_width: 0,
             last_hovered: None,
             redraw: true,
-            time_size: TIME_LENGTH,
+            display_time: true,
         }
     }
 
@@ -220,11 +220,17 @@ impl DiscussWidget {
                     break;
                 }
                 let color = line.get_source().map(|s| model.get_color(s));
+                let time_format = if line.is_log() {
+                    crate::message_irc::message_content::TimeFormat::Day
+                } else {
+                    crate::message_irc::message_content::TimeFormat::Hour
+                };
+
                 let rows = line
                     .create_rows(
                         self.content_width as u16,
                         color,
-                        self.time_size,
+                        self.display_time.then_some(&time_format),
                         NICKNAME_LENGTH,
                     )
                     .skip(rows_to_skip_in_message)
@@ -439,14 +445,14 @@ impl Draw for DiscussWidget {
                 Constraint::Length(1), // Scrollbar
             ])
             .split(area);
-
+        let time_size = if self.display_time { TIME_LENGTH } else { 0 };
         let content_width = layout
             .first()
             .map(|rect| {
                 rect.width
-                    .saturating_sub(self.time_size as u16)
-                    .saturating_sub(NICKNAME_LENGTH as u16)
-                    .saturating_sub(SEPARATOR_LENGTH as u16)
+                    .saturating_sub(time_size)
+                    .saturating_sub(NICKNAME_LENGTH)
+                    .saturating_sub(SEPARATOR_LENGTH)
                     .saturating_sub(4_u16)
             })
             .unwrap_or(0);
@@ -454,7 +460,6 @@ impl Draw for DiscussWidget {
         self.content_width = content_width as usize;
         let number_lines = self.get_fake_total_lines(&ctx.messages);
 
-        let time_size = self.time_size;
         let offset = self.scroll_offset;
         let visible_rows = self.collect_visible_rows(&ctx.messages, &ctx.model);
 
@@ -463,10 +468,10 @@ impl Draw for DiscussWidget {
             let table = Table::new(
                 visible_rows,
                 [
-                    Constraint::Length(time_size.saturating_add(1) as u16), // time
-                    Constraint::Length(NICKNAME_LENGTH.saturating_add(1) as u16), // nickname
-                    Constraint::Length(1),                                  // separator
-                    Constraint::Min(10),                                    // Content
+                    Constraint::Length(time_size.saturating_add(1)), // time
+                    Constraint::Length(NICKNAME_LENGTH.saturating_add(1)), // nickname
+                    Constraint::Length(1),                           // separator
+                    Constraint::Min(10),                             // Content
                 ],
             )
             .column_spacing(1)
@@ -699,11 +704,8 @@ impl crate::component::EventHandler for DiscussWidget {
                 None
             }
             MessageEvent::SettingsDidChange => {
-                if ctx.model.get_discuss_config().left_bar.time {
-                    self.time_size = TIME_LENGTH;
-                } else {
-                    self.time_size = 0;
-                }
+                self.display_time = ctx.model.get_discuss_config().left_bar.time;
+
                 None
             }
             MessageEvent::ReplaceUser(server_id, old, new) => {
@@ -886,7 +888,7 @@ mod tests {
 
     #[test]
     fn test_find_index() {
-        pub const TEXT_START: usize = TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH;
+        pub const TEXT_START: usize = (TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH) as usize;
 
         let mut messages = new_messages();
         let mut discuss = DiscussWidget::new();

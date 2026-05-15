@@ -7,6 +7,10 @@ use crate::irc_view::input::command::ClientCommand;
 use crate::irc_view::input::command::help;
 use crate::irc_view::input::input_widget;
 use crate::irc_view::input::input_widget::CInput;
+use crate::irc_view::search_widget;
+use crate::irc_view::search_widget::Query;
+use crate::irc_view::search_widget::QueryOption;
+use crate::irc_view::search_widget::SearchWidget;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
@@ -39,6 +43,13 @@ pub enum MessageError {
     MissingSource,
 }
 
+#[derive(Default, PartialEq)]
+enum ViewState {
+    #[default]
+    Discuss,
+    Search,
+}
+
 const LOG_FLUSH_CHECK_TIMER: u64 = 10;
 
 pub struct MainView<'a> {
@@ -47,9 +58,11 @@ pub struct MainView<'a> {
     list_users_view: Component<'a, users_widget::UsersWidget>,
     topic_view: Component<'a, topic_widget::TopicWidget>,
     tooltip_widget: Component<'a, tooltip_widget::ToolTipDiscussWidget>,
+    search_widget: Component<'a, search_widget::SearchWidget>,
 
     need_redraw: bool,
     has_focus: bool,
+    state: ViewState,
 
     //TODO move them into their own struct
     log_instant: std::time::Instant,
@@ -87,6 +100,8 @@ impl MainView<'_> {
             has_focus: true,
             log_instant: std::time::Instant::now(),
             logger: MessageLogger::new(log_dir),
+            search_widget: Component::new("search", SearchWidget::default()),
+            state: ViewState::default(),
         }
     }
 
@@ -171,6 +186,10 @@ impl MainView<'_> {
                 }
                 command::ClientCommand::Unknown(command_name) => {
                     Self::handle_cmd_unknown(command_name)
+                }
+                command::ClientCommand::Search(content) => {
+                    self.state = ViewState::Search;
+                    Self::handle_search(content, None, &ctx.session)
                 }
             }
         } else {
@@ -355,6 +374,25 @@ impl MainView<'_> {
         ))
     }
 
+    fn handle_search(
+        content: String,
+        channel: Option<String>,
+        session: &Session,
+    ) -> Option<MessageEvent> {
+        let status = session.get_current_status();
+        let server_id = status.as_ref().map(|s| s.server_id);
+        let channel = channel.or_else(|| status.and_then(|s| s.channel.map(|v| v.to_string())));
+        let query_option = QueryOption {
+            channel,
+            server_id: server_id,
+            ..Default::default()
+        };
+        Some(MessageEvent::Search(Query {
+            to_search: content,
+            option: Box::new(query_option),
+        }))
+    }
+
     fn handle_plain_text(content: &str, session: &mut Session) -> Option<MessageEvent> {
         if let Some(cstatus) = session.get_current_status().map(|v| v.to_owned())
             && let Some(status_channel) = cstatus.channel
@@ -433,6 +471,11 @@ impl MainView<'_> {
         }
         for mut child in self.children() {
             if let Some(message) = child.handle_events(ctx, event) {
+                messages.push_message(message);
+            }
+        }
+        if self.state == ViewState::Search {
+            if let Some(message) = self.search_widget.handle_events(ctx, event) {
                 messages.push_message(message);
             }
         }
@@ -642,6 +685,10 @@ impl widget_view::WidgetView for MainView<'_> {
             return self.need_redraw;
         }
 
+        if self.state == ViewState::Search && self.search_widget.need_redraw() {
+            return true;
+        }
+
         for child in self.children().iter_mut() {
             if child.need_redraw() {
                 return true;
@@ -653,50 +700,56 @@ impl widget_view::WidgetView for MainView<'_> {
         if self.need_redraw {
             self.need_redraw = false;
         }
-        // Create layout
-        let main_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(if ctx.model.is_topic_ui_enabled() {
-                    1
-                } else {
-                    0
-                }), // Topic area
-                Constraint::Percentage(100), // Messages area
-                Constraint::Length(2),       // Input area
-            ])
-            .split(frame.area());
 
-        if let Some(message_area_layout) = main_layout.get(1) {
-            let top_layout = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(100), // Messages
-                    Constraint::Min(if ctx.model.is_users_ui_enabled() {
-                        15
-                    } else {
-                        0
-                    }), // List Users
-                ])
-                .split(*message_area_layout);
+        match self.state {
+            ViewState::Discuss => {
+                // Create layout
+                let main_layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(if ctx.model.is_topic_ui_enabled() {
+                            1
+                        } else {
+                            0
+                        }), // Topic area
+                        Constraint::Percentage(100), // Messages area
+                        Constraint::Length(2),       // Input area
+                    ])
+                    .split(frame.area());
 
-            if let Some(message_area) = top_layout.first() {
-                self.messages_display.render(ctx, frame, *message_area);
-                self.tooltip_widget.render(ctx, frame, *message_area);
+                if let Some(message_area_layout) = main_layout.get(1) {
+                    let top_layout = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints([
+                            Constraint::Percentage(100), // Messages
+                            Constraint::Min(if ctx.model.is_users_ui_enabled() {
+                                15
+                            } else {
+                                0
+                            }), // List Users
+                        ])
+                        .split(*message_area_layout);
+
+                    if let Some(message_area) = top_layout.first() {
+                        self.messages_display.render(ctx, frame, *message_area);
+                        self.tooltip_widget.render(ctx, frame, *message_area);
+                    }
+
+                    if let Some(list_users) = top_layout.get(1) {
+                        self.list_users_view.render(ctx, frame, *list_users);
+                    }
+                }
+
+                // Render widgets
+                if let Some(input_area) = main_layout.get(2) {
+                    self.input.render(ctx, frame, *input_area);
+                }
+
+                if let Some(topic_area) = main_layout.first() {
+                    self.topic_view.render(ctx, frame, *topic_area);
+                }
             }
-
-            if let Some(list_users) = top_layout.get(1) {
-                self.list_users_view.render(ctx, frame, *list_users);
-            }
-        }
-
-        // Render widgets
-        if let Some(input_area) = main_layout.get(2) {
-            self.input.render(ctx, frame, *input_area);
-        }
-
-        if let Some(topic_area) = main_layout.first() {
-            self.topic_view.render(ctx, frame, *topic_area);
+            ViewState::Search => self.search_widget.render(ctx, frame, frame.area()),
         }
     }
 
@@ -711,9 +764,19 @@ impl widget_view::WidgetView for MainView<'_> {
             Event::Crossterm(crossterm::event::Event::Key(_)) => {
                 // Pass event to focused widget
                 if self.has_focus {
-                    for child in self.children().iter_mut() {
-                        if let Some(new_message) = child.handle_events(ctx, event) {
-                            messages.push_message(new_message);
+                    match self.state {
+                        ViewState::Discuss => {
+                            for child in self.children().iter_mut() {
+                                if let Some(new_message) = child.handle_events(ctx, event) {
+                                    messages.push_message(new_message);
+                                }
+                            }
+                        }
+                        ViewState::Search => {
+                            if let Some(new_message) = self.search_widget.handle_events(ctx, event)
+                            {
+                                messages.push_message(new_message);
+                            }
                         }
                     }
                 }
@@ -732,17 +795,25 @@ impl widget_view::WidgetView for MainView<'_> {
                     messages.push_message(message);
                 }
             }
-            Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => {
-                if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row) {
-                    for child in self.children().iter_mut() {
-                        if child.get_id().eq(&id)
-                            && let Some(new_message) = child.handle_events(ctx, event)
-                        {
-                            messages.push_message(new_message);
+            Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => match self.state {
+                ViewState::Discuss => {
+                    if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row)
+                    {
+                        for child in self.children().iter_mut() {
+                            if child.get_id().eq(&id)
+                                && let Some(new_message) = child.handle_events(ctx, event)
+                            {
+                                messages.push_message(new_message);
+                            }
                         }
                     }
                 }
-            }
+                ViewState::Search => {
+                    if let Some(new_message) = self.search_widget.handle_events(ctx, event) {
+                        messages.push_message(new_message);
+                    }
+                }
+            },
             Event::Tick => {
                 self.handle_tick(ctx, event, messages);
             }
@@ -769,6 +840,15 @@ impl widget_view::WidgetView for MainView<'_> {
             MessageEvent::Bel => {
                 println!("{}", 0x07 as char);
                 return;
+            }
+            MessageEvent::SearchEnd() => {
+                self.state = ViewState::Discuss;
+                return;
+            }
+            MessageEvent::Search(..) => {
+                if let Some(v) = self.search_widget.handle_actions(ctx, &msg) {
+                    messages.push_message(v);
+                }
             }
             MessageEvent::OpenWeb(url) => {
                 if let Err(e) = open::that(url) {

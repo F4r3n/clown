@@ -55,6 +55,8 @@ pub enum ClientCommand {
     ),
     #[strum(message = "close", detailed_message = "To close a buffer")]
     CloseBuffer(Option<String> /*buffer name, if not current*/),
+    #[strum(message = "search", detailed_message = "To search")]
+    Search(String),
     Unknown(Option<String>),
 }
 
@@ -82,6 +84,9 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
                 })),
                 "nick" => Some(args.map_or(ClientCommand::Unknown(None), |v| {
                     ClientCommand::Nick(v.to_string())
+                })),
+                "search" => Some(args.map_or(ClientCommand::Unknown(None), |v| {
+                    ClientCommand::Search(v.to_string())
                 })),
                 "help" => Some(ClientCommand::Help),
                 "spell" => Some(ClientCommand::Spell(args.map(|v| v.to_string()))),

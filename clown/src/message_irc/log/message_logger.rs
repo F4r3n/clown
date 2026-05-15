@@ -2,6 +2,7 @@ use super::log_parser;
 use crate::message_event::MessageEvent;
 use ahash::AHashMap;
 use std::borrow::Cow;
+use std::collections::VecDeque;
 use std::{
     io::{BufReader, BufWriter, Read, Seek, Write},
     path::{Path, PathBuf},
@@ -12,7 +13,7 @@ const LOG_FLUSH_TIMER_SECONDS: u64 = 5;
 //Using a LRU should be more efficient, but no need for now
 const LOG_OPENED_TIMER_MINUTES: u64 = 120;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LoggedMessage<'a> {
     Topic {
         source: Cow<'a, str>,
@@ -43,11 +44,52 @@ pub enum LoggedMessage<'a> {
         content: Cow<'a, str>,
     },
 }
+impl<'a> LoggedMessage<'a> {
+    pub fn content(&self) -> Option<&Cow<'a, str>> {
+        match self {
+            LoggedMessage::Message { source, content } => Some(content),
+            LoggedMessage::Action { source, content } => Some(content),
+            LoggedMessage::Topic {
+                source,
+                channel,
+                content,
+            } => Some(content),
+            _ => None,
+        }
+    }
 
-#[derive(Debug)]
+    pub fn source(&self) -> Option<&Cow<'a, str>> {
+        match self {
+            LoggedMessage::Message { source, content } => Some(source),
+            LoggedMessage::Action { source, content } => Some(source),
+            LoggedMessage::Topic {
+                source,
+                channel,
+                content,
+            } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct LoggedTimedMessage<'a> {
     pub time: std::time::SystemTime,
     pub message: LoggedMessage<'a>,
+}
+
+impl<'a> LoggedTimedMessage<'a> {
+    pub fn content(&self) -> Option<&Cow<'a, str>> {
+        self.message.content()
+    }
+
+    pub fn time(&self) -> std::time::SystemTime {
+        self.time
+    }
+
+    pub fn source(&self) -> Option<&Cow<'a, str>> {
+        self.message.source()
+    }
 }
 
 struct LogWriter {
@@ -146,6 +188,15 @@ impl LogReader<std::fs::File> {
         let file = Self::init(path)?;
         Ok(Self {
             seek_pos: file.metadata()?.len(),
+            buffer: BufReader::new(file),
+        })
+    }
+
+    //Starts in reverse
+    pub fn try_from_path_with_start_pos(path: &Path, position: u64) -> anyhow::Result<Self> {
+        let file = Self::init(path)?;
+        Ok(Self {
+            seek_pos: position,
             buffer: BufReader::new(file),
         })
     }
@@ -290,6 +341,105 @@ impl<R: Read + Seek> LogReader<R> {
         }
 
         Ok(vec)
+    }
+
+    pub fn iter(&mut self) -> LogReaderIter<'_, R> {
+        let exhausted = self.is_empty();
+        LogReaderIter {
+            reader: self,
+            carry: Vec::new(),
+            pending: VecDeque::new(),
+            exhausted,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LoggedMessageWithPos(LoggedTimedMessage<'static>, u64);
+
+impl LoggedMessageWithPos {
+    pub fn get_message(&self) -> &LoggedTimedMessage<'static> {
+        &self.0
+    }
+
+    pub fn get_offset(&self) -> u64 {
+        self.1
+    }
+}
+
+pub struct LogReaderIter<'r, R: Read + Seek> {
+    reader: &'r mut LogReader<R>,
+    carry: Vec<u8>,
+    pending: VecDeque<LoggedMessageWithPos>,
+    exhausted: bool,
+}
+
+impl<R: Read + Seek> LogReaderIter<'_, R> {
+    fn fill(&mut self) -> anyhow::Result<()> {
+        if self.reader.seek_pos == 0 {
+            if !self.carry.is_empty() {
+                if let Ok(msg) = log_parser::parse(&self.carry) {
+                    self.pending.push_back(LoggedMessageWithPos(msg, 0));
+                } else {
+                    tracing::error!(
+                        "Cannot parse {}",
+                        std::str::from_utf8(&self.carry).unwrap_or("<invalid utf8>")
+                    );
+                }
+                self.carry.clear();
+            }
+            self.exhausted = true;
+            return Ok(());
+        }
+
+        let amount_to_read = self.reader.seek_pos.min(1024);
+        self.reader.seek_pos -= amount_to_read;
+
+        self.reader
+            .buffer
+            .seek(std::io::SeekFrom::Start(self.reader.seek_pos))?;
+        let mut chunk = vec![0; amount_to_read as usize];
+        self.reader.buffer.read_exact(&mut chunk)?;
+
+        let old_carry = std::mem::take(&mut self.carry);
+        let mut combined = chunk;
+        combined.extend_from_slice(&old_carry);
+
+        let mut end_idx = combined.len();
+        for i in (0..combined.len()).rev() {
+            if combined.get(i) == Some(&b'\n') {
+                if let Some(line) = combined.get(i + 1..end_idx)
+                    && !line.is_empty()
+                {
+                    if let Ok(msg) = log_parser::parse(line) {
+                        self.pending.push_back(LoggedMessageWithPos(msg, i as u64));
+                    } else {
+                        tracing::error!(
+                            "Cannot parse {}",
+                            std::str::from_utf8(line).unwrap_or("<invalid utf8>")
+                        );
+                    }
+                }
+                end_idx = i;
+            }
+        }
+
+        self.carry = combined[..end_idx].to_vec();
+        Ok(())
+    }
+}
+
+impl<R: Read + Seek> Iterator for LogReaderIter<'_, R> {
+    type Item = anyhow::Result<LoggedMessageWithPos>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.pending.is_empty() && !self.exhausted {
+            if let Err(e) = self.fill() {
+                self.exhausted = true;
+                return Some(Err(e));
+            }
+        }
+        self.pending.pop_front().map(Ok)
     }
 }
 
@@ -649,6 +799,119 @@ mod tests {
         assert_eq!(
             system_time_to_utc_string(results[0].time),
             "2026-03-28 09:42:02"
+        );
+    }
+
+    #[test]
+    fn test_iter_empty() {
+        let cursor = Cursor::new(b"");
+        let mut reader = LogReader::new(cursor).unwrap();
+        assert!(reader.iter().next().is_none());
+    }
+
+    #[test]
+    fn test_iter_single_message() {
+        let data = "2026-03-28 09:42:01\tfarine a\n";
+        let cursor = Cursor::new(data.as_bytes());
+        let mut reader = LogReader::new(cursor).unwrap();
+        let mut iter = reader.iter();
+
+        let msg = iter.next().unwrap().unwrap();
+        assert_eq!(
+            system_time_to_utc_string(msg.get_message().time),
+            "2026-03-28 09:42:01"
+        );
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_iter_order_newest_first() {
+        // The iterator reads backwards: newest message comes out first.
+        let data = "2026-03-28 09:42:01\tfarine a\n2026-03-28 09:42:02\tfarine b\n2026-03-28 09:42:03\tfarine c\n";
+        let cursor = Cursor::new(data.as_bytes());
+        let mut reader = LogReader::new(cursor).unwrap();
+
+        let messages: Vec<_> = reader.iter().map(|r| r.unwrap()).collect();
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(
+            system_time_to_utc_string(messages[0].get_message().time),
+            "2026-03-28 09:42:03"
+        );
+        assert_eq!(
+            system_time_to_utc_string(messages[1].get_message().time),
+            "2026-03-28 09:42:02"
+        );
+        assert_eq!(
+            system_time_to_utc_string(messages[2].get_message().time),
+            "2026-03-28 09:42:01"
+        );
+    }
+
+    #[test]
+    fn test_iter_offsets() {
+        // Each line is 29 bytes. The offset stored is the byte position of the
+        // preceding '\n' (or 0 for the first line, which goes through the carry path).
+        let data = "2026-03-28 09:42:01\tfarine a\n2026-03-28 09:42:02\tfarine b\n2026-03-28 09:42:03\tfarine c\n";
+        let cursor = Cursor::new(data.as_bytes());
+        let mut reader = LogReader::new(cursor).unwrap();
+
+        let messages: Vec<_> = reader.iter().map(|r| r.unwrap()).collect();
+
+        assert_eq!(messages[0].get_offset(), 57); // '\n' after line 2
+        assert_eq!(messages[1].get_offset(), 28); // '\n' after line 1
+        assert_eq!(messages[2].get_offset(), 0); // first line via carry
+    }
+
+    #[test]
+    fn test_iter_across_chunk_boundary() {
+        // Build enough data to span multiple 1024-byte read chunks.
+        // Each line is 29 bytes; 40 lines = 1160 bytes > 1024.
+        let mut data = String::new();
+        for i in 0..40u32 {
+            data.push_str(&format!(
+                "2026-03-28 09:{:02}:{:02}\tfarine x\n",
+                i / 60,
+                i % 60
+            ));
+        }
+        let cursor = Cursor::new(data.as_bytes().to_vec());
+        let mut reader = LogReader::new(cursor).unwrap();
+
+        let messages: Vec<_> = reader.iter().map(|r| r.unwrap()).collect();
+
+        assert_eq!(messages.len(), 40);
+        // Newest line (i=39) comes first.
+        assert_eq!(
+            system_time_to_utc_string(messages[0].get_message().time),
+            "2026-03-28 09:00:39"
+        );
+        // Oldest line (i=0) comes last.
+        assert_eq!(
+            system_time_to_utc_string(messages[39].get_message().time),
+            "2026-03-28 09:00:00"
+        );
+    }
+
+    #[test]
+    fn test_iter_after_seek() {
+        // Seeking before iterating should exclude messages after the seek point.
+        let data = "2026-03-28 09:42:01\tfarine a\n2026-03-28 09:42:02\tfarine b\n2026-03-28 09:42:03\tfarine c\n";
+        let cursor = Cursor::new(data.as_bytes());
+        let mut reader = LogReader::new(cursor).unwrap();
+
+        reader.seek_last_time(parse_utc_to_system_time("2026-03-28 09:42:03").unwrap());
+
+        let messages: Vec<_> = reader.iter().map(|r| r.unwrap()).collect();
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(
+            system_time_to_utc_string(messages[0].get_message().time),
+            "2026-03-28 09:42:02"
+        );
+        assert_eq!(
+            system_time_to_utc_string(messages[1].get_message().time),
+            "2026-03-28 09:42:01"
         );
     }
 }

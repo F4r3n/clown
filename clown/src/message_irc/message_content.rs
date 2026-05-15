@@ -10,8 +10,8 @@ use std::borrow::Cow;
 
 const SPACES: &str = "                  "; //Max 18 spaces
 
-fn spaces(n: usize) -> &'static str {
-    SPACES.get(..n).unwrap_or_default()
+fn spaces(n: u16) -> &'static str {
+    SPACES.get(..n as usize).unwrap_or_default()
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -39,6 +39,27 @@ pub enum MessageKind {
     Notice,
 }
 
+pub enum TimeFormat {
+    Hour,
+    Day,
+}
+
+impl TimeFormat {
+    pub fn length(&self) -> u16 {
+        match self {
+            Self::Hour => 8,
+            Self::Day => 8,
+        }
+    }
+
+    pub fn chrono_fmt(&self) -> &'static str {
+        match self {
+            Self::Hour => "%H:%M:%S",
+            Self::Day => "%d/%m/%y",
+        }
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct MessageContent {
     time: std::time::SystemTime, /*Generated time */
@@ -57,6 +78,10 @@ impl MessageContent {
     #[cfg(test)]
     pub fn get_content(&self) -> &str {
         &self.content
+    }
+
+    pub fn is_log(&self) -> bool {
+        self.is_log
     }
 
     pub fn get_word_from_pos(&self, pos: &WordPos) -> Option<&str> {
@@ -174,17 +199,17 @@ impl MessageContent {
         Some(WordPos::from(start, end))
     }
 
-    fn time_format(&self) -> impl std::fmt::Display {
+    fn time_format(&self, format: &TimeFormat) -> impl std::fmt::Display {
         let datetime: DateTime<Local> = self.time.into();
-        datetime.format("%H:%M:%S")
+        datetime.format(format.chrono_fmt())
     }
 
     pub fn create_rows(
         &self,
         content_width: u16,
         color_source: Option<ratatui::style::Color>,
-        time_length: usize,
-        nickname_length: usize,
+        time_format: Option<&TimeFormat>,
+        nickname_length: u16,
     ) -> impl Iterator<Item = Row<'_>> {
         let mut nickname_style = Style::default();
         if let Some(color_source) = color_source {
@@ -207,21 +232,21 @@ impl MessageContent {
         };
         let wrapped = self.wrap_spans(content_width as usize, Some(default_style));
         let mut visible_rows = Vec::with_capacity(wrapped.len());
-
+        let time_length: u16 = time_format.as_ref().map(|v| v.length()).unwrap_or(0);
         visible_rows.push([
-            if time_length > 0 {
-                Cell::from(format!(
-                    "{:>width$}",
-                    self.time_format(),
-                    width = time_length
-                ))
-            } else {
-                Cell::default()
-            },
+            time_format
+                .map(|v| {
+                    Cell::from(format!(
+                        "{:>width$}",
+                        self.time_format(&v),
+                        width = time_length as usize
+                    ))
+                })
+                .unwrap_or_default(),
             Cell::from(format!(
                 "{:<width$}",
                 self.source.as_deref().unwrap_or_default(),
-                width = nickname_length
+                width = nickname_length as usize
             ))
             .style(nickname_style),
             Cell::from("┃ ").style(separator_style),

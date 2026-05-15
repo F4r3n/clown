@@ -72,6 +72,8 @@ pub enum MessageEvent {
     SettingsDidChange,
     Bel,
     CloseBuffer(Option<ServerID> /*server id */, String /*name */),
+    Search(super::irc_view::search_widget::Query),
+    SearchEnd(),
 }
 
 impl MessageEvent {
