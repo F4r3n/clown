@@ -107,6 +107,12 @@ impl<'a> SpanRef<'a> {
     }
 }
 
+impl<'a> From<SpanRef<'a>> for ratatui::text::Span<'a> {
+    fn from(s: SpanRef<'a>) -> Self {
+        ratatui::text::Span::styled(s.content, s.style)
+    }
+}
+
 pub fn to_spans<'a>(content: &'a str, start_style: Option<Style>) -> Vec<SpanRef<'a>> {
     if content.is_empty() {
         return vec![];
@@ -278,7 +284,7 @@ mod tests {
     fn span_data<'a>(span: &'a SpanRef<'_>) -> (&'a str, Color, Color) {
         // Assuming you have methods or public fields to get these:
         (
-            span.content,
+            span.content.as_ref(),
             span.style.fg.unwrap_or_default(),
             span.style.bg.unwrap_or_default(),
         )

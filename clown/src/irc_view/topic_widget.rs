@@ -1,7 +1,8 @@
 use crate::component::{Draw, EventHandler};
+use crate::message_irc::message_parser::to_spans;
 use crate::state::server_id::ServerID;
 use ratatui::layout::Rect;
-use ratatui::text::Text;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 pub struct TopicWidget {
@@ -24,9 +25,8 @@ impl Draw for TopicWidget {
             && let Some(channel) = server_model.get_current_channel()
             && let Some(topic) = self.get_topic(server_model.get_server_id(), channel)
         {
-            let text = Text::from(topic);
-            let paragrapth = Paragraph::new(text);
-            frame.render_widget(paragrapth, area);
+            let line: Line<'_> = to_spans(topic, None).into_iter().map(Span::from).collect();
+            frame.render_widget(Paragraph::new(line), area);
         }
     }
 }
