@@ -12,7 +12,12 @@ fn criterion_benchmark(c: &mut Criterion) {
         );
         b.iter(|| {
             black_box(&msg)
-                .create_rows(black_box(40), None, black_box(8), black_box(10))
+                .create_rows(
+                    black_box(40),
+                    None,
+                    Some(&clown::message_irc::message_content::TimeFormat::Hour),
+                    black_box(10),
+                )
                 .count()
         });
     });
@@ -22,7 +27,12 @@ fn criterion_benchmark(c: &mut Criterion) {
             MessageContent::message(Some("nickname".to_string()), "short message".to_string());
         b.iter(|| {
             black_box(&msg)
-                .create_rows(black_box(120), None, black_box(8), black_box(10))
+                .create_rows(
+                    black_box(120),
+                    None,
+                    Some(&clown::message_irc::message_content::TimeFormat::Hour),
+                    black_box(10),
+                )
                 .count()
         });
     });

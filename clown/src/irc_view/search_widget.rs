@@ -76,11 +76,12 @@ async fn async_search(
     let mut count: usize = 0;
     let mut last_offset = 0;
     let file_path = log_path;
-    if let Ok(mut log_reader) = if let Some(start) = position_to_start {
+    let reader = if let Some(start) = position_to_start {
         LogReader::try_from_path_with_start_pos(file_path.as_path(), start.get())
     } else {
         LogReader::try_from_path(file_path.as_path())
-    } {
+    };
+    if let Ok(mut log_reader) = reader {
         for message in log_reader.iter() {
             if let Ok(message) = message {
                 if let Some(content) = message.get_message().content() {
@@ -105,7 +106,8 @@ async fn async_search(
                             message: MessageContent::message(
                                 message.get_message().source().map(|v| v.to_string()),
                                 content.to_string(),
-                            ),
+                            )
+                            .with_time(message.get_message().time),
                         })
                         .await;
                     if limit.is_some_and(|l| count >= l.into()) {
