@@ -2,7 +2,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::io::{BufReader, BufWriter};
 
 use crate::conn::{self, Connection};
-use crate::error::ClownError;
+use crate::error::{ClownError, ConnectionError};
 use crate::message::MessageReceiver;
 use crate::outgoing::CommandSender;
 use crate::outgoing::Outgoing;
@@ -34,6 +34,13 @@ impl Client {
             outgoing,
             message_receiver: Some(message_receiver),
         }
+    }
+
+    pub fn install_crypto_default_provider() -> Result<(), ConnectionError> {
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .map_err(|_| ConnectionError::Unknown)?;
+        Ok(())
     }
 
     fn try_connect(&mut self) -> Result<(), ClownError> {

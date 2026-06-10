@@ -71,6 +71,7 @@ fn prepare_logs(is_debug: bool) -> anyhow::Result<WorkerGuard> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    clown_core::client::Client::install_crypto_default_provider()?;
     let args = Args::parse();
 
     let _guard = prepare_logs(args.debug)?;
