@@ -1,133 +1,89 @@
 use crate::message_irc::message_parser::to_spans;
 use ratatui::style::Style;
 use ratatui::text::Span;
+use std::ops::Range;
 use unicode_width::UnicodeWidthChar;
 
-pub fn wrapped_line_count(content: &str, width: usize) -> usize {
+fn wrap_ranges(content: &str, width: usize, mut emit: impl FnMut(Range<usize>)) {
     if width == 0 || content.is_empty() {
-        return 0;
+        return;
     }
 
-    let mut total_lines = 1;
-    let mut chars = content.chars().peekable();
-    let mut current_width = 0;
-
-    while let Some(c) = chars.next() {
-        let char_width = c.width().unwrap_or(0);
-
-        if c.is_whitespace() {
-            current_width += char_width;
-            continue;
-        }
-
-        // Consume the word
-        let mut word_width = char_width;
-        while let Some(next_c) = chars.peek() {
-            if next_c.is_whitespace() {
-                break;
-            }
-            word_width += next_c.width().unwrap_or(0);
-            chars.next();
-        }
-
-        // Overflow check
-        if current_width > 0 && current_width + word_width > width {
-            total_lines += 1;
-            current_width = 0;
-        }
-
-        // Force split or normal
-        if word_width > width {
-            let distinct_lines = word_width.div_ceil(width);
-            total_lines += distinct_lines - 1;
-            current_width = word_width % width;
-            if current_width == 0 {
-                current_width = width;
-            }
-        } else {
-            current_width += word_width;
-        }
-    }
-
-    total_lines
-}
-
-pub fn wrap_content(content: &str, width: usize) -> Vec<&str> {
-    if width == 0 {
-        return vec![];
-    }
-    let mut wrapped_lines = Vec::with_capacity(content.len().div_ceil(width));
-    let line = content;
-    let mut char_indices = line.char_indices().peekable();
+    // `line_end` trails the last non-whitespace char so trailing ws is trimmed.
     let mut line_start = 0;
+    let mut line_end = 0;
     let mut current_width = 0;
-    let mut last_word_end = 0;
+    let mut line_count = 0;
+    let mut chars = content.char_indices().peekable();
 
-    while let Some((i, c)) = char_indices.next() {
+    while let Some((i, c)) = chars.next() {
         let char_width = c.width().unwrap_or(0);
 
         if c.is_whitespace() {
-            last_word_end = i;
             current_width += char_width;
-
             continue;
         }
 
-        // Consume the word
         let word_start = i;
-        let mut word_width = char_width;
         let mut word_end = i + c.len_utf8();
-        while let Some((_next_i, next_c)) = char_indices.peek() {
+        let mut word_width = char_width;
+        while let Some(&(_, next_c)) = chars.peek() {
             if next_c.is_whitespace() {
                 break;
             }
             word_width += next_c.width().unwrap_or(0);
             word_end += next_c.len_utf8();
-            char_indices.next();
+            chars.next();
         }
 
-        // Overflow check
         if current_width > 0 && current_width + word_width > width {
-            let line_slice = &line[line_start..last_word_end];
-            wrapped_lines.push(line_slice.trim_end());
+            emit(line_start..line_end);
+            line_count += 1;
             line_start = word_start;
             current_width = 0;
         }
 
-        // Handle long words
         if word_width > width {
-            if current_width > 0 {
-                wrapped_lines.push(line[line_start..word_start].trim_end());
-            }
-            let mut temp_w = 0;
-            let mut temp_start = word_start;
-            for (ci, cc) in line[word_start..word_end].char_indices() {
-                let cw = cc.width().unwrap_or(0);
-                if temp_w + cw > width {
-                    wrapped_lines.push(&line[temp_start..word_start + ci]);
-                    temp_start = word_start + ci;
-                    temp_w = 0;
+            // Word wider than a line: force-split at char boundaries.
+            let mut seg_width = 0;
+            for (ci, cc) in content[word_start..word_end].char_indices() {
+                let cc_width = cc.width().unwrap_or(0);
+                let abs = word_start + ci;
+                if seg_width > 0 && seg_width + cc_width > width {
+                    emit(line_start..abs);
+                    line_count += 1;
+                    line_start = abs;
+                    seg_width = 0;
                 }
-                temp_w += cw;
+                seg_width += cc_width;
             }
-            line_start = temp_start;
-            last_word_end = word_end;
-            current_width = temp_w;
+            current_width = seg_width;
+            line_end = word_end;
         } else {
             current_width += word_width;
-            last_word_end = word_end;
+            line_end = word_end;
         }
     }
 
-    // Push remaining content
-    if line_start < line.len() {
-        let remaining_slice = &line[line_start..];
-        if !remaining_slice.trim().is_empty() {
-            wrapped_lines.push(remaining_slice.trim_end());
-        }
+    // Drop an empty final line unless it is the only one (so a whitespace-only
+    // message still counts as one row).
+    if line_count == 0 || line_end > line_start {
+        emit(line_start..line_end);
     }
+}
 
-    wrapped_lines
+/// Rows `content` (already stripped of IRC formatting) wraps to. Allocation-free.
+pub fn wrapped_line_count(content: &str, width: usize) -> usize {
+    let mut count = 0;
+    wrap_ranges(content, width, |_| count += 1);
+    count
+}
+
+/// Wrap plain (already stripped) text into borrowed line slices.
+pub fn wrap_content(content: &str, width: usize) -> Vec<&str> {
+    let mut lines = Vec::new();
+    wrap_ranges(content, width, |r| lines.push(&content[r]));
+    lines
 }
 
 #[derive(Default)]
@@ -135,6 +91,10 @@ pub struct WrappedLine<'a> {
     pub spans: Vec<Span<'a>>,
 }
 
+/// Wrap IRC-formatted `content` into styled lines. Break decisions run on the
+/// visible text (concatenated span contents, byte-identical to what
+/// [`wrapped_line_count`] sees), then styling is overlaid per range — so the
+/// line count always matches `wrapped_line_count`.
 pub fn wrap_spans<'a>(
     content: &'a str,
     width: usize,
@@ -146,121 +106,42 @@ pub fn wrap_spans<'a>(
 
     let spans = to_spans(content, start_style);
 
-    let mut lines: Vec<WrappedLine<'a>> = vec![WrappedLine::default()];
-    let mut current_width = 0;
-    let mut just_wrapped = false;
-
-    for span in spans {
-        let style = span.style;
-        let text_content: &'a str = span.content;
-
-        let mut char_indices = text_content.char_indices().peekable();
-
-        while let Some((i, c)) = char_indices.next() {
-            let char_w = c.width().unwrap_or(0);
-
-            // Handle Whitespace
-            if c.is_whitespace() {
-                // Skip leading whitespace only after a word wrap, not on the original first line
-                if !just_wrapped {
-                    if let Some(last_line) = lines.last_mut() {
-                        let char_slice = &text_content[i..i + c.len_utf8()];
-                        last_line.spans.push(Span::styled(char_slice, style));
-                    }
-                    current_width += char_w;
-                }
-                continue;
+    // Borrow the visible text for a single span, else concatenate once.
+    let visible: std::borrow::Cow<'a, str> = match spans.as_slice() {
+        [single] => std::borrow::Cow::Borrowed(single.content),
+        _ => {
+            let mut s = String::with_capacity(content.len());
+            for span in &spans {
+                s.push_str(span.content);
             }
+            std::borrow::Cow::Owned(s)
+        }
+    };
 
-            // Consume the Word
-            let word_start = i;
-            let mut word_width = char_w;
-            let mut word_end = i + c.len_utf8();
+    let mut span_starts = Vec::with_capacity(spans.len());
+    let mut acc = 0;
+    for span in &spans {
+        span_starts.push(acc);
+        acc += span.content.len();
+    }
 
-            while let Some(&(_, next_c)) = char_indices.peek() {
-                if next_c.is_whitespace() {
-                    break;
-                }
-                word_width += next_c.width().unwrap_or(0);
-                word_end += next_c.len_utf8();
-                char_indices.next();
-            }
-            let word_slice = &text_content[word_start..word_end];
-
-            // Overflow Check
-            if current_width > 0 && current_width + word_width > width {
-                // Before moving to a new line, trim trailing whitespace from the current line
-                trim_line_end(lines.last_mut());
-
-                lines.push(WrappedLine::default());
-                current_width = 0;
-                just_wrapped = true;
-            }
-
-            // Force Split or Normal Push
-            if word_width > width {
-                let mut temp_w = 0;
-                let mut temp_start = 0;
-                for (ci, cc) in word_slice.char_indices() {
-                    let ccw = cc.width().unwrap_or(0);
-                    if temp_w + ccw > width && temp_w > 0 {
-                        if let Some(last_line) = lines.last_mut() {
-                            last_line
-                                .spans
-                                .push(Span::styled(&word_slice[temp_start..ci], style));
-                        }
-                        lines.push(WrappedLine::default());
-                        just_wrapped = true;
-                        temp_start = ci;
-                        temp_w = 0;
-                    }
-                    temp_w += ccw;
-                }
-                let remaining = &word_slice[temp_start..];
-                if !remaining.is_empty() {
-                    if let Some(last_line) = lines.last_mut() {
-                        last_line.spans.push(Span::styled(remaining, style));
-                    }
-                    current_width = temp_w;
-                    just_wrapped = false;
-                }
-            } else {
-                if let Some(last_line) = lines.last_mut() {
-                    last_line.spans.push(Span::styled(word_slice, style));
-                }
-                current_width += word_width;
-                just_wrapped = false;
+    let mut lines = Vec::new();
+    wrap_ranges(&visible, width, |range| {
+        let mut line = WrappedLine::default();
+        for (span, &span_start) in spans.iter().zip(&span_starts) {
+            let span_end = span_start + span.content.len();
+            let start = range.start.max(span_start);
+            let end = range.end.min(span_end);
+            if start < end {
+                line.spans.push(Span::styled(
+                    &span.content[start - span_start..end - span_start],
+                    span.style,
+                ));
             }
         }
-    }
-
-    // Final cleanup for each line
-    for line in &mut lines {
-        trim_line_end(Some(line));
-    }
-
-    // Remove last line if empty
-    if let Some(last) = lines.last()
-        && last.spans.is_empty()
-        && lines.len() > 1
-    {
-        lines.pop();
-    }
-
+        lines.push(line);
+    });
     lines
-}
-
-/// Helper to remove trailing whitespace spans from a line
-fn trim_line_end(line: Option<&mut WrappedLine<'_>>) {
-    if let Some(l) = line {
-        while let Some(last_span) = l.spans.last() {
-            if last_span.content.chars().all(|c| c.is_whitespace()) {
-                l.spans.pop();
-            } else {
-                break;
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -310,10 +191,6 @@ mod tests {
         let width = 7;
 
         let lines = wrap_spans(input, width, None);
-
-        // Should result in 2 lines:
-        // 1. "Hello" (Pink) -> Note: trailing space should be trimmed by your `trim_line_end`
-        // 2. "World" (Bold)
 
         assert_eq!(lines.len(), 2);
 
@@ -537,6 +414,42 @@ mod tests {
                 content,
                 width
             );
+        }
+    }
+
+    /// The invariant the scroll math depends on: the row count used to position
+    /// the viewport must equal the number of rows actually rendered. Counting
+    /// runs on the stripped text; rendering runs on the formatted text — they
+    /// must agree across plain, multibyte, long-word and IRC-formatted inputs.
+    #[test]
+    fn count_matches_wrap_spans_len() {
+        use crate::message_irc::message_parser::strip_irc_formatting_cow;
+
+        let inputs = [
+            "hello world",
+            "one two three four",
+            "abcdefghij",
+            "中中中中中",
+            "😀😀😀 hi",
+            "   ",
+            "  leading spaces then text",
+            "https://github.com/F4r3n/clown/ is a long url",
+            "\x0313Hello \x02World",
+            "plain \x034red\x03 text \x02bold\x02 mixed formatting here",
+            "no\x02space\x02between\x02styled\x02runs",
+            "中\x02中中\x02中中",
+        ];
+
+        for input in inputs {
+            for width in 1..=20 {
+                let stripped = strip_irc_formatting_cow(input);
+                let count = wrapped_line_count(&stripped, width);
+                let rendered = wrap_spans(input, width, None).len();
+                assert_eq!(
+                    count, rendered,
+                    "count ({count}) != wrap_spans len ({rendered}) for input={input:?}, width={width}",
+                );
+            }
         }
     }
 }

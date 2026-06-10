@@ -69,7 +69,7 @@ fn prepare_logs(is_debug: bool) -> anyhow::Result<WorkerGuard> {
     Ok(guard)
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     clown_core::client::Client::install_crypto_default_provider()?;
     let args = Args::parse();
