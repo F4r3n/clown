@@ -52,12 +52,12 @@ impl Client {
             self.login_config
                 .username
                 .as_ref()
-                .unwrap_or_else(|| &self.login_config.nickname)
+                .unwrap_or(&self.login_config.nickname)
                 .to_string(),
             self.login_config
                 .real_name
                 .as_ref()
-                .unwrap_or_else(|| &self.login_config.nickname)
+                .unwrap_or(&self.login_config.nickname)
                 .to_string(),
         ))?;
 

@@ -320,7 +320,7 @@ impl Completion {
                     }
                 }
                 _ => {
-                    if phrase.ends_with(" ") && slice.len() >= 1 {
+                    if phrase.ends_with(" ") && !slice.is_empty() {
                         if let Some(list) =
                             self.input_completion
                                 .list(self.server_id, &self.current_channel, last)

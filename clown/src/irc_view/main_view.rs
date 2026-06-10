@@ -227,12 +227,11 @@ impl MainView<'_> {
             return Some(MessageEvent::from_error(e));
         }
 
-        if let Some(id) = session.get_current_server_id() {
-            if !session.is_connected(id)
-                && let Err(e) = model.set_nickname(id, new_nick.clone())
-            {
-                tracing::error!(error = %e, "Impossible to save");
-            }
+        if let Some(id) = session.get_current_server_id()
+            && !session.is_connected(id)
+            && let Err(e) = model.set_nickname(id, new_nick.clone())
+        {
+            tracing::error!(error = %e, "Impossible to save");
         }
 
         None
@@ -384,7 +383,7 @@ impl MainView<'_> {
         let channel = channel.or_else(|| status.and_then(|s| s.channel.map(|v| v.to_string())));
         let query_option = QueryOption {
             channel,
-            server_id: server_id,
+            server_id,
             ..Default::default()
         };
         Some(MessageEvent::Search(Query {
@@ -474,10 +473,10 @@ impl MainView<'_> {
                 messages.push_message(message);
             }
         }
-        if self.state == ViewState::Search {
-            if let Some(message) = self.search_widget.handle_events(ctx, event) {
-                messages.push_message(message);
-            }
+        if self.state == ViewState::Search
+            && let Some(message) = self.search_widget.handle_events(ctx, event)
+        {
+            messages.push_message(message);
         }
     }
 
@@ -519,11 +518,10 @@ impl MainView<'_> {
                         if let Some(source) = source
                             && let Some(nickname) = ctx.model.get_nickname(server_id)
                         {
-                            if source.eq_ignore_ascii_case(nickname) {
-                                if let Err(e) = ctx.model.set_nickname(server_id, new_user.clone())
-                                {
-                                    tracing::error!(error = %e, "Impossible to save");
-                                }
+                            if source.eq_ignore_ascii_case(nickname)
+                                && let Err(e) = ctx.model.set_nickname(server_id, new_user.clone())
+                            {
+                                tracing::error!(error = %e, "Impossible to save");
                             }
 
                             messages.push_message(MessageEvent::ReplaceUser(

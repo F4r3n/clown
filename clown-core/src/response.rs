@@ -366,10 +366,7 @@ impl ResponseBuilder {
             325 => UniqueOpIs(string_to_send),
             331 => NoTopic(string_to_send),
             332 if let Some(parameters) = parameters => {
-                let parameter = parameters
-                    .split_ascii_whitespace()
-                    .filter(|v| !v.is_empty())
-                    .last();
+                let parameter = parameters.split_ascii_whitespace().rfind(|v| !v.is_empty());
                 match parameter {
                     Some(param) => Topic(param.to_string(), string_to_send),
                     _ => Unknown(reply_number, string_to_send),
@@ -403,8 +400,8 @@ impl ResponseBuilder {
                     .filter(|v| !v.is_empty());
                 parameters.next();
                 NameReply(
-                    parameters.next().unwrap_or(&"").to_string(),
-                    parameters.next().unwrap_or(&"").to_string(),
+                    parameters.next().unwrap_or("").to_string(),
+                    parameters.next().unwrap_or("").to_string(),
                     string_to_send
                         .split_ascii_whitespace()
                         .map(|v| v.to_string())

@@ -284,7 +284,7 @@ mod tests {
     fn span_data<'a>(span: &'a SpanRef<'_>) -> (&'a str, Color, Color) {
         // Assuming you have methods or public fields to get these:
         (
-            span.content.as_ref(),
+            span.content,
             span.style.fg.unwrap_or_default(),
             span.style.bg.unwrap_or_default(),
         )

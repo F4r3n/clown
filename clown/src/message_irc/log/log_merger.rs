@@ -46,7 +46,7 @@ pub fn merge_logs(log_location: PathBuf) -> anyhow::Result<()> {
             }
         }
 
-        data.sort_by(|a, b| a.0.cmp(&b.0));
+        data.sort_by_key(|a| a.0);
 
         // merge everyting to the last file
         //first create a copy of the current

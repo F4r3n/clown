@@ -102,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
     let mut ctx = crate::state::context::Ctx {
         messages: ServersMessages::new(log_dir),
         session: Session::new(model.get_server_count()),
-        model: model,
+        model,
     };
     let mut current_view = Views::Main(main_view::MainView::new());
 

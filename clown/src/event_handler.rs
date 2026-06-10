@@ -46,10 +46,11 @@ impl EventHandler {
                             break;
                         }
                       }
-                      Some(Err(_)) => {
-                        if tx.send(Event::Error).await.is_err() {
-                            break;
-                        }
+                      Some(Err(_))  => {
+                        //It will stop
+                        let _ = tx.send(Event::Error).await;
+                        break;
+
                       }
                       None => {},
                     }

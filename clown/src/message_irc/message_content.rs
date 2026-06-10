@@ -238,7 +238,7 @@ impl MessageContent {
                 .map(|v| {
                     Cell::from(format!(
                         "{:>width$}",
-                        self.time_format(&v),
+                        self.time_format(v),
                         width = time_length as usize
                     ))
                 })

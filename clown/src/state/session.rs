@@ -59,16 +59,16 @@ impl Session {
     pub fn new(in_length: usize) -> Self {
         Self {
             model: IrcModel::new(in_length),
-            servers: std::iter::repeat_with(|| ServerSlot::new())
+            servers: std::iter::repeat_with(ServerSlot::new)
                 .take(in_length)
                 .collect(),
         }
     }
 
     pub fn reset_retry(&mut self, id: ServerID) {
-        self.servers
-            .get_mut(id.as_usize())
-            .map(|v| v.status.retry = 0);
+        if let Some(server) = self.servers.get_mut(id.as_usize()) {
+            server.status.retry = 5;
+        }
     }
 
     pub fn get_mut_connection(&mut self, id: ServerID) -> Option<&mut IRCConnection> {
@@ -230,9 +230,7 @@ impl Session {
     pub fn get_current_status<'a>(&'a self) -> Option<SessionStatus<'a>> {
         self.get_current_irc_server_model().map(|v| SessionStatus {
             server_id: v.get_server_id(),
-            channel: v
-                .get_current_channel()
-                .map(|v| std::borrow::Cow::Borrowed(v)),
+            channel: v.get_current_channel().map(std::borrow::Cow::Borrowed),
             nickname: std::borrow::Cow::Borrowed(v.get_current_nick()),
         })
     }

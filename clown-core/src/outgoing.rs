@@ -19,7 +19,7 @@ pub struct Outgoing {
 impl Outgoing {
     pub async fn receive_message<W>(
         &mut self,
-        mut writer: &mut BufWriter<W>,
+        writer: &mut BufWriter<W>,
         server_message: ServerMessage,
     ) -> Result<(), IRCIOError>
     where
@@ -27,11 +27,11 @@ impl Outgoing {
     {
         match server_message.reply() {
             Response::Cmd(Command::Ping(token)) => {
-                Command::Pong(token).write(&mut writer).await?;
+                Command::Pong(token).write(writer).await?;
                 writer.flush().await?;
             }
             Response::Cmd(Command::Cap(_)) => {
-                Command::Cap("END".into()).write(&mut writer).await?;
+                Command::Cap("END".into()).write(writer).await?;
                 writer.flush().await?;
             }
             _ => {}
