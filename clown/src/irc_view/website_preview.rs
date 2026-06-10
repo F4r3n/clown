@@ -51,6 +51,7 @@ impl WebsitePreview {
         }
     }
     fn get_metadata(&mut self) -> Option<MetaData> {
+        use futures::future::FutureExt;
         if self.metadata.is_some() {
             return self.metadata.clone();
         }
@@ -59,14 +60,10 @@ impl WebsitePreview {
             return self.metadata.clone();
         }
         if let Some(join_handle) = self.handle.take() {
-            let data = block_in_place(|| {
-                let handle = Handle::current();
-                match handle.block_on(join_handle) {
-                    Ok(Ok(meta)) => Some(meta),
-                    Ok(Err(_)) => None,
-                    Err(_) => None,
-                }
-            });
+            let data = match join_handle.now_or_never() {
+                Some(Ok(Ok(meta))) => Some(meta),
+                _ => None, // Task failed, panicked, or wasn't actually finished
+            };
             self.metadata = data;
             if let Some(meta) = &mut self.metadata
                 && let Some(dyn_image) = meta.take_image()

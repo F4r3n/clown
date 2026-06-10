@@ -1,4 +1,4 @@
-use tokio::task::{JoinHandle, block_in_place};
+use tokio::task::JoinHandle;
 #[allow(dead_code)]
 pub struct AsyncTask<T> {
     pub handle: Option<JoinHandle<anyhow::Result<T>>>,
@@ -19,6 +19,7 @@ impl<T> AsyncTask<T> {
     }
 
     pub fn poll(&mut self) -> bool {
+        use futures::FutureExt;
         if !self.is_ready() {
             return false;
         }
@@ -27,12 +28,10 @@ impl<T> AsyncTask<T> {
             return false;
         };
 
-        let res = block_in_place(|| tokio::runtime::Handle::current().block_on(handle));
-
-        match res {
-            Ok(res) => self.result = Some(res),
-            Err(e) => self.result = Some(Err(anyhow::anyhow!(e))),
-        }
+        match handle.now_or_never() {
+            Some(Ok(data)) => self.result = Some(data),
+            _ => self.result = Some(Err(anyhow::anyhow!("Task failed"))), // Task failed, panicked, or wasn't actually finished
+        };
 
         true
     }
