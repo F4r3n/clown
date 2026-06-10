@@ -571,10 +571,16 @@ impl MainView<'_> {
                                 source.clone(),
                             ));
 
-                            messages.push_message(MessageEvent::SelectChannel(
-                                Some(server_id),
-                                channel.clone(),
-                            ));
+                            //If the server has received the join command and send it back
+                            // we are allowed to select the channel if we are the current user
+                            if let Some(nickname) = ctx.model.get_nickname(server_id)
+                                && source.eq_ignore_ascii_case(nickname)
+                            {
+                                messages.push_message(MessageEvent::SelectChannel(
+                                    Some(server_id),
+                                    channel.clone(),
+                                ));
+                            }
                         } else {
                             tracing::error!(error = %MessageError::MissingSource, "Join");
                         }
