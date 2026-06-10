@@ -417,7 +417,7 @@ impl CommandBuilder {
                 CommandName::Invite => CommandBuilder::invite(parameters),
                 CommandName::Kick => CommandBuilder::kick(parameters, trailing),
                 CommandName::Error => {
-                    CommandBuilder::make_command_1(parameters, trailing, Command::Ping)
+                    CommandBuilder::make_command_1(parameters, trailing, Command::Error)
                 }
                 CommandName::Cap => {
                     CommandBuilder::make_command_1(parameters, trailing, Command::Cap)
