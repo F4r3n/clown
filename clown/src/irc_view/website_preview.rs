@@ -1,10 +1,7 @@
 use {
     clown_website_preview::{MetaData, get_url_preview},
     ratatui_image::{StatefulImage, picker::Picker, protocol::StatefulProtocol},
-    tokio::{
-        runtime::Handle,
-        task::{JoinHandle, block_in_place},
-    },
+    tokio::{runtime::Handle, task::JoinHandle},
 };
 
 use ratatui::{

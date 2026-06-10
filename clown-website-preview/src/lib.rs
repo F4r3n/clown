@@ -30,32 +30,29 @@ impl MetaData {
             image: None,
         };
 
-        if let Some(selector) = dom.query_selector("head") {
-            if let Some(tag) = selector
+        if let Some(selector) = dom.query_selector("head")
+            && let Some(tag) = selector
                 .into_iter()
                 .next()
                 .and_then(|v| v.get(parser).and_then(|node| node.as_tag()))
-            {
-                if let Some(selector) = tag.query_selector(parser, "meta") {
-                    for handle in selector {
-                        if let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) {
-                            let attributes = tag.attributes();
+            && let Some(selector) = tag.query_selector(parser, "meta")
+        {
+            for handle in selector {
+                if let Some(tag) = handle.get(parser).and_then(|node| node.as_tag()) {
+                    let attributes = tag.attributes();
 
-                            let property = attributes
-                                .get("property")
-                                .flatten()
-                                .map(|v| v.as_utf8_str());
-                            let content =
-                                attributes.get("content").flatten().map(|v| v.as_utf8_str());
+                    let property = attributes
+                        .get("property")
+                        .flatten()
+                        .map(|v| v.as_utf8_str());
+                    let content = attributes.get("content").flatten().map(|v| v.as_utf8_str());
 
-                            if let (Some(prop), Some(cont)) = (property, content) {
-                                match prop.as_ref() {
-                                    "og:title" => meta.title = cont.to_string(),
-                                    "og:image" => meta.image_url = cont.to_string(),
-                                    "og:description" => meta.description = cont.to_string(),
-                                    _ => {}
-                                }
-                            }
+                    if let (Some(prop), Some(cont)) = (property, content) {
+                        match prop.as_ref() {
+                            "og:title" => meta.title = cont.to_string(),
+                            "og:image" => meta.image_url = cont.to_string(),
+                            "og:description" => meta.description = cont.to_string(),
+                            _ => {}
                         }
                     }
                 }
@@ -110,6 +107,8 @@ fn fetch_head_html(reader: &mut dyn Read) -> Result<String, std::io::Error> {
         }
 
         let previous_size = buf.len();
+
+        //Should nerver fails
         buf.extend_from_slice(&chunk[..n]);
 
         // Stop if </head> is found
@@ -134,8 +133,7 @@ pub fn get_url_preview(endpoint: &str) -> Result<MetaData, String> {
     let content_type = resp
         .headers()
         .get("content-type")
-        .map(|v| v.to_str().ok())
-        .flatten();
+        .and_then(|v| v.to_str().ok());
 
     let has_meta = !content_type.is_some_and(|v| v.starts_with("image"));
 
