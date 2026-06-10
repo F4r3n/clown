@@ -8,8 +8,8 @@ description.workspace = true
 
 [dependencies]
 fst = "0.4.7"
-regex = {version="1.12.2",features=["std", "perf"], default-features=false}
-thiserror = "2.0.17"
+regex = {version="1.12.4",features=["std", "perf"], default-features=false}
+thiserror = "2.0.18"
 
 [lints]
 workspace = true
