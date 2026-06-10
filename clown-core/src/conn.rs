@@ -101,6 +101,7 @@ impl AsyncWrite for IRCStream {
 pub struct ConnectionConfig {
     pub address: String,
     pub port: u16,
+    pub use_tls: bool,
 }
 
 #[derive(Debug)]
@@ -151,7 +152,7 @@ impl Connection {
     }
 
     pub async fn connect(&self) -> Result<IRCStream, ConnectionError> {
-        if self.connection_config.port == 6697 {
+        if self.connection_config.use_tls {
             self.establish_stream_tls(&self.connection_config.address, self.connection_config.port)
                 .await
         } else {

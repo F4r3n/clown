@@ -40,6 +40,8 @@ pub trait RemoteConfig {
 pub struct Connection {
     pub address: String,
     pub port: u16,
+    #[serde(default = "default_true")]
+    pub use_tls: bool,
 }
 
 impl RemoteConfig for Connection {
@@ -51,6 +53,7 @@ impl RemoteConfig for Connection {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("address") => Ok(self.address.to_string()),
             Some("port") => Ok(self.port.to_string()),
+            Some("use_tls") => Ok(self.use_tls.to_string()),
             Some(p) => bail!("Invalid path {p}"),
             _ => bail!("[Connection]: Invalid path"),
         }
@@ -63,6 +66,7 @@ impl RemoteConfig for Connection {
         match path.next().as_ref().map(AsRef::as_ref) {
             Some("address") => Ok(vec![ValueParameter::String]),
             Some("port") => Ok(vec![ValueParameter::Number]),
+            Some("use_tls") => Ok(vec![ValueParameter::Boolean]),
             Some(p) => bail!("Invalid path {p}"),
             _ => bail!("[Connection]: Invalid path"),
         }
@@ -82,13 +86,17 @@ impl RemoteConfig for Connection {
                 self.port = value.parse::<u16>()?;
                 Ok(())
             }
+            Some("use_tls") => {
+                self.use_tls = value.parse::<bool>()?;
+                Ok(())
+            }
             Some(p) => bail!("Invalid path {p}"),
             _ => bail!("[Connection]: Invalid path"),
         }
     }
 
     fn get_paths(prefix: &str) -> Vec<String> {
-        ["address", "port"]
+        ["address", "port", "use_tls"]
             .iter()
             .map(|v| format!("{prefix}.{v}"))
             .collect::<Vec<String>>()
@@ -828,6 +836,7 @@ impl Default for Config {
                 connection: Connection {
                     address: "".into(),
                     port: 6697,
+                    use_tls: true,
                 },
                 channels: Channels {
                     list: vec![],
@@ -1075,6 +1084,7 @@ impl Config {
             .map(|v| ConnectionConfig {
                 address: v.connection.address.to_string(),
                 port: v.connection.port,
+                use_tls: v.connection.use_tls,
             })
     }
 
@@ -1099,6 +1109,7 @@ mod tests {
                 connection: Connection {
                     address: "irc.example.com".into(),
                     port: 6667,
+                    use_tls: true,
                 },
                 login: Login {
                     nickname: "tester".into(),
