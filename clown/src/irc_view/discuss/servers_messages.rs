@@ -127,7 +127,11 @@ impl ServersMessages {
     ) -> Option<&mut ChannelMessages> {
         let position = Self::server_id_position(server_id);
         let new_length = position.saturating_add(1);
-        self.messages.resize_with(new_length, Default::default);
+
+        //reconnect with server_id inferior
+        if self.messages.len() < new_length {
+            self.messages.resize_with(new_length, Default::default);
+        }
         if let Some(server_group) = self.messages.get_mut(position) {
             server_group.server_address = server_address;
         }
