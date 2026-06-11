@@ -23,6 +23,8 @@ tokio = { version = "1.52.3", default-features = false, features = [
 tokio-rustls = { version = "0.26", default-features = false, features = [
     "ring",
 ] }
+tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
+tokio-stream = { version = "0.1", default-features = false }
 webpki-roots = { version = "1.0.7", default-features = false }
 
 [lints]

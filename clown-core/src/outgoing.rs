@@ -4,9 +4,11 @@ use crate::error::IRCIOError;
 use crate::message::{MessageReceiver, MessageSender, ServerMessage};
 use crate::response::Response;
 use clown_parser::message::create_message;
+use tokio_stream::StreamExt;
+use tokio_util::codec::{FramedRead, LinesCodec};
 
+use tokio::io::AsyncRead;
 use tokio::io::BufReader;
-use tokio::io::{AsyncBufReadExt, AsyncRead};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
 
@@ -49,31 +51,35 @@ impl Outgoing {
 
     pub async fn process<R, W>(
         &mut self,
-        mut reader: BufReader<R>,
+        reader: BufReader<R>,
         mut writer: BufWriter<W>,
     ) -> Result<(), IRCIOError>
     where
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
     {
-        let mut buffer = String::new();
+        //Irc v3 can have messages with 1024 characters
+        let mut lines = FramedRead::new(reader, LinesCodec::new_with_max_length(1024));
         let mut receiver = self.receiver.take().ok_or(IRCIOError::Uninitialized)?;
+
         loop {
             tokio::select! {
-                response = reader.read_line(&mut buffer) => {
-                    match response {
-                        Ok(0) => break, // Connection closed
-                        Ok(_) => {
-                            let line = buffer.trim_end();
+                line = lines.next() => {
+                    match line {
+                        None => { //if server has disconnected
+                            if let Ok(message) = create_message("ERROR :Connection timeout".as_bytes()) {
+                                self.receive_message(&mut writer, ServerMessage::new(message)).await?;
+                            }
+                            break
+                        },
+                        Some(Ok(line)) => {
                             if let Ok(message) = create_message(line.as_bytes())
                             {
-                                let server_message = ServerMessage::new(message);
-                                self.receive_message(&mut writer, server_message).await?;
+                                self.receive_message(&mut writer, ServerMessage::new(message)).await?;
                             }
-                            buffer.clear();
                         }
-                        Err(e) => {
-                            return Err(IRCIOError::IO(e));
+                        Some(Err(e)) => {
+                            return Err(IRCIOError::CodecError(e));
                         }
                     }
                 }

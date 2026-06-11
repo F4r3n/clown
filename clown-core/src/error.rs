@@ -1,5 +1,6 @@
 use thiserror::Error;
 use tokio::io;
+use tokio_util::codec::LinesCodecError;
 
 #[derive(Error, Debug)]
 pub enum ConnectionError {
@@ -14,6 +15,8 @@ pub enum ConnectionError {
 #[derive(Error, Debug)]
 pub enum IRCIOError {
     #[error("IO error")]
+    CodecError(#[from] LinesCodecError),
+    #[error("Cannot send command")]
     IO(#[from] io::Error),
     #[error("Cannot send command")]
     SendCommand,
