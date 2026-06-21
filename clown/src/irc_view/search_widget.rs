@@ -83,38 +83,37 @@ async fn async_search(
     };
     if let Ok(mut log_reader) = reader {
         for message in log_reader.iter() {
-            if let Ok(message) = message {
-                if let Some(content) = message.get_message().content() {
-                    debug!("Search in message {}", content.clone());
-                    let positions = content
-                        .match_indices(&query.to_search)
-                        .map(|v| Range {
-                            start: v.0,
-                            end: v.0 + query.to_search.len(),
-                        })
-                        .collect::<Vec<Range<usize>>>();
-                    if positions.is_empty() {
-                        continue;
-                    }
-                    count = count.saturating_add(1);
-                    last_offset = message.get_offset();
-                    debug!("Pushed In thread {}", query.to_search);
+            if let Ok(message) = message
+                && let Some(content) = message.get_message().content()
+            {
+                let positions = content
+                    .match_indices(&query.to_search)
+                    .map(|v| Range {
+                        start: v.0,
+                        end: v.0 + query.to_search.len(),
+                    })
+                    .collect::<Vec<Range<usize>>>();
+                if positions.is_empty() {
+                    continue;
+                }
+                count = count.saturating_add(1);
+                last_offset = message.get_offset();
 
-                    let _ = producer
-                        .send(SearchItemResult {
-                            highlights: positions,
-                            message: MessageContent::message(
-                                message.get_message().source().map(|v| v.to_string()),
-                                content.to_string(),
-                            )
-                            .with_time(message.get_message().time),
-                        })
-                        .await;
-                    if limit.is_some_and(|l| count >= l.into()) {
-                        break;
-                    }
+                let _ = producer
+                    .send(SearchItemResult {
+                        highlights: positions,
+                        message: MessageContent::message(
+                            message.get_message().source().map(|v| v.to_string()),
+                            content.to_string(),
+                        )
+                        .with_time(message.get_message().time),
+                    })
+                    .await;
+                if limit.is_some_and(|l| count >= l.into()) {
+                    break;
                 }
             }
+            tokio::task::yield_now().await;
         }
     }
     last_offset
@@ -185,7 +184,7 @@ impl Draw for SearchWidget {
                 Constraint::Length(2),       // Input area
             ])
             .split(frame.area());
-        if let Some(layout_message) = main_layout.get(0) {
+        if let Some(layout_message) = main_layout.first() {
             let time_format = TimeFormat::Day;
             const NICKNAME_LENGTH: u16 = 10;
             const SEPARATOR_LENGTH: u16 = 2;
@@ -347,16 +346,13 @@ impl SearchWidget {
                 });
             }
         }
+        use futures::FutureExt;
 
-        if let Some(searcher) = self.searcher.as_ref()
-            && searcher.task.as_ref().is_some_and(|t| t.is_finished())
+        if let Some(searcher) = self.searcher.as_mut()
+            && searcher.task.as_mut().is_some_and(|t| t.is_finished())
+            && let Some(Ok(pos)) = searcher.task.take().and_then(|t| t.now_or_never())
         {
-            if let Some(searcher) = self.searcher.as_mut() {
-                use futures::FutureExt;
-                if let Some(Ok(pos)) = searcher.task.take().and_then(|t| t.now_or_never()) {
-                    self.result.file_position = pos;
-                }
-            }
+            self.result.file_position = pos;
         }
     }
 }

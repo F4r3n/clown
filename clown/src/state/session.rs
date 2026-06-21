@@ -29,22 +29,44 @@ impl SessionStatus<'_> {
 }
 
 struct RetryState {
-    pub retry: usize,
+    pub max_retry: usize,
+    pub counter: usize,
     pub time_before_next_retry: std::time::Duration,
 }
 
+impl RetryState {
+    pub fn new() -> Self {
+        Self {
+            max_retry: 5,
+            counter: 0,
+            time_before_next_retry: std::time::Duration::from_secs(5),
+        }
+    }
+
+    pub fn get_next_retry(&self) -> std::time::Duration {
+        self.time_before_next_retry
+            .mul_f32((self.counter + 1) as f32)
+    }
+
+    pub fn increment_retry(&mut self) -> bool {
+        if self.counter < self.max_retry {
+            self.counter += 1;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 struct ServerSlot {
-    status: RetryState,
+    retry: RetryState,
     connection: Option<IRCConnection>,
 }
 
 impl ServerSlot {
     fn new() -> Self {
         Self {
-            status: RetryState {
-                retry: 5,
-                time_before_next_retry: std::time::Duration::from_secs(5),
-            },
+            retry: RetryState::new(),
             connection: None,
         }
     }
@@ -67,7 +89,7 @@ impl Session {
 
     pub fn reset_retry(&mut self, id: ServerID) {
         if let Some(server) = self.servers.get_mut(id.as_usize()) {
-            server.status.retry = 5;
+            server.retry = RetryState::new();
         }
     }
 
@@ -149,7 +171,7 @@ impl Session {
     pub fn get_duration_before_retry(&self, in_id: ServerID) -> Option<std::time::Duration> {
         self.servers
             .get(in_id.as_usize())
-            .map(|s| s.status.time_before_next_retry)
+            .map(|s| s.retry.get_next_retry())
     }
 
     pub fn pull_all_server_message(&mut self) -> impl Iterator<Item = (ServerID, ServerMessage)> {
@@ -275,11 +297,10 @@ impl Session {
             .servers
             .get_mut(in_id.as_usize())
             .ok_or_else(|| anyhow!("Wrong ID {}", in_id))?;
-        if server.status.retry == 0 {
+        if !server.retry.increment_retry() {
             anyhow::bail!("No retries left");
         }
 
-        server.status.retry -= 1;
         server.connection = Some(IRCConnection {
             command_sender,
             error_receiver,

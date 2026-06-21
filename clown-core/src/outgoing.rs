@@ -58,8 +58,8 @@ impl Outgoing {
         R: AsyncRead + Unpin,
         W: AsyncWrite + Unpin,
     {
-        //Irc v3 can have messages with 1024 characters
-        let mut lines = FramedRead::new(reader, LinesCodec::new_with_max_length(1024));
+        //Irc v3 can have messages with 8191+512 characters
+        let mut lines = FramedRead::new(reader, LinesCodec::new_with_max_length(8191 + 512));
         let mut receiver = self.receiver.take().ok_or(IRCIOError::Uninitialized)?;
 
         loop {
@@ -70,7 +70,7 @@ impl Outgoing {
                             if let Ok(message) = create_message("ERROR :Connection timeout".as_bytes()) {
                                 self.receive_message(&mut writer, ServerMessage::new(message)).await?;
                             }
-                            break
+                            return Err(IRCIOError::Timeout);
                         },
                         Some(Ok(line)) => {
                             if let Ok(message) = create_message(line.as_bytes())

@@ -37,7 +37,7 @@ impl WebsitePreview {
     pub fn fetch_preview(&mut self) {
         let handle = Handle::current();
         let url = self.url.clone();
-        self.handle = Some(handle.spawn(async move { get_url_preview(&url) }));
+        self.handle = Some(handle.spawn_blocking(move || get_url_preview(&url)));
     }
 
     pub fn has_finished(&self) -> bool {

@@ -22,6 +22,8 @@ pub enum IRCIOError {
     SendCommand,
     #[error("Cannot send Message")]
     SendMessage,
+    #[error("Timeout")]
+    Timeout,
     #[error("unknown data store error")]
     Unknown,
     #[error("Uninitialized")]
