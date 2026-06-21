@@ -8,7 +8,7 @@ description.workspace = true
 
 [dependencies]
 image = { version = "^0.25.10", default-features = false, features = ["jpeg", "png"] }
-bytes = "1.11.1"
+bytes = "1.12"
 thiserror = "2.0.18"
 astral-tl = "0.7.11"
 ureq = "3.3.0"

@@ -38,7 +38,7 @@ unicode-width = "0.2.2"
 clown-website-preview = {version= "0.1.0", path="../clown-website-preview", optional = true}
 clown-spell = {version= "0.1.0", path="../clown-spell", optional = true}
 
-ratatui-image = {version = "11.0.4", features= ["crossterm"], default-features = false}
+ratatui-image = {version = "11.0", features= ["crossterm"], default-features = false}
 ahash = { version = "0.8.12", features = ["serde"] }
 open = "5.3.5"
 palette = {version="0.7.6", features=["std"], default-features=false}
