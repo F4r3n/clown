@@ -13,19 +13,22 @@ use std::{
 };
 
 impl SpellChecker {
-    async fn download_file(url: &str, to: &PathBuf) -> anyhow::Result<PathBuf> {
+    fn download_file(url: &str, to: &PathBuf) -> anyhow::Result<PathBuf> {
         let mut reader = ureq::get(url).call()?.into_body().into_reader();
         to.parent().map(std::fs::create_dir_all);
         let mut file = std::fs::File::create(to)?;
         let mut buf = [0u8; 4096];
 
         while let Ok(size) = reader.read(&mut buf[..]) {
-            file.write_all(&buf)?;
+            if size == 0 {
+                break;
+            }
+            file.write_all(&buf[..size])?;
         }
         Ok(to.to_path_buf())
     }
 
-    async fn download_affix(language: &str) -> anyhow::Result<PathBuf> {
+    fn download_affix(language: &str) -> anyhow::Result<PathBuf> {
         if let Some(dest) = ProjectPath::project_dir()
             .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.aff", language)))
         {
@@ -37,13 +40,13 @@ impl SpellChecker {
                 "https://raw.githubusercontent.com/LibreOffice/dictionaries/refs/heads/master/{}_FR/{}.aff",
                 language, language
             );
-            SpellChecker::download_file(&url, &dest).await
+            SpellChecker::download_file(&url, &dest)
         } else {
             Err(anyhow::anyhow!("Error downloading dict"))
         }
     }
 
-    async fn download_dict(language: &str) -> anyhow::Result<PathBuf> {
+    fn download_dict(language: &str) -> anyhow::Result<PathBuf> {
         if let Some(dest) = ProjectPath::project_dir()
             .map(|proj_dirs| proj_dirs.data_dir().join(format!("{}.dic", language)))
         {
@@ -56,15 +59,15 @@ impl SpellChecker {
                 "https://raw.githubusercontent.com/LibreOffice/dictionaries/refs/heads/master/{}_FR/{}.dic",
                 language, language
             );
-            SpellChecker::download_file(&url, &dest).await
+            SpellChecker::download_file(&url, &dest)
         } else {
             Err(anyhow::anyhow!("Error downloading dict"))
         }
     }
 
-    pub async fn try_build(language: &str) -> anyhow::Result<Self> {
-        let dict = SpellChecker::download_dict(language).await?;
-        let affix = SpellChecker::download_affix(language).await?;
+    pub fn try_build(language: &str) -> anyhow::Result<Self> {
+        let dict = SpellChecker::download_dict(language)?;
+        let affix = SpellChecker::download_affix(language)?;
 
         Ok(SpellChecker {
             dict: Some(dict::Dictionary::try_build_from_path(&dict, &affix)?),
@@ -74,7 +77,7 @@ impl SpellChecker {
     pub fn async_build(language: &str) -> JoinHandle<anyhow::Result<Self>> {
         let handle = Handle::current();
         let language = language.to_string();
-        handle.spawn(async move { SpellChecker::try_build(&language).await })
+        handle.spawn_blocking(move || SpellChecker::try_build(&language))
     }
 
     pub fn check_word(&self, word: &str) -> bool {
