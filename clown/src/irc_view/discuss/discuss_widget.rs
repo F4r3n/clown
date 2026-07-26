@@ -717,7 +717,7 @@ impl crate::component::EventHandler for DiscussWidget {
                             channel,
                             MessageContent::info(format!(
                                 "{} has changed their nickname to {}",
-                                &old, &new
+                                old, new
                             )),
                         );
                     }
@@ -797,6 +797,7 @@ impl crate::component::EventHandler for DiscussWidget {
                                         &self.current_channel,
                                         &last_hovered.range,
                                     ) {
+                                        should_clear = true;
                                         Some(MessageEvent::HoverURL(url))
                                     } else {
                                         //Not an url, no need to wait for next round
@@ -850,6 +851,7 @@ impl crate::component::EventHandler for DiscussWidget {
                                 &self.current_channel,
                                 &last_hovered.range,
                             ) {
+                                should_clear = true;
                                 Some(MessageEvent::HoverURL(url))
                             } else {
                                 //Not an url, no need to wait for next round
