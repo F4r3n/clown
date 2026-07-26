@@ -69,7 +69,7 @@ impl InputCompletion {
     }
 
     pub fn replace_user(&mut self, old: &str, new: &str) {
-        for (_, trie) in self.channels.iter_mut() {
+        for trie in self.channels.values_mut() {
             trie.disable_word(old);
             trie.add_word(new.to_string());
         }
@@ -272,27 +272,15 @@ impl Completion {
                                 last,
                             )
                         {
-                            self.apply_state(
-                                list,
-                                CompletionKind::Nickname,
-                                start.saturating_add(full_phrase.len() - end.len() - 1),
-                            );
+                            self.apply_state(list, CompletionKind::Nickname, start);
                         }
                     } else if let Some(list) = self.input_completion.list_config(last) {
-                        self.apply_state(
-                            list,
-                            CompletionKind::Config,
-                            start.saturating_add(full_phrase.len() - end.len() - 1),
-                        );
+                        self.apply_state(list, CompletionKind::Config, start);
                     }
                 }
                 ["/config", "get" | "set", ..] => {
                     if let Some(list) = self.input_completion.list_config(last) {
-                        self.apply_state(
-                            list,
-                            CompletionKind::Config,
-                            start.saturating_add(full_phrase.len() - end.len() - 1),
-                        );
+                        self.apply_state(list, CompletionKind::Config, start);
                     }
                 }
 
@@ -300,11 +288,7 @@ impl Completion {
                     let mut list: Vec<String> = vec!["set".into(), "get".into()];
 
                     list.retain(|v| v.starts_with(last));
-                    self.apply_state(
-                        list,
-                        CompletionKind::Config,
-                        start.saturating_add(full_phrase.len() - end.len() - 1),
-                    );
+                    self.apply_state(list, CompletionKind::Config, start);
                 }
                 ["/me", ..] => {
                     if let Some(list) =
@@ -482,6 +466,33 @@ mod test {
         assert_eq!(
             comp.get_next_completion(true),
             Some((1, "help".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_insert_config_mid_line() {
+        let mut comp = Completion::default();
+
+        comp.input_completion.add_command("/config".into());
+        comp.input_completion
+            .add_config_field("nickname_colors.seed".into());
+
+        // Cursor sits just after "n", with more text still to its right. The
+        // splice point must be the start of the token being completed, not a
+        // position shifted by the number of bytes after the cursor.
+        comp.set_completion(12, 13, "/config set n trailing");
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((12, "nickname_colors.seed".to_string()))
+        );
+
+        // Same, with multi-byte text after the cursor: the shifted offset used
+        // to land inside a UTF-8 char and panic once spliced.
+        comp.reset();
+        comp.set_completion(12, 13, "/config set n éé");
+        assert_eq!(
+            comp.get_next_completion(true),
+            Some((12, "nickname_colors.seed".to_string()))
         );
     }
 
