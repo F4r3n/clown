@@ -115,12 +115,8 @@ impl Connection {
         }
     }
 
-    fn socket_addr(host: &str, port: u16) -> String {
-        if host.contains(':') && !host.starts_with('[') {
-            format!("[{host}]:{port}") //ipv6
-        } else {
-            format!("{host}:{port}")
-        }
+    fn socket_addr(host: &str, port: u16) -> impl tokio::net::ToSocketAddrs {
+        (host, port)
     }
 
     async fn establish_stream(&self, host: &str, port: u16) -> Result<IRCStream, ConnectionError> {
