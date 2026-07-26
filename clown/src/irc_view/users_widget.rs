@@ -8,6 +8,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{List, ListItem},
 };
+const INDENT: [&str; 2] = [" ", "  "];
 
 #[derive(Debug)]
 struct RegisteredSection {
@@ -88,17 +89,17 @@ impl UsersWidget {
         })
     }
 
-    fn add_section_index(&mut self, server_id: Option<ServerID>, section: String) -> usize {
+    fn add_section_index(&mut self, server_id: Option<ServerID>, section: &str) -> usize {
         if let Some(i) = self.list_sections.iter().position(|c| {
             c.section_info.server_id == server_id
-                && c.section_info.name.eq_ignore_ascii_case(&section)
+                && c.section_info.name.eq_ignore_ascii_case(section)
         }) {
             i
         } else {
             let id = self.list_section_pool_id;
 
             self.list_sections
-                .push(Section::new(section, id, server_id));
+                .push(Section::new(section.to_string(), id, server_id));
 
             self.list_section_pool_id = self.list_section_pool_id.saturating_add(1);
 
@@ -118,11 +119,16 @@ impl UsersWidget {
         }
     }
 
-    fn set_users(&mut self, server_id: Option<ServerID>, section: &str, list_users: Vec<String>) {
-        let section_index = self.add_section_index(server_id, section.to_string());
+    fn set_users<'a>(
+        &mut self,
+        server_id: Option<ServerID>,
+        section: &str,
+        list_users: impl Iterator<Item = &'a str>,
+    ) {
+        let section_index = self.add_section_index(server_id, section);
 
         for user in list_users {
-            self.add_user(section_index, &user);
+            self.add_user(section_index, user);
         }
     }
 
@@ -221,7 +227,7 @@ impl UsersWidget {
         if let Some(section_index) = self.get_section_index(server_id, section) {
             self.add_user(section_index, user);
         } else {
-            let section_index = self.add_section_index(server_id, section.to_string());
+            let section_index = self.add_section_index(server_id, section);
             self.add_user(section_index, user);
         }
     }
@@ -394,7 +400,7 @@ impl ListStateWidget {
         if is_highlighted {
             style = style.bg(Color::LightBlue);
         }
-        spans.push(Span::raw(format!("{:<width$}", " ", width = depth + 1)));
+        spans.push(Span::raw(*INDENT.get(depth).unwrap_or(&" ")));
         spans.push(Span::styled(title, style));
         spans
     }
@@ -457,7 +463,11 @@ impl crate::component::EventHandler for UsersWidget {
     ) -> Option<MessageEvent> {
         match event {
             MessageEvent::UpdateUsers(server_id, channel, list_users) => {
-                self.set_users(Some(*server_id), channel, list_users.to_vec());
+                self.set_users(
+                    Some(*server_id),
+                    channel,
+                    list_users.iter().map(|v| v.as_ref()),
+                );
                 self.need_redraw = true;
 
                 None
@@ -512,7 +522,7 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::JoinServer(server_id) => {
-                let server_name = ctx.session.model.get_server_name(*server_id).to_string();
+                let server_name = ctx.session.model.get_server_name(*server_id);
 
                 self.add_section_index(Some(*server_id), server_name);
                 self.need_redraw = true;
@@ -520,7 +530,7 @@ impl crate::component::EventHandler for UsersWidget {
                 None
             }
             MessageEvent::Join(server_id, channel, user) => {
-                let section_index = self.add_section_index(Some(*server_id), channel.to_string());
+                let section_index = self.add_section_index(Some(*server_id), channel);
                 self.add_user_with_section(Some(*server_id), channel, user);
                 self.list_state.current_section = section_index;
                 self.need_redraw = true;
@@ -838,8 +848,8 @@ mod tests {
     fn test_add_section_uppercase() {
         let mut users_widget = UsersWidget::new();
         let section = "#rust";
-        users_widget.add_section_index(Some(TEST_SERVER_ID), section.to_string());
-        users_widget.add_section_index(Some(TEST_SERVER_ID), section.to_uppercase());
+        users_widget.add_section_index(Some(TEST_SERVER_ID), section);
+        users_widget.add_section_index(Some(TEST_SERVER_ID), section.to_uppercase().as_ref());
 
         assert_eq!(users_widget.list_sections.len(), 1);
         assert_eq!(users_widget.list_sections[0].section_info.name, "#rust");

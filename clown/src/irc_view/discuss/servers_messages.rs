@@ -308,10 +308,14 @@ pub struct ChannelMessages {
 
 impl ChannelMessages {
     pub fn add_message(&mut self, channel: &str, in_message: MessageContent) {
-        self.messages
-            .entry(channel.to_string())
-            .or_default()
-            .push_new(in_message);
+        if let Some(channel) = self.messages.get_mut(channel) {
+            channel.push_new(in_message);
+        } else {
+            self.messages
+                .entry(channel.to_string())
+                .or_default()
+                .push_new(in_message);
+        }
     }
 
     fn rename(&mut self, old: &str, new: &str) {

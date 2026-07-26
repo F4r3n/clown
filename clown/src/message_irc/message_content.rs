@@ -9,7 +9,6 @@ use ratatui::{
 use std::borrow::Cow;
 
 const SPACES: &str = "                  "; //Max 18 spaces
-
 fn spaces(n: u16) -> &'static str {
     SPACES.get(..n as usize).unwrap_or_default()
 }
