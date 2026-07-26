@@ -1,7 +1,6 @@
 use crate::error::ConnectionError;
 use rustls::RootCertStore;
 use rustls::pki_types::ServerName;
-use std::net::ToSocketAddrs;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -116,12 +115,18 @@ impl Connection {
         }
     }
 
-    async fn establish_stream(
-        &self,
-        in_address: &str,
-        port: u16,
-    ) -> Result<IRCStream, ConnectionError> {
-        let stream = TcpStream::connect(format!("{in_address}:{port}")).await?;
+    fn socket_addr(host: &str, port: u16) -> String {
+        if host.contains(':') && !host.starts_with('[') {
+            format!("[{host}]:{port}") //ipv6
+        } else {
+            format!("{host}:{port}")
+        }
+    }
+
+    async fn establish_stream(&self, host: &str, port: u16) -> Result<IRCStream, ConnectionError> {
+        let stream = TcpStream::connect(Connection::socket_addr(host, port)).await?;
+        stream.set_nodelay(true)?;
+
         Ok(IRCStream::PLAIN(stream))
     }
 
@@ -130,11 +135,8 @@ impl Connection {
         host: &str,
         port: u16,
     ) -> Result<IRCStream, ConnectionError> {
-        let addr = (host, port)
-            .to_socket_addrs()?
-            .next()
-            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))?;
-
+        let stream = TcpStream::connect(Connection::socket_addr(host, port)).await?;
+        stream.set_nodelay(true)?;
         let mut root_cert_store = RootCertStore::empty();
         root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
@@ -142,7 +144,6 @@ impl Connection {
             .with_root_certificates(root_cert_store)
             .with_no_client_auth();
         let connector = TlsConnector::from(Arc::new(config));
-        let stream = TcpStream::connect(&addr).await?;
 
         let domain = ServerName::try_from(host)
             .map_err(|_err| ConnectionError::InvalidDNS)?
