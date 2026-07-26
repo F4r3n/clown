@@ -20,7 +20,6 @@ impl Event {
 
 #[derive(Debug)]
 pub struct EventHandler {
-    _tx: mpsc::Sender<Event>,
     rx: mpsc::Receiver<Event>,
     _task: Option<JoinHandle<()>>,
 }
@@ -30,7 +29,6 @@ impl EventHandler {
         let mut tick_interval = tokio::time::interval(std::time::Duration::from_millis(100));
 
         let (tx, rx) = mpsc::channel(100);
-        let _tx = tx.clone();
 
         let task = tokio::spawn(async move {
             let mut reader = crossterm::event::EventStream::new();
@@ -52,7 +50,9 @@ impl EventHandler {
                         break;
 
                       }
-                      None => {},
+                      None => {
+                          break;
+                    },
                     }
                   },
                   _tick = tick_interval.tick() => {
@@ -65,7 +65,6 @@ impl EventHandler {
         });
 
         Self {
-            _tx,
             rx,
             _task: Some(task),
         }

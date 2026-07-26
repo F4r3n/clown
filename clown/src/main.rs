@@ -135,6 +135,8 @@ async fn main() -> anyhow::Result<()> {
             if need_redraw(&mut ctx.model, &mut current_view) {
                 terminal.draw(|f| view(&mut ctx, &mut current_view, f))?;
             }
+        } else {
+            ctx.model.running_state = RunningState::Done;
         }
     }
     EventHandler::disable_mouse_event()?;
