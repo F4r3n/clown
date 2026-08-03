@@ -490,7 +490,11 @@ impl Draw for DiscussWidget {
             frame.render_stateful_widget(
                 Scrollbar::default()
                     .orientation(ScrollbarOrientation::VerticalRight)
-                    .thumb_style(Style::default().bg(Color::Cyan)),
+                    .thumb_style(Style::default().fg(if self.follow_last {
+                        Color::White
+                    } else {
+                        Color::LightRed
+                    })),
                 *layout_1,
                 &mut self.vertical_scroll_state,
             );
