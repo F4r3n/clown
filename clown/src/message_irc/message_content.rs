@@ -7,6 +7,7 @@ use ratatui::{
     widgets::{Cell, Row},
 };
 use std::borrow::Cow;
+use tracing::info;
 
 const SPACES: &str = "                  "; //Max 18 spaces
 fn spaces(n: u16) -> &'static str {
@@ -241,7 +242,7 @@ impl MessageContent {
                         width = time_length as usize
                     ))
                 })
-                .unwrap_or_default(),
+                .unwrap_or_else(|| Cell::from("")),
             Cell::from(format!(
                 "{:<width$}",
                 self.source.as_deref().unwrap_or_default(),
@@ -275,6 +276,7 @@ impl MessageContent {
                 *last = Cell::from(Line::from(w.spans.clone()));
             }
         }
+        info!("{:?}", visible_rows);
 
         visible_rows.into_iter().map(Row::new)
     }

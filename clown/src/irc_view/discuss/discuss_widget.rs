@@ -445,15 +445,20 @@ impl Draw for DiscussWidget {
                 Constraint::Length(1), // Scrollbar
             ])
             .split(area);
-        let time_size = if self.display_time { TIME_LENGTH } else { 0 };
+        let time_size = if self.display_time {
+            Some(TIME_LENGTH)
+        } else {
+            None
+        };
+        let tme_padding = time_size.map(|v| v.saturating_add(1)).unwrap_or(0);
         let content_width = layout
             .first()
             .map(|rect| {
                 rect.width
-                    .saturating_sub(time_size)
+                    .saturating_sub(tme_padding)
                     .saturating_sub(NICKNAME_LENGTH)
                     .saturating_sub(SEPARATOR_LENGTH)
-                    .saturating_sub(4_u16)
+                    .saturating_sub(3_u16)
             })
             .unwrap_or(0);
 
@@ -468,13 +473,13 @@ impl Draw for DiscussWidget {
             let table = Table::new(
                 visible_rows,
                 [
-                    Constraint::Length(time_size.saturating_add(1)), // time
+                    Constraint::Length(tme_padding),                       // time
                     Constraint::Length(NICKNAME_LENGTH.saturating_add(1)), // nickname
-                    Constraint::Length(1),                           // separator
-                    Constraint::Min(10),                             // Content
+                    Constraint::Length(SEPARATOR_LENGTH),                  // separator
+                    Constraint::Min(10),                                   // Content
                 ],
             )
-            .column_spacing(1)
+            .column_spacing(0)
             .style(text_style);
 
             if let Some(layout) = layout.first() {
