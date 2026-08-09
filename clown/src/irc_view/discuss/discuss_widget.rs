@@ -1,4 +1,4 @@
-use super::dimension_discuss::{NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
+use super::dimension_discuss::{META_LENGTH, NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use super::servers_messages::{Messages, Range, ServersMessages};
 use crate::component::Draw;
 use crate::message_irc::textwrapper::wrap_content;
@@ -26,6 +26,22 @@ impl Hovered {
             range,
             time: std::time::Instant::now(),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct WidgetBox {
+    pub size: u16,
+    pub padding: u16,
+}
+
+impl WidgetBox {
+    fn get_full_size(&self) -> u16 {
+        self.size.saturating_add(self.padding)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.get_full_size() == 0
     }
 }
 
@@ -190,9 +206,10 @@ impl DiscussWidget {
     }
 
     fn collect_visible_rows<'a>(
-        &'a mut self,
+        &'a self,
         messages: &'a ServersMessages,
         model: &crate::state::model::Model,
+        display_time: bool,
     ) -> Vec<Row<'a>> {
         let mut visible_rows = Vec::new();
         if self.content_width == 0 {
@@ -230,7 +247,7 @@ impl DiscussWidget {
                     .create_rows(
                         self.content_width as u16,
                         color,
-                        self.display_time.then_some(&time_format),
+                        display_time.then_some(&time_format),
                         NICKNAME_LENGTH,
                     )
                     .skip(rows_to_skip_in_message)
@@ -423,6 +440,19 @@ impl DiscussWidget {
             false
         }
     }
+
+    fn compute_time_size(&self, area: Rect) -> WidgetBox {
+        let time_size = if self.display_time && area.width.saturating_div(2) > META_LENGTH {
+            Some(TIME_LENGTH)
+        } else {
+            None
+        };
+        let time_padding = time_size.map(|_| 1).unwrap_or(0);
+        WidgetBox {
+            padding: time_padding,
+            size: time_size.unwrap_or(0),
+        }
+    }
 }
 
 impl Draw for DiscussWidget {
@@ -432,51 +462,39 @@ impl Draw for DiscussWidget {
         }
 
         self.area = area;
-
-        let text_style = Style::default().fg(Color::White);
-
-        // Set how many lines can be shown
-        self.max_visible_height = area.height as usize;
-
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Min(30),   // Meta (time + source)
+                Constraint::Min(0),    // Meta (time + source)
                 Constraint::Length(1), // Scrollbar
             ])
             .split(area);
-        let time_size = if self.display_time {
-            Some(TIME_LENGTH)
-        } else {
-            None
-        };
-        let tme_padding = time_size.map(|v| v.saturating_add(1)).unwrap_or(0);
-        let content_width = layout
-            .first()
-            .map(|rect| {
-                rect.width
-                    .saturating_sub(tme_padding)
-                    .saturating_sub(NICKNAME_LENGTH)
-                    .saturating_sub(SEPARATOR_LENGTH)
-                    .saturating_sub(3_u16)
-            })
-            .unwrap_or(0);
+        // Set how many lines can be shown
+        self.max_visible_height = area.height as usize;
+        let time_box = self.compute_time_size(area);
 
-        self.content_width = content_width as usize;
+        let full_width = layout.first().map(|v| v.width).unwrap_or(0);
+        let meta_min = time_box
+            .size
+            .saturating_add(META_LENGTH)
+            .min(full_width.saturating_div(4));
+        self.content_width = full_width.saturating_sub(meta_min) as usize;
+
         let number_lines = self.get_fake_total_lines(&ctx.messages);
 
-        let offset = self.scroll_offset;
-        let visible_rows = self.collect_visible_rows(&ctx.messages, &ctx.model);
+        let visible_rows =
+            self.collect_visible_rows(&ctx.messages, &ctx.model, !time_box.is_empty());
 
         let visible_length = visible_rows.len();
         {
+            let text_style = Style::default().fg(Color::White);
             let table = Table::new(
                 visible_rows,
                 [
-                    Constraint::Length(tme_padding),                       // time
-                    Constraint::Length(NICKNAME_LENGTH.saturating_add(1)), // nickname
-                    Constraint::Length(SEPARATOR_LENGTH),                  // separator
-                    Constraint::Min(10),                                   // Content
+                    Constraint::Length(time_box.get_full_size()), // time
+                    Constraint::Max(NICKNAME_LENGTH.saturating_add(1)), // nickname
+                    Constraint::Length(SEPARATOR_LENGTH),         // separator
+                    Constraint::Min(10),                          // Content
                 ],
             )
             .column_spacing(0)
@@ -486,9 +504,10 @@ impl Draw for DiscussWidget {
                 frame.render_widget(table, *layout)
             }
         }
+
         self.vertical_scroll_state = ScrollbarState::new(number_lines)
             .viewport_content_length(visible_length)
-            .position(number_lines.saturating_sub(offset));
+            .position(number_lines.saturating_sub(self.scroll_offset));
         if let Some(layout_1) = layout.get(1)
             && layout_1.width > 0
         {
@@ -1055,22 +1074,28 @@ mod tests {
         );
 
         discuss.content_width = 10;
-        assert_eq!(discuss.collect_visible_rows(&messages, &model).len(), 3);
+        assert_eq!(
+            discuss.collect_visible_rows(&messages, &model, true).len(),
+            3,
+        );
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
-        assert_eq!(discuss.collect_visible_rows(&messages, &model).len(), 6);
+        assert_eq!(
+            discuss.collect_visible_rows(&messages, &model, true).len(),
+            6
+        );
 
         discuss.content_width = 4;
         discuss.scroll_offset = 0;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows(&messages, &model);
+        let rows = discuss.collect_visible_rows(&messages, &model, true);
         assert_eq!(rows.len(), 2);
 
         discuss.content_width = 4;
         discuss.scroll_offset = 1;
         discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows(&messages, &model);
+        let rows = discuss.collect_visible_rows(&messages, &model, true);
         assert_eq!(rows.len(), 2);
     }
 

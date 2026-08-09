@@ -242,7 +242,9 @@ impl MessageContent {
                         width = time_length as usize
                     ))
                 })
-                .unwrap_or_else(|| Cell::from("")),
+                .unwrap_or_else(
+                    || Cell::default().column_span(1), /*Cell default fails without column span of 1*/
+                ),
             Cell::from(format!(
                 "{:<width$}",
                 self.source.as_deref().unwrap_or_default(),
