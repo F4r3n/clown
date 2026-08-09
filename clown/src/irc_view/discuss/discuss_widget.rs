@@ -14,6 +14,7 @@ use ratatui::{
     widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
 };
 use std::time::Duration;
+
 #[derive(Debug)]
 struct Hovered {
     time: std::time::Instant,
@@ -441,8 +442,8 @@ impl DiscussWidget {
         }
     }
 
-    fn compute_time_size(&self, area: Rect) -> WidgetBox {
-        let time_size = if self.display_time && area.width.saturating_div(2) > META_LENGTH {
+    fn compute_time_size(&self, row: u16) -> WidgetBox {
+        let time_size = if self.display_time && row.saturating_div(3) > META_LENGTH {
             Some(TIME_LENGTH)
         } else {
             None
@@ -469,16 +470,24 @@ impl Draw for DiscussWidget {
                 Constraint::Length(1), // Scrollbar
             ])
             .split(area);
+        let row = layout.first().map(|v| v.width).unwrap_or(0);
         // Set how many lines can be shown
         self.max_visible_height = area.height as usize;
-        let time_box = self.compute_time_size(area);
+        let time_box = self.compute_time_size(row);
+        let constraints = [
+            Constraint::Length(time_box.get_full_size()), // time
+            Constraint::Max(NICKNAME_LENGTH.saturating_add(1)), // nickname
+            Constraint::Length(SEPARATOR_LENGTH),         // separator
+            Constraint::Min(10),                          // Content
+        ];
+        let mut row_area = self.area;
+        row_area.width = row;
+        let fake_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(constraints)
+            .split(row_area);
 
-        let full_width = layout.first().map(|v| v.width).unwrap_or(0);
-        let meta_min = time_box
-            .size
-            .saturating_add(META_LENGTH)
-            .min(full_width.saturating_div(4));
-        self.content_width = full_width.saturating_sub(meta_min) as usize;
+        self.content_width = fake_layout.get(3).map(|v| v.width).unwrap_or(0) as usize;
 
         let number_lines = self.get_fake_total_lines(&ctx.messages);
 
@@ -488,17 +497,12 @@ impl Draw for DiscussWidget {
         let visible_length = visible_rows.len();
         {
             let text_style = Style::default().fg(Color::White);
-            let table = Table::new(
-                visible_rows,
-                [
-                    Constraint::Length(time_box.get_full_size()), // time
-                    Constraint::Max(NICKNAME_LENGTH.saturating_add(1)), // nickname
-                    Constraint::Length(SEPARATOR_LENGTH),         // separator
-                    Constraint::Min(10),                          // Content
-                ],
-            )
-            .column_spacing(0)
-            .style(text_style);
+            //TODO: replace render row by own renderer
+            // remove the rows allocation
+            // no more need of constraint
+            let table = Table::new(visible_rows, constraints)
+                .column_spacing(0)
+                .style(text_style);
 
             if let Some(layout) = layout.first() {
                 frame.render_widget(table, *layout)

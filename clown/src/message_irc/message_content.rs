@@ -278,7 +278,6 @@ impl MessageContent {
                 *last = Cell::from(Line::from(w.spans.clone()));
             }
         }
-        info!("{:?}", visible_rows);
 
         visible_rows.into_iter().map(Row::new)
     }

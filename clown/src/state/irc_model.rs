@@ -9,7 +9,6 @@ pub struct User {
     is_main: bool,
 }
 const NB_SECTIONS: usize = 32;
-
 impl User {
     pub fn new(name: String, is_main: bool) -> Self {
         Self {
