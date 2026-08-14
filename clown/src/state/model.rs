@@ -1,8 +1,28 @@
 use super::config::{Config, Discuss};
 use super::server_id::ServerID;
 use crate::irc_view::color_user::ColorGenerator;
+use crate::state::config::{self, Keybindings};
 use clown_core::{client::LoginConfig, conn::ConnectionConfig};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tokio::{sync::mpsc, task::JoinHandle};
+use tracing::warn;
+
+#[derive(Default)]
+pub struct EventBindings(ahash::AHashMap<KeyEvent, config::Action>);
+
+impl std::ops::Deref for EventBindings {
+    type Target = ahash::AHashMap<KeyEvent, config::Action>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for EventBindings {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum RunningState {
@@ -58,6 +78,7 @@ pub struct Model {
     stored_config: StoredConfig,
 
     color_generator: ColorGenerator,
+    events: EventBindings,
 }
 
 impl Model {
@@ -67,6 +88,7 @@ impl Model {
             running_state: RunningState::Start,
             stored_config: StoredConfig::default(),
             color_generator: ColorGenerator::new(0),
+            events: EventBindings::default(),
         }
     }
 
@@ -77,6 +99,7 @@ impl Model {
                 config: Config::default(),
                 stored_name: in_config_name,
             },
+            events: EventBindings::default(),
             color_generator: ColorGenerator::new(0),
         }
     }
@@ -91,15 +114,71 @@ impl Model {
 
     pub fn try_new(config_name: String) -> anyhow::Result<Self> {
         let config = Config::new(&config_name)?;
-
         Ok(Self {
             running_state: RunningState::Start,
             color_generator: Self::load_color(&config),
+            events: Self::convert_model_keybindings_to_crossterm(&config.keybindings),
             stored_config: StoredConfig {
                 config,
                 stored_name: config_name,
             },
         })
+    }
+
+    pub fn handle_event(&mut self, event: &crossterm::event::KeyEvent) {
+        if let Some(action) = self.events.get(event) {
+            match action {
+                config::Action::ToggleUserPanel => {
+                    self.stored_config.config.users.enabled =
+                        !self.stored_config.config.users.enabled
+                }
+                config::Action::ToggleTopicPanel => {
+                    self.stored_config.config.topic.enabled =
+                        !self.stored_config.config.topic.enabled
+                }
+                config::Action::ToggleTimeDiscussPanel => {
+                    self.stored_config.config.discuss.left_bar.time =
+                        !self.stored_config.config.discuss.left_bar.time
+                }
+                config::Action::Custom(_) => {
+                    //todo later
+                    unreachable!();
+                }
+            }
+        }
+    }
+
+    //TODO: add warning
+    // bad char
+    // replace existing
+    // bad action
+    fn convert_model_keybindings_to_crossterm(bindings: &Keybindings) -> EventBindings {
+        let mut event_bindings: EventBindings = EventBindings::default();
+        for binding in bindings.bind.iter() {
+            let mut keymodifier = KeyModifiers::NONE;
+            let mut keycode: Option<KeyCode> = None;
+            for key in binding.keys.iter() {
+                match key.to_lowercase().as_str() {
+                    "ctrl" => keymodifier.toggle(KeyModifiers::CONTROL),
+                    "alt" => keymodifier.toggle(KeyModifiers::ALT),
+                    "shift" => keymodifier.toggle(KeyModifiers::SHIFT),
+                    "meta" => keymodifier.toggle(KeyModifiers::META),
+
+                    _ => {
+                        if let Some(char) = key.chars().next() {
+                            keycode = Some(KeyCode::Char(char))
+                        } else {
+                            warn!("Invalid binding for {}", &binding.action);
+                        }
+                    }
+                }
+            }
+            if let Some(keycode) = keycode {
+                let crossterm_event = KeyEvent::new(keycode, keymodifier);
+                event_bindings.insert(crossterm_event, binding.action.clone());
+            }
+        }
+        event_bindings
     }
 
     fn get_config(&self) -> &Config {

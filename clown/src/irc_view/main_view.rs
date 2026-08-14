@@ -765,11 +765,12 @@ impl widget_view::WidgetView for MainView<'_> {
     ) {
         // Handle focus switching first
         match event {
-            Event::Crossterm(crossterm::event::Event::Key(_)) => {
+            Event::Crossterm(crossterm::event::Event::Key(key_event)) => {
                 // Pass event to focused widget
                 if self.has_focus {
                     match self.state {
                         ViewState::Discuss => {
+                            ctx.model.handle_event(key_event);
                             for child in self.children().iter_mut() {
                                 if let Some(new_message) = child.handle_events(ctx, event) {
                                     messages.push_message(new_message);

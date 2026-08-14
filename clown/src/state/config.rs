@@ -785,12 +785,28 @@ pub struct Keybindings {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct Keybinding {
     pub action: Action,
-    pub keys: String,
+    pub keys: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
-pub enum Action {}
+pub enum Action {
+    ToggleUserPanel,
+    ToggleTopicPanel,
+    ToggleTimeDiscussPanel,
+    Custom(String),
+}
+
+impl std::fmt::Display for Action {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ToggleUserPanel => f.write_str("toggle_user_panel"),
+            Self::ToggleTopicPanel => f.write_str("toggle_topic_panel"),
+            Self::ToggleTimeDiscussPanel => f.write_str("toggle_time_discuss_panel"),
+            Self::Custom(_) => f.write_str("custom_action"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Default)]
 pub struct Meta {
