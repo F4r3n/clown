@@ -545,7 +545,6 @@ impl crate::component::EventHandler for DiscussWidget {
     ) -> Option<MessageEvent> {
         match event {
             MessageEvent::AddMessageViewInfo(server_id, channel, kind, in_content) => {
-                tracing::debug!("Has received a message {in_content}");
                 for content in in_content.split('\n') {
                     if let Some(message) =
                         MessageContent::from_kind(*kind, channel.clone(), content.to_string())

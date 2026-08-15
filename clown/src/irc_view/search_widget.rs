@@ -8,7 +8,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Row;
 use std::{ops::Range, path::PathBuf};
 use tokio::{sync::mpsc, task::JoinHandle};
-use tracing::debug;
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct QueryOption {
     pub server_id: Option<ServerID>,
@@ -71,8 +70,6 @@ async fn async_search(
     limit: Option<std::num::NonZero<usize>>,
     producer: mpsc::Sender<SearchItemResult>,
 ) -> u64 {
-    debug!("Search In thread {}", query.to_search);
-
     let mut count: usize = 0;
     let mut last_offset = 0;
     let file_path = log_path;

@@ -492,6 +492,7 @@ impl crate::component::EventHandler for UsersWidget {
                     let target = irc_server.get_target(source, target);
 
                     self.add_user_global_section(Some(*server_id), target);
+
                     self.highlight_user(Some(*server_id), target);
                     self.need_redraw = true;
                 }
@@ -505,6 +506,7 @@ impl crate::component::EventHandler for UsersWidget {
                         .get_server_name_from_channel(*server_id, channel.as_deref())
                 {
                     self.highlight_user(Some(*server_id), server_name);
+                    self.need_redraw = true;
                 }
 
                 None
@@ -532,7 +534,13 @@ impl crate::component::EventHandler for UsersWidget {
             MessageEvent::Join(server_id, channel, user) => {
                 let section_index = self.add_section_index(Some(*server_id), channel);
                 self.add_user_with_section(Some(*server_id), channel, user);
-                self.list_state.current_section = section_index;
+
+                //when main user joins, move the selection to main channel
+                if let Some(irc_server) = ctx.session.model.get_server(*server_id)
+                    && irc_server.is_main_user(user)
+                {
+                    self.list_state.current_section = section_index;
+                }
                 self.need_redraw = true;
 
                 None
