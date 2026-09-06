@@ -42,7 +42,7 @@ impl TrieNode {
         match self.nodes.binary_search_by_key(&c, |v| v.character) {
             Ok(index) => {
                 let n = &mut self.nodes[index];
-                if word_id.is_some() {
+                if word_id.is_some() && n.word_id.is_none() {
                     n.word_id = word_id;
                 }
                 n
@@ -109,7 +109,11 @@ impl Trie {
         while let Some(next) = chars.next() {
             current_node = current_node.insert_node(next, chars.peek().is_none().then_some(new_id));
         }
-        self.words.push(word);
+        if let Some(currend_id) = current_node.word_id
+            && currend_id == new_id
+        {
+            self.words.push(word);
+        }
     }
 
     fn navigate_word_mut<F>(&mut self, word: &str, apply: F)
@@ -205,6 +209,14 @@ mod tests {
 
         assert_eq!(trie.list("c"), Some(result));
         assert_eq!(trie.list("A"), None);
+    }
+
+    #[test]
+    fn test_insert_same_node() {
+        let mut trie = Trie::new();
+        trie.add_word("cat".into());
+        trie.add_word("cat".into());
+        assert_eq!(trie.words.len(), 1);
     }
 
     #[test]

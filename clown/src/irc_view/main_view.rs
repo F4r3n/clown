@@ -770,7 +770,9 @@ impl widget_view::WidgetView for MainView<'_> {
                 if self.has_focus {
                     match self.state {
                         ViewState::Discuss => {
-                            ctx.model.handle_event(key_event);
+                            if !key_event.modifiers.is_empty() {
+                                ctx.model.handle_event(key_event);
+                            }
                             for child in self.children().iter_mut() {
                                 if let Some(new_message) = child.handle_events(ctx, event) {
                                     messages.push_message(new_message);
