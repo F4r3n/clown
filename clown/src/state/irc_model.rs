@@ -284,31 +284,21 @@ impl IrcServerModel {
         user.strip_prefix('@').unwrap_or(user)
     }
 
-    fn get_channel_id(&self, channel: &str) -> Option<usize> {
-        for c in &self.list_channels {
-            if c.name.eq_ignore_ascii_case(channel) {
-                return Some(c.id);
-            }
-        }
-
-        None
+    fn get_channel(&self, channel: &str) -> Option<&Channel> {
+        self.list_channels
+            .iter()
+            .find(|v| v.name.eq_ignore_ascii_case(channel))
     }
 
     fn get_channel_mut(&mut self, channel: &str) -> Option<&mut Channel> {
-        self.get_channel_id(channel)
-            .and_then(|v| self.list_channels.get_mut(v))
-    }
-
-    fn get_channel(&self, channel: &str) -> Option<&Channel> {
-        self.get_channel_id(channel)
-            .and_then(|v| self.list_channels.get(v))
+        self.list_channels
+            .iter_mut()
+            .find(|v| v.name.eq_ignore_ascii_case(channel))
     }
 
     pub fn add_channel(&mut self, channel: &str) -> usize {
-        for c in &self.list_channels {
-            if c.name.eq_ignore_ascii_case(channel) {
-                return c.id;
-            }
+        if let Some(c) = self.get_channel(channel) {
+            return c.id;
         }
         let new_channel = Channel {
             id: self.list_channels.len(),
@@ -398,7 +388,7 @@ impl IrcServerModel {
     }
 
     pub fn has_user_joined_channel(&self, user: &str, channel: &str) -> bool {
-        if let Some(id) = self.get_channel_id(channel) {
+        if let Some(id) = self.get_channel(channel).map(|v| v.id) {
             self.users
                 .get(&Self::sanitize_name(user).to_lowercase())
                 .map(|v| v.has_joined_section(id))
@@ -574,7 +564,7 @@ mod tests {
             "hello".into(),
         ));
 
-        assert!(server(&m).get_channel_id("jack").is_some());
+        assert!(server(&m).get_channel("jack").is_some());
 
         // Rename Alice → Bob
         m.handle_action(&MessageEvent::ReplaceUser(
@@ -597,8 +587,8 @@ mod tests {
 
         assert!(s.get_user("jack").is_none());
         assert!(s.get_user("miki").is_some());
-        assert!(s.get_channel_id("jack").is_none());
-        assert!(s.get_channel_id("miki").is_some());
+        assert!(s.get_channel("jack").is_none());
+        assert!(s.get_channel("miki").is_some());
     }
 
     #[test]
