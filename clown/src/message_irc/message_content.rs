@@ -149,19 +149,6 @@ impl MessageContent {
         self
     }
 
-    // --- Finalizer ---
-
-    pub fn build(self) -> MessageContent {
-        MessageContent {
-            width_without_format: get_width_without_format(&self.content),
-            time: self.time,
-            source: self.source,
-            content: self.content,
-            kind: self.kind,
-            is_log: self.is_log,
-        }
-    }
-
     pub fn from_kind(kind: MessageKind, source: Option<String>, content: String) -> Option<Self> {
         let builder = match kind {
             MessageKind::Info => MessageContent::info(content),
@@ -169,7 +156,7 @@ impl MessageContent {
             MessageKind::Normal => MessageContent::message(source, content),
             _ => return None,
         };
-        Some(builder.build())
+        Some(builder)
     }
     pub fn get_time(&self) -> std::time::SystemTime {
         self.time
