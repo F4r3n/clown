@@ -7,7 +7,6 @@ use ratatui::{
     widgets::{Cell, Row},
 };
 use std::borrow::Cow;
-use tracing::info;
 
 const SPACES: &str = "                  "; //Max 18 spaces
 fn spaces(n: u16) -> &'static str {

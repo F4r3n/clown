@@ -14,6 +14,7 @@ use crate::irc_view::search_widget::SearchWidget;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
+use crate::message_event::ConfigEvent;
 use crate::message_event::MessageEvent;
 use crate::message_irc::log::message_logger;
 use crate::message_irc::log::message_logger::MessageLogger;
@@ -571,6 +572,10 @@ impl MainView<'_> {
                                 source.clone(),
                             ));
 
+                            messages.push_message(MessageEvent::Config(ConfigEvent::AddColor(
+                                vec![source.clone()],
+                            )));
+
                             //If the server has received the join command and send it back
                             // we are allowed to select the channel if we are the current user
                             if let Some(nickname) = ctx.model.get_nickname(server_id)
@@ -637,8 +642,12 @@ impl MainView<'_> {
                     }
                     ResponseNumber::NameReply(_symbol, channel, list_users) => {
                         messages.push_message(MessageEvent::UpdateUsers(
-                            server_id, channel, list_users,
+                            server_id,
+                            channel,
+                            list_users.clone(),
                         ));
+                        messages
+                            .push_message(MessageEvent::Config(ConfigEvent::AddColor(list_users)));
                     }
                     ResponseNumber::Topic(channel, topic) => {
                         messages
@@ -951,6 +960,13 @@ impl widget_view::WidgetView for MainView<'_> {
                 }
                 ctx.model.running_state = RunningState::Done;
             }
+            MessageEvent::Config(config) => match config {
+                ConfigEvent::AddColor(users) => {
+                    for user in users {
+                        ctx.model.add_color(user.to_string());
+                    }
+                }
+            },
             // Handle Logging for IRC events
             MessageEvent::ActionMsg(id, ..)
             | MessageEvent::Join(id, ..)

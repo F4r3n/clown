@@ -1,6 +1,11 @@
 use crate::state::server_id::ServerID;
 
 #[derive(PartialEq, Debug)]
+pub enum ConfigEvent {
+    AddColor(Vec<String> /*usernames*/),
+}
+
+#[derive(PartialEq, Debug)]
 pub enum MessageEvent {
     MessageInput(String),
     AddMessageViewInfo(
@@ -74,6 +79,7 @@ pub enum MessageEvent {
     CloseBuffer(Option<ServerID> /*server id */, String /*name */),
     Search(super::irc_view::search_widget::Query),
     SearchEnd(),
+    Config(ConfigEvent),
 }
 
 impl MessageEvent {

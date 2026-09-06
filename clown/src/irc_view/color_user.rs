@@ -3,9 +3,14 @@ use palette::FromColor;
 use palette::{Oklch, Srgb};
 use ratatui::style::Color;
 
+struct GeneratedColor {
+    overrides: bool,
+    color: Color,
+}
+
 pub struct ColorGenerator {
     seed: u64,
-    overrides: ahash::AHashMap<String, Color>,
+    overrides: ahash::AHashMap<String, GeneratedColor>,
 }
 
 impl ColorGenerator {
@@ -37,17 +42,39 @@ impl ColorGenerator {
 
     pub fn add_override(&mut self, input: String, color: &str) -> bool {
         if let Some(c) = Self::parse_hex_color(color) {
-            self.overrides.insert(input, c);
+            self.overrides.insert(
+                input,
+                GeneratedColor {
+                    color: c,
+                    overrides: true,
+                },
+            );
             true
         } else {
             false
         }
     }
 
+    pub fn add(&mut self, input: String) {
+        let color = self.nickname_color(input.as_str());
+
+        self.overrides
+            .entry(input)
+            .and_modify(|e| {
+                if !e.overrides {
+                    e.color = color;
+                }
+            })
+            .or_insert(GeneratedColor {
+                color,
+                overrides: false,
+            });
+    }
+
     pub fn generate_color(&self, input: &str) -> Color {
         self.overrides
             .get(input)
-            .cloned()
+            .map(|v| v.color)
             .unwrap_or(self.nickname_color(input))
     }
 

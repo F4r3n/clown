@@ -251,6 +251,10 @@ impl Model {
         self.color_generator.generate_color(input)
     }
 
+    pub fn add_color(&mut self, input: String) {
+        self.color_generator.add(input)
+    }
+
     pub fn is_topic_ui_enabled(&self) -> bool {
         self.stored_config.config.topic.enabled
     }
