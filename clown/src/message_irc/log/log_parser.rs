@@ -74,7 +74,7 @@ fn buf_to_str(s: &[u8]) -> anyhow::Result<&str> {
     std::str::from_utf8(s).map_err(|e| anyhow::anyhow!(e))
 }
 
-fn parse_topic(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
+fn parse_topic<'a>(input: &'a [u8]) -> IResult<&'a [u8], LoggedMessage<'a>> {
     let (input, source) =
         map_res(take_till(|c: u8| c.is_ascii_whitespace()), buf_to_str).parse(input)?;
     let (input, _) = tag(" has changed topic for ").parse(input)?;
@@ -86,14 +86,14 @@ fn parse_topic(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
     Ok((
         input,
         LoggedMessage::Topic {
-            source: std::borrow::Cow::Owned(source.to_string()),
-            channel: std::borrow::Cow::Owned(channel.to_string()),
-            content: std::borrow::Cow::Owned(content.to_string()),
+            source: std::borrow::Cow::Borrowed(source),
+            channel: std::borrow::Cow::Borrowed(channel),
+            content: std::borrow::Cow::Borrowed(content),
         },
     ))
 }
 
-fn parse_join<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMessage<'static>> {
+fn parse_join<'a>(input: &'a [u8], source: &'a str) -> IResult<&'a [u8], LoggedMessage<'a>> {
     let (input, _) = tag(" has joined ").parse(input)?;
 
     let (input, channel) = map_res(nom::combinator::rest, buf_to_str).parse(input)?;
@@ -101,26 +101,26 @@ fn parse_join<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMess
     Ok((
         input,
         LoggedMessage::Join {
-            source: std::borrow::Cow::Owned(source.to_string()),
-            channel: std::borrow::Cow::Owned(channel.to_string()),
+            source: std::borrow::Cow::Borrowed(source),
+            channel: std::borrow::Cow::Borrowed(channel),
         },
     ))
 }
 
-fn parse_nick<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMessage<'static>> {
+fn parse_nick<'a>(input: &'a [u8], source: &'a str) -> IResult<&'a [u8], LoggedMessage<'a>> {
     let (input, _) = tag(" has changed their nickname to ").parse(input)?;
     let (input, new) = map_res(nom::combinator::rest, buf_to_str).parse(input)?;
 
     Ok((
         input,
         LoggedMessage::NickChange {
-            old: std::borrow::Cow::Owned(source.to_string()),
-            new: std::borrow::Cow::Owned(new.to_string()),
+            old: std::borrow::Cow::Borrowed(source),
+            new: std::borrow::Cow::Borrowed(new),
         },
     ))
 }
 
-fn parse_priv_message(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
+fn parse_priv_message<'a>(input: &'a [u8]) -> IResult<&'a [u8], LoggedMessage<'a>> {
     let (input, source) =
         map_res(take_till(|c: u8| c.is_ascii_whitespace()), buf_to_str).parse(input)?;
     let (input, _) = tag(" ").parse(input)?;
@@ -129,37 +129,37 @@ fn parse_priv_message(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
     Ok((
         input,
         LoggedMessage::Message {
-            source: std::borrow::Cow::Owned(source.to_string()),
-            content: std::borrow::Cow::Owned(rest.to_string()),
+            source: std::borrow::Cow::Borrowed(source),
+            content: std::borrow::Cow::Borrowed(rest),
         },
     ))
 }
 
-fn parse_part<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMessage<'static>> {
+fn parse_part<'a>(input: &'a [u8], source: &'a str) -> IResult<&'a [u8], LoggedMessage<'a>> {
     let (input, _) = tag(" has left ").parse(input)?;
     let (input, channel) = map_res(nom::combinator::rest, buf_to_str).parse(input)?;
 
     Ok((
         input,
         LoggedMessage::Part {
-            source: std::borrow::Cow::Owned(source.to_string()),
-            channel: std::borrow::Cow::Owned(channel.to_string()),
+            source: std::borrow::Cow::Borrowed(source),
+            channel: std::borrow::Cow::Borrowed(channel),
         },
     ))
 }
 
-fn parse_quit<'a>(input: &'a [u8], source: &str) -> IResult<&'a [u8], LoggedMessage<'static>> {
+fn parse_quit<'a>(input: &'a [u8], source: &'a str) -> IResult<&'a [u8], LoggedMessage<'a>> {
     let (input, _) = tag(" has quit").parse(input)?;
 
     Ok((
         input,
         LoggedMessage::Quit {
-            source: std::borrow::Cow::Owned(source.to_string()),
+            source: std::borrow::Cow::Borrowed(source),
         },
     ))
 }
 
-fn parse_event(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
+fn parse_event<'a>(input: &'a [u8]) -> IResult<&'a [u8], LoggedMessage<'a>> {
     alt((
         preceded(tag("\t<--\t "), parse_outgoing_subevents),
         preceded(tag("\t-->\t "), parse_ingoing_subevents),
@@ -169,7 +169,7 @@ fn parse_event(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
     .parse(input)
 }
 
-fn parse_outgoing_subevents(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
+fn parse_outgoing_subevents<'a>(input: &'a [u8]) -> IResult<&'a [u8], LoggedMessage<'a>> {
     let (input, source) =
         map_res(take_till(|c: u8| c.is_ascii_whitespace()), buf_to_str).parse(input)?;
 
@@ -181,18 +181,18 @@ fn parse_outgoing_subevents(input: &[u8]) -> IResult<&[u8], LoggedMessage<'stati
     .parse(input)
 }
 
-fn parse_ingoing_subevents(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
+fn parse_ingoing_subevents<'a>(input: &'a [u8]) -> IResult<&'a [u8], LoggedMessage<'a>> {
     let (input, source) =
         map_res(take_till(|c: u8| c.is_ascii_whitespace()), buf_to_str).parse(input)?;
 
     alt((|i| parse_join(i, source),)).parse(input)
 }
 
-fn parse_network_subevents(input: &[u8]) -> IResult<&[u8], LoggedMessage<'static>> {
+fn parse_network_subevents<'a>(input: &'a [u8]) -> IResult<&'a [u8], LoggedMessage<'a>> {
     alt((|i| parse_topic(i),)).parse(input)
 }
 
-pub fn parse(input: &[u8]) -> anyhow::Result<LoggedTimedMessage<'static>> {
+pub fn parse<'a>(input: &'a [u8]) -> anyhow::Result<LoggedTimedMessage<'a>> {
     let (input, time) =
         parse_date_time(input).map_err(|e| anyhow::anyhow!("Date parsing failed: {}", e))?;
 

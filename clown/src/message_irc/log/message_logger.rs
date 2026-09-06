@@ -47,27 +47,59 @@ pub enum LoggedMessage<'a> {
 impl<'a> LoggedMessage<'a> {
     pub fn content(&self) -> Option<&Cow<'a, str>> {
         match self {
-            LoggedMessage::Message { source, content } => Some(content),
-            LoggedMessage::Action { source, content } => Some(content),
-            LoggedMessage::Topic {
-                source,
-                channel,
-                content,
-            } => Some(content),
+            LoggedMessage::Message { content, .. } => Some(content),
+            LoggedMessage::Action { content, .. } => Some(content),
+            LoggedMessage::Topic { content, .. } => Some(content),
             _ => None,
         }
     }
 
     pub fn source(&self) -> Option<&Cow<'a, str>> {
         match self {
-            LoggedMessage::Message { source, content } => Some(source),
-            LoggedMessage::Action { source, content } => Some(source),
+            LoggedMessage::Message { source, .. } => Some(source),
+            LoggedMessage::Action { source, .. } => Some(source),
+            LoggedMessage::Topic { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+
+    pub fn into_owned(self) -> LoggedMessage<'static> {
+        fn own(c: Cow<'_, str>) -> Cow<'static, str> {
+            Cow::Owned(c.into_owned())
+        }
+        match self {
             LoggedMessage::Topic {
                 source,
                 channel,
                 content,
-            } => Some(source),
-            _ => None,
+            } => LoggedMessage::Topic {
+                source: own(source),
+                channel: own(channel),
+                content: own(content),
+            },
+            LoggedMessage::Join { source, channel } => LoggedMessage::Join {
+                source: own(source),
+                channel: own(channel),
+            },
+            LoggedMessage::Part { source, channel } => LoggedMessage::Part {
+                source: own(source),
+                channel: own(channel),
+            },
+            LoggedMessage::Quit { source } => LoggedMessage::Quit {
+                source: own(source),
+            },
+            LoggedMessage::NickChange { old, new } => LoggedMessage::NickChange {
+                old: own(old),
+                new: own(new),
+            },
+            LoggedMessage::Message { source, content } => LoggedMessage::Message {
+                source: own(source),
+                content: own(content),
+            },
+            LoggedMessage::Action { source, content } => LoggedMessage::Action {
+                source: own(source),
+                content: own(content),
+            },
         }
     }
 }
@@ -78,13 +110,18 @@ pub struct LoggedTimedMessage<'a> {
     pub message: LoggedMessage<'a>,
 }
 
+impl LoggedTimedMessage<'_> {
+    pub fn into_owned(self) -> LoggedTimedMessage<'static> {
+        LoggedTimedMessage {
+            time: self.time,
+            message: self.message.into_owned(),
+        }
+    }
+}
+
 impl<'a> LoggedTimedMessage<'a> {
     pub fn content(&self) -> Option<&Cow<'a, str>> {
         self.message.content()
-    }
-
-    pub fn time(&self) -> std::time::SystemTime {
-        self.time
     }
 
     pub fn source(&self) -> Option<&Cow<'a, str>> {
@@ -202,6 +239,13 @@ impl LogReader<std::fs::File> {
     }
 }
 
+pub struct LogReaderIter<'r, R: Read + Seek> {
+    reader: &'r mut LogReader<R>,
+    carry: Vec<u8>,
+    pending: VecDeque<LoggedMessageWithPos>,
+    exhausted: bool,
+}
+
 impl<R: Read + Seek> LogReader<R> {
     fn init(path: &Path) -> anyhow::Result<std::fs::File> {
         if let Some(parent) = path.parent() {
@@ -284,7 +328,10 @@ impl<R: Read + Seek> LogReader<R> {
         }
     }
 
-    pub fn read(&mut self, number_lines: usize) -> anyhow::Result<Vec<LoggedTimedMessage<'_>>> {
+    pub fn read(
+        &mut self,
+        number_lines: usize,
+    ) -> anyhow::Result<Vec<LoggedTimedMessage<'static>>> {
         if self.is_empty() {
             return Ok(Vec::new());
         }
@@ -311,7 +358,7 @@ impl<R: Read + Seek> LogReader<R> {
                         && !line.is_empty()
                     {
                         if let Ok(parsed_message) = log_parser::parse(line) {
-                            vec.push(parsed_message);
+                            vec.push(parsed_message.into_owned());
                         } else {
                             tracing::error!("Cannot parse {}", std::str::from_utf8(line)?);
                         }
@@ -334,7 +381,7 @@ impl<R: Read + Seek> LogReader<R> {
 
         if to_read > 0 && !carry.is_empty() {
             if let Ok(parsed_message) = log_parser::parse(&carry) {
-                vec.push(parsed_message);
+                vec.push(parsed_message.into_owned());
             } else {
                 tracing::error!("Cannot parse {}", std::str::from_utf8(&carry)?);
             }
@@ -344,6 +391,16 @@ impl<R: Read + Seek> LogReader<R> {
     }
 
     pub fn iter(&mut self) -> LogReaderIter<'_, R> {
+        let exhausted = self.is_empty();
+        LogReaderIter {
+            reader: self,
+            carry: Vec::new(),
+            pending: VecDeque::new(),
+            exhausted,
+        }
+    }
+
+    pub fn next_matching(&mut self, matching: &str) -> LogReaderIter<'_, R> {
         let exhausted = self.is_empty();
         LogReaderIter {
             reader: self,
@@ -367,19 +424,13 @@ impl LoggedMessageWithPos {
     }
 }
 
-pub struct LogReaderIter<'r, R: Read + Seek> {
-    reader: &'r mut LogReader<R>,
-    carry: Vec<u8>,
-    pending: VecDeque<LoggedMessageWithPos>,
-    exhausted: bool,
-}
-
 impl<R: Read + Seek> LogReaderIter<'_, R> {
     fn fill(&mut self) -> anyhow::Result<()> {
         if self.reader.seek_pos == 0 {
             if !self.carry.is_empty() {
                 if let Ok(msg) = log_parser::parse(&self.carry) {
-                    self.pending.push_back(LoggedMessageWithPos(msg, 0));
+                    self.pending
+                        .push_back(LoggedMessageWithPos(msg.into_owned(), 0));
                 } else {
                     tracing::error!(
                         "Cannot parse {}",
@@ -412,7 +463,8 @@ impl<R: Read + Seek> LogReaderIter<'_, R> {
                     && !line.is_empty()
                 {
                     if let Ok(msg) = log_parser::parse(line) {
-                        self.pending.push_back(LoggedMessageWithPos(msg, i as u64));
+                        self.pending
+                            .push_back(LoggedMessageWithPos(msg.into_owned(), i as u64));
                     } else {
                         tracing::error!(
                             "Cannot parse {}",

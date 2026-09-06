@@ -11,7 +11,7 @@ use std::path::PathBuf;
 fn create_message(log: LoggedTimedMessage<'_>) -> MessageContent {
     match log.message {
         LoggedMessage::Action { source, content } => {
-            MessageContent::action(source.to_string(), content.to_string())
+            MessageContent::action(source.into_owned(), content.into_owned())
                 .with_time(log.time)
                 .with_log()
         }
@@ -45,7 +45,7 @@ fn create_message(log: LoggedTimedMessage<'_>) -> MessageContent {
                 .with_log()
         }
         LoggedMessage::Message { source, content } => {
-            MessageContent::message(Some(source.to_string()), content.to_string())
+            MessageContent::message(Some(source.into_owned()), content.into_owned())
                 .with_time(log.time)
                 .with_log()
         }
