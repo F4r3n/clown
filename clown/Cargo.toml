@@ -77,5 +77,10 @@ harness = false
 name = "message_content"
 harness = false
 
+[[bench]]
+name = "render_frame"
+harness = false
+required-features = ["bench"]
+
 [lints]
 workspace = true

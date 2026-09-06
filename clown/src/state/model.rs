@@ -82,7 +82,8 @@ pub struct Model {
 }
 
 impl Model {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "bench"))]
+    #[allow(dead_code)]
     pub fn new_empty_config() -> Self {
         Self {
             running_state: RunningState::Start,

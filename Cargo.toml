@@ -38,6 +38,13 @@ inherits = "release"
 lto = "fat"
 debug = false
 
+
+#RUSTFLAGS="-C force-frame-pointers=yes" cargo bench --profile profiling ...
+[profile.profiling]
+inherits = "dist"
+debug = true
+strip = false
+
 [profile.bloaty]
 debug = true
 lto = false

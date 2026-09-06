@@ -40,6 +40,42 @@ Build with spell checker:
 cargo build --profile dist --features spell-checker
 ```
 
+## Benchmarks
+
+```bash
+cargo bench
+```
+
+To bench the full frame use the `bench` feature:
+
+```bash
+cargo bench -p clown --features bench --bench render_frame
+```
+
+To profile use the `profiling` profile (release codegen, symbols kept):
+
+```bash
+cargo bench -p clown --features bench --profile profiling --bench render_frame --no-run #gives an exe
+samply record -- ./target/profiling/deps/render_frame-<hash> --bench --profile-time 10
+```
+
+`samply` needs `perf_event_paranoid` at 1 or lower, and enough locked memory for one
+perf ring buffer per CPU (the 516 KB default is too small on a many-core machine, and
+samply fails with `mmap failed`):
+
+```bash
+sudo sysctl -w kernel.perf_event_paranoid=1
+sudo sysctl -w kernel.perf_event_mlock_kb=2048
+```
+
+To make it persist across reboots:
+
+```bash
+printf 'kernel.perf_event_paranoid = 1\nkernel.perf_event_mlock_kb = 2048\n' \
+    | sudo tee /etc/sysctl.d/99-perf.conf
+```
+
+
 ## Commands
 
 All commands are typed in the input bar and start with `/`.

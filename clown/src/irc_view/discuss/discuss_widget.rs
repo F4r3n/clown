@@ -87,6 +87,14 @@ impl DiscussWidget {
         self.follow_last = true;
     }
 
+    #[cfg(any(test, feature = "bench"))]
+    #[allow(dead_code)]
+    pub fn set_scroll_offset(&mut self, offset: usize) {
+        self.scroll_offset = offset;
+        self.follow_last = offset == 0;
+        self.redraw = true;
+    }
+
     fn get_range_from_mouse(
         &self,
         messages: &ServersMessages,
