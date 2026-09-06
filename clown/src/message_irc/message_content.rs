@@ -210,6 +210,8 @@ impl MessageContent {
         color_source: Option<ratatui::style::Color>,
         time_format: Option<&TimeFormat>,
         nickname_length: u16,
+        rows_to_skip: usize,
+        rows_to_take: usize,
     ) -> impl Iterator<Item = Row<'_>> {
         let mut nickname_style = Style::default();
         if let Some(color_source) = color_source {
@@ -231,55 +233,47 @@ impl MessageContent {
             Style::default()
         };
         let wrapped = self.wrap_spans(content_width as usize, Some(default_style));
-        let mut visible_rows = Vec::with_capacity(wrapped.len());
-        let time_length: u16 = time_format.as_ref().map(|v| v.length()).unwrap_or(0);
-        visible_rows.push([
-            time_format
-                .map(|v| {
-                    Cell::from(format!(
-                        "{:>width$}",
-                        self.time_format(v),
-                        width = time_length as usize
-                    ))
-                })
-                .unwrap_or_else(
-                    || Cell::default().column_span(1), /*Cell default fails without column span of 1*/
-                ),
-            Cell::from(format!(
-                "{:<width$}",
-                self.source.as_deref().unwrap_or_default(),
-                width = nickname_length as usize
-            ))
-            .style(nickname_style),
-            Cell::from("┃ ").style(separator_style),
-            Cell::default(),
-        ]);
+        let time_length = time_format.as_ref().map(|v| v.length()).unwrap_or(0);
+        let time_pad = spaces(time_length);
+        let nick_pad = spaces(nickname_length);
 
-        if wrapped.len() > 1 {
-            let time_pad = spaces(time_length);
-            let nick_pad = spaces(nickname_length);
-            visible_rows.extend(
-                std::iter::repeat_with(|| {
-                    [
-                        Cell::from(time_pad),
-                        Cell::from(nick_pad).style(nickname_style),
-                        Cell::from("┃ ").style(separator_style),
-                        Cell::default(),
-                    ]
-                })
-                .take(wrapped.len() - 1),
-            );
-        }
+        let visible_rows = wrapped
+            .into_iter()
+            .skip(rows_to_skip)
+            .take(rows_to_take)
+            .enumerate()
+            .map(move |(offset, w)| {
+                let is_header = rows_to_skip == 0 && offset == 0;
+                [
+                    if is_header {
+                        time_format
+                            .map(|v| {
+                                Cell::from(format!(
+                                    "{:>width$}",
+                                    self.time_format(v),
+                                    width = time_length as usize
+                                ))
+                            })
+                            .unwrap_or_else(|| Cell::default().column_span(1))
+                    } else {
+                        Cell::from(time_pad)
+                    },
+                    if is_header {
+                        Cell::from(format!(
+                            "{:<width$}",
+                            self.source.as_deref().unwrap_or_default(),
+                            width = nickname_length as usize
+                        ))
+                    } else {
+                        Cell::from(nick_pad)
+                    }
+                    .style(nickname_style),
+                    Cell::from("┃ ").style(separator_style),
+                    Cell::from(Line::from(w.spans)),
+                ]
+            });
 
-        for (i, w) in wrapped.into_iter().enumerate() {
-            if let Some(row) = visible_rows.get_mut(i)
-                && let Some(last) = row.last_mut()
-            {
-                *last = Cell::from(Line::from(w.spans.clone()));
-            }
-        }
-
-        visible_rows.into_iter().map(Row::new)
+        visible_rows.map(Row::new)
     }
 
     pub fn get_message_width(&self) -> usize {
@@ -305,7 +299,127 @@ impl MessageContent {
 
 #[cfg(test)]
 mod test {
-    use crate::message_irc::message_content::{MessageContent, WordPos};
+    use crate::message_irc::message_content::{MessageContent, TimeFormat, WordPos};
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::{Constraint, Rect};
+    use ratatui::widgets::{Row, Table, Widget};
+
+    const NICK_LEN: u16 = 10;
+
+    /// Renders rows through the same table layout the discuss widget uses, and
+    /// returns one trimmed string per terminal line.
+    fn render_rows(rows: Vec<Row<'_>>, term_width: u16) -> Vec<String> {
+        if rows.is_empty() {
+            return Vec::new();
+        }
+        let area = Rect::new(0, 0, term_width, rows.len() as u16);
+        let mut buf = Buffer::empty(area);
+        Table::new(
+            rows,
+            [
+                Constraint::Length(TimeFormat::Hour.length().saturating_add(1)),
+                Constraint::Max(NICK_LEN.saturating_add(1)),
+                Constraint::Length(2),
+                Constraint::Min(10),
+            ],
+        )
+        .column_spacing(0)
+        .render(area, &mut buf);
+
+        (0..area.height)
+            .map(|y| {
+                (0..term_width)
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    fn render_window(
+        message: &MessageContent,
+        content_width: u16,
+        skip: usize,
+        take: usize,
+    ) -> Vec<String> {
+        render_rows(
+            message
+                .create_rows(
+                    content_width,
+                    None,
+                    Some(&TimeFormat::Hour),
+                    NICK_LEN,
+                    skip,
+                    take,
+                )
+                .collect(),
+            40,
+        )
+    }
+
+    #[test]
+    fn create_rows_window_matches_full_render() {
+        let message = MessageContent::message(
+            Some("alice".to_string()),
+            "aaa bbb ccc ddd eee fff".to_string(),
+        );
+        let content_width: u16 = 8;
+        let total = message.wrapped_line_count(content_width as usize);
+        assert_eq!(total, 3, "precondition: message wraps to 3 rows");
+
+        let full = render_window(&message, content_width, 0, total);
+        assert_eq!(full.len(), total);
+
+        for skip in 0..=total + 1 {
+            for take in 0..=total + 1 {
+                let expected: Vec<String> = full.iter().skip(skip).take(take).cloned().collect();
+
+                let actual = render_window(&message, content_width, skip, take);
+
+                assert_eq!(
+                    actual, expected,
+                    "create_rows(skip={skip}, take={take}) diverged from the full render"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn create_rows_skipped_window_has_no_header() {
+        let message = MessageContent::message(
+            Some("alice".to_string()),
+            "aaa bbb ccc ddd eee fff".to_string(),
+        );
+
+        let rows = render_window(&message, 8, 1, 2);
+
+        assert_eq!(rows.len(), 2, "2 rows remain after skipping 1 of 3");
+        assert!(
+            !rows[0].contains("alice"),
+            "first row of a skipped window must be padding, got {:?}",
+            rows[0]
+        );
+        assert!(
+            rows[0].contains("ccc ddd"),
+            "first row of a skipped window must carry the 2nd wrapped line, got {:?}",
+            rows[0]
+        );
+        assert!(
+            rows[1].contains("eee fff"),
+            "second row must carry the 3rd wrapped line, got {:?}",
+            rows[1]
+        );
+    }
+
+    /// A zero-height window must produce nothing.
+    #[test]
+    fn create_rows_empty_window_yields_no_rows() {
+        let message = MessageContent::message(Some("alice".to_string()), "hello world".to_string());
+
+        assert!(render_window(&message, 20, 0, 0).is_empty());
+        assert!(render_window(&message, 20, 5, 3).is_empty());
+    }
 
     #[test]
     fn test_wrapped_line_count() {

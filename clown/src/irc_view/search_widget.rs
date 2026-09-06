@@ -285,15 +285,14 @@ impl SearchWidget {
             }
             let color = message.get_source().map(|s| model.get_color(s));
 
-            let rows = message
-                .create_rows(
-                    content_width,
-                    color,
-                    Some(time_format),
-                    table_dimension.nickname,
-                )
-                .skip(rows_to_skip_in_message)
-                .take(rows_to_take);
+            let rows = message.create_rows(
+                content_width,
+                color,
+                Some(time_format),
+                table_dimension.nickname,
+                rows_to_skip_in_message,
+                rows_to_take,
+            );
 
             visible_rows_total += rows_to_take;
             visible_rows.extend(rows);

@@ -244,15 +244,14 @@ impl DiscussWidget {
                     crate::message_irc::message_content::TimeFormat::Hour
                 };
 
-                let rows = line
-                    .create_rows(
-                        self.content_width as u16,
-                        color,
-                        display_time.then_some(&time_format),
-                        NICKNAME_LENGTH,
-                    )
-                    .skip(rows_to_skip_in_message)
-                    .take(rows_to_take);
+                let rows = line.create_rows(
+                    self.content_width as u16,
+                    color,
+                    display_time.then_some(&time_format),
+                    NICKNAME_LENGTH,
+                    rows_to_skip_in_message,
+                    rows_to_take,
+                );
 
                 visible_rows_total += rows_to_take;
                 visible_rows.extend(rows);
