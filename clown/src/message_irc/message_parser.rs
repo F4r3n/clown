@@ -267,11 +267,45 @@ pub fn get_width_without_format(content: &str) -> usize {
 }
 
 pub fn is_string_plain(content: &str) -> bool {
-    for c in content.bytes() {
-        if c == 0x03 || c == 0x01 || c == 0x02 || c == 0x1D || c == 0x1E || c == 0x1F || c == 0x0F {
+    let bytes = content.as_bytes();
+    let mut chunks = bytes.chunks_exact(8);
+
+    //from 1 to 31
+    const MASK: u32 = (1 << 0x01)
+        | (1 << 0x02)
+        | (1 << 0x03)
+        | (1 << 0x0F)
+        | (1 << 0x1D)
+        | (1 << 0x1E)
+        | (1 << 0x1F);
+
+    for chunk in &mut chunks {
+        //pack everyting in a u64
+        // safe because the chunk is 8
+        let word = u64::from_ne_bytes(chunk.try_into().unwrap());
+
+        // Check if has bytes inferior to 32 (0x20) (the max is 0x1F = 31)
+        // 0x80 is the UTF8 sequence
+        let has_control_chars =
+            (word.wrapping_sub(0x2020_2020_2020_2020)) & !word & 0x8080_8080_8080_8080 != 0;
+
+        if has_control_chars {
+            // Slow path: scalar check only when a byte < 0x20 is detected
+            for &b in chunk {
+                if b < 0x20 && ((MASK >> b) & 1) != 0 {
+                    return false;
+                }
+            }
+        }
+    }
+
+    // Process remaining 0..7 bytes
+    for &b in chunks.remainder() {
+        if b < 0x20 && ((MASK >> b) & 1) != 0 {
             return false;
         }
     }
+
     true
 }
 
