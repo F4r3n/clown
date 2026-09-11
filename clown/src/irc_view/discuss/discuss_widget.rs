@@ -46,6 +46,32 @@ impl WidgetBox {
     }
 }
 
+#[derive(Clone, Copy)]
+struct DivCeilBy {
+    divisor: u64,
+    magic: u64,
+}
+
+impl DivCeilBy {
+    fn new(divisor: usize) -> Self {
+        debug_assert!(divisor >= 2, "reciprocal needs divisor >= 2");
+        let divisor = divisor as u64;
+        Self {
+            divisor,
+            magic: ((1u128 << 64) / u128::from(divisor)) as u64 + 1,
+        }
+    }
+
+    fn apply(self, value: usize) -> usize {
+        let numerator = value as u64 + (self.divisor - 1);
+        debug_assert!(
+            numerator <= u64::from(u32::MAX),
+            "reciprocal input out of range"
+        );
+        ((u128::from(numerator) * u128::from(self.magic)) >> 64) as usize
+    }
+}
+
 #[derive(Debug)]
 pub struct DiscussWidget {
     vertical_scroll_state: ScrollbarState,
@@ -275,6 +301,12 @@ impl DiscussWidget {
         visible_rows
     }
 
+    #[cfg(any(test, feature = "bench"))]
+    #[allow(dead_code)]
+    pub fn total_lines(&self, messages: &ServersMessages) -> usize {
+        self.get_fake_total_lines(messages)
+    }
+
     //Does not properly get the number of lines
     //but because its called each rendering time, better be fast
     fn get_fake_total_lines(&self, messages: &ServersMessages) -> usize {
@@ -285,9 +317,14 @@ impl DiscussWidget {
         messages
             .get_messages(self.current_server_id, &self.current_channel)
             .map(|msgs| {
+                if self.content_width == 1 {
+                    return msgs.iter().map(|m| m.get_message_width()).sum::<usize>();
+                }
+                //need divisor >=2
+                let div = DivCeilBy::new(self.content_width);
                 msgs.iter()
-                    .map(|m| m.get_message_width().div_ceil(self.content_width))
-                    .sum()
+                    .map(|m| div.apply(m.get_message_width()))
+                    .sum::<usize>()
             })
             .unwrap_or(0)
     }
@@ -924,6 +961,36 @@ mod tests {
 
     fn new_messages() -> ServersMessages {
         ServersMessages::new(std::path::Path::new("").to_path_buf())
+    }
+
+    #[test]
+    fn test_div_ceil_reciprocal_matches_div_ceil() {
+        // Every plausible terminal content width against every small message
+        // width, plus the boundaries the reciprocal derivation depends on.
+        for divisor in 2usize..=512 {
+            let div = DivCeilBy::new(divisor);
+            for value in 0usize..2048 {
+                assert_eq!(
+                    div.apply(value),
+                    value.div_ceil(divisor),
+                    "divisor {divisor}, value {value}"
+                );
+            }
+
+            for value in [
+                divisor - 1,
+                divisor,
+                divisor + 1,
+                u16::MAX as usize,
+                u32::MAX as usize - divisor + 1,
+            ] {
+                assert_eq!(
+                    div.apply(value),
+                    value.div_ceil(divisor),
+                    "divisor {divisor}, value {value}"
+                );
+            }
+        }
     }
 
     #[test]

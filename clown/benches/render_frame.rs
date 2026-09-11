@@ -151,6 +151,31 @@ fn bench_history_size(c: &mut Criterion) {
     group.finish();
 }
 
+/// The scrollbar sizing walk alone: `get_fake_total_lines` re-measures every
+/// message in the channel on every frame, so its cost is O(history) no matter
+/// where the viewport sits or how few rows are actually visible.
+fn bench_total_lines(c: &mut Criterion) {
+    let mut group = c.benchmark_group("render_frame/total_lines");
+
+    for &count in &[100usize, 1_000, 10_000, 50_000] {
+        let (mut ctx, mut widget) = build_ctx(count);
+        let mut terminal = match Terminal::new(TestBackend::new(120, 40)) {
+            Ok(terminal) => terminal,
+            Err(_) => continue,
+        };
+        // One real render first: `content_width` is only set by the `Layout`
+        // inside `render`, and the walk is a no-op while it is still zero.
+        draw_once(&mut terminal, &mut ctx, &mut widget);
+
+        group.throughput(Throughput::Elements(count as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, _| {
+            b.iter(|| black_box(&widget).total_lines(black_box(&ctx.messages)));
+        });
+    }
+
+    group.finish();
+}
+
 /// Same history, viewport moved progressively further back. `find_viewport_start`
 /// walks from the newest message towards the target, so cost should climb with
 /// scroll depth even though the number of drawn rows is constant.
@@ -203,6 +228,7 @@ fn bench_geometry(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_history_size,
+    bench_total_lines,
     bench_scroll_depth,
     bench_geometry
 );
