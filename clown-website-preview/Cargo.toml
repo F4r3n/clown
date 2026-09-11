@@ -9,13 +9,13 @@ description.workspace = true
 [dependencies]
 image = { version = "^0.25.10", default-features = false, features = ["jpeg", "png"] }
 bytes = "1.12"
-thiserror = "2.0.18"
-astral-tl = "0.7.11"
-ureq = "3.3.0"
+thiserror = "2.0.20"
+astral-tl = "0.8.0"
+ureq = "3.4.1"
 
 [dev-dependencies]
 httpmock = {version="0.8.3", default-features=false}
-tokio = "1.52.3"
+tokio = "1.53.1"
 
 [lints]
 workspace = true
