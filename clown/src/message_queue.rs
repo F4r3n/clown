@@ -36,6 +36,8 @@ pub struct MessageQueue {
     qtimed: BinaryHeap<Reverse<TimedMessage>>,
 }
 
+//Not a true iterator
+// if qtimed has value but later we return none
 impl std::iter::Iterator for MessageQueue {
     type Item = MessageEvent;
     fn next(&mut self) -> Option<Self::Item> {

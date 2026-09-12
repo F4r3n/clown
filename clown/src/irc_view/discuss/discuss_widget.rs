@@ -72,6 +72,16 @@ impl DivCeilBy {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct ScrollbarCache {
+    pub start_message_index: usize,
+    pub rows_to_skip_in_message: usize,
+
+    pub cache_width: usize,
+    pub scroll_offset: usize,
+    pub max_visible_height: usize,
+}
+
 #[derive(Debug)]
 pub struct DiscussWidget {
     vertical_scroll_state: ScrollbarState,
@@ -87,6 +97,7 @@ pub struct DiscussWidget {
     redraw: bool,
 
     display_time: bool,
+    scroll_cache: ScrollbarCache,
 }
 
 impl DiscussWidget {
@@ -103,7 +114,15 @@ impl DiscussWidget {
             last_hovered: None,
             redraw: true,
             display_time: true,
+            scroll_cache: ScrollbarCache::default(),
         }
+    }
+
+    pub fn is_scroll_cache_valid(&self) -> bool {
+        self.content_width > 0
+            && self.scroll_cache.cache_width == self.content_width
+            && self.scroll_cache.scroll_offset == self.scroll_offset
+            && self.scroll_cache.max_visible_height == self.max_visible_height
     }
 
     pub fn set_current_channel(&mut self, server_id: Option<ServerID>, channel: &str) {
@@ -111,6 +130,8 @@ impl DiscussWidget {
         self.current_server_id = server_id;
         self.scroll_offset = 0;
         self.follow_last = true;
+
+        self.scroll_cache = ScrollbarCache::default();
     }
 
     #[cfg(any(test, feature = "bench"))]
@@ -148,6 +169,13 @@ impl DiscussWidget {
     }
 
     fn find_viewport_start(&self, messages: &Messages) -> (usize, usize) {
+        if self.is_scroll_cache_valid() {
+            return (
+                self.scroll_cache.start_message_index,
+                self.scroll_cache.rows_to_skip_in_message,
+            );
+        }
+
         let message_count = messages.len();
         let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
 
@@ -345,6 +373,7 @@ impl DiscussWidget {
         } else {
             self.scroll_offset = self.scroll_offset.saturating_add(1);
         }
+        self.scroll_cache = ScrollbarCache::default();
     }
 
     pub fn add_line(
@@ -378,6 +407,22 @@ impl DiscussWidget {
         self.add_line_scroll();
 
         self.redraw = true;
+    }
+
+    fn update_scroll_cache(&mut self, messages: &ServersMessages) {
+        if !self.is_scroll_cache_valid()
+            && let Some(messages) =
+                messages.get_messages(self.current_server_id, &self.current_channel)
+        {
+            let (start_message_index, rows_to_skip_in_message) = self.find_viewport_start(messages);
+            self.scroll_cache = ScrollbarCache {
+                start_message_index,
+                rows_to_skip_in_message,
+                cache_width: self.content_width,
+                max_visible_height: self.max_visible_height,
+                scroll_offset: self.scroll_offset,
+            };
+        }
     }
 
     //How many lines I can scroll up
@@ -534,6 +579,7 @@ impl Draw for DiscussWidget {
         self.content_width = fake_layout.get(3).map(|v| v.width).unwrap_or(0) as usize;
 
         let number_lines = self.get_fake_total_lines(&ctx.messages);
+        self.update_scroll_cache(&ctx.messages);
 
         let visible_rows =
             self.collect_visible_rows(&ctx.messages, &ctx.model, !time_box.is_empty());
@@ -800,6 +846,7 @@ impl crate::component::EventHandler for DiscussWidget {
                     ctx.messages.rename(Some(*server_id), old, new);
                     if self.current_channel.eq_ignore_ascii_case(old) {
                         self.current_channel = new.to_ascii_lowercase();
+                        self.scroll_cache = ScrollbarCache::default();
                     }
                 }
                 None
