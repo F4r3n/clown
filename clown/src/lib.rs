@@ -4,6 +4,7 @@ pub mod tui;
 
 mod async_task;
 pub mod event_handler;
+mod math;
 pub mod message_event;
 pub mod message_irc;
 pub mod message_queue;

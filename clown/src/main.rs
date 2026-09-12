@@ -2,6 +2,7 @@ mod async_task;
 mod component;
 mod event_handler;
 mod irc_view;
+mod math;
 mod message_event;
 mod message_irc;
 mod message_queue;
