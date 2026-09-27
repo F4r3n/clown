@@ -33,7 +33,6 @@ pub enum MessageKind {
     Error,
     Info,
     Normal,
-    Highlight,
     Action,
     Notice,
 }
@@ -59,6 +58,16 @@ impl TimeFormat {
     }
 }
 
+use bitflags::bitflags;
+
+bitflags! {
+    #[derive(PartialEq, Debug, Clone, Copy, Default)]
+    pub struct MessageFlags: u8 {
+        const IS_LOG        = 0b0000_0001;
+        const IS_HIGHLIGHTED = 0b0000_0010;
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct MessageContent {
     time: std::time::SystemTime, /*Generated time */
@@ -66,7 +75,7 @@ pub struct MessageContent {
     content: String,             /*Content */
     width_without_format: usize,
     kind: MessageKind,
-    is_log: bool,
+    flags: MessageFlags,
 }
 
 impl MessageContent {
@@ -74,13 +83,20 @@ impl MessageContent {
         self.source.as_deref()
     }
 
-    #[cfg(test)]
     pub fn get_content(&self) -> &str {
         &self.content
     }
 
+    pub fn get_kind(&self) -> MessageKind {
+        self.kind
+    }
+
     pub fn is_log(&self) -> bool {
-        self.is_log
+        self.flags.contains(MessageFlags::IS_LOG)
+    }
+
+    pub fn is_highlighted(&self) -> bool {
+        self.flags.contains(MessageFlags::IS_HIGHLIGHTED)
     }
 
     pub fn get_word_from_pos(&self, pos: &WordPos) -> Option<&str> {
@@ -92,6 +108,32 @@ impl MessageContent {
             .filter(|w| w.starts_with("http://") || w.starts_with("https://"))
     }
 
+    pub fn should_highlight(current_nickname: &str, in_content: &str) -> bool {
+        if current_nickname.is_empty() {
+            return false;
+        }
+        let nick = current_nickname;
+
+        if let Some(start_byte) = in_content.find(nick) {
+            let end_byte = start_byte + nick.len();
+
+            // char before
+            let prev_char = in_content[..start_byte].chars().next_back();
+
+            // char after
+            let next_char = in_content[end_byte..].chars().next();
+
+            let is_boundary = |c: char| c.is_ascii_punctuation() || c.is_ascii_whitespace();
+
+            let start_ok = prev_char.is_none() || prev_char.is_some_and(is_boundary);
+            let end_ok = next_char.is_none() || next_char.is_some_and(is_boundary);
+
+            start_ok && end_ok
+        } else {
+            false
+        }
+    }
+
     fn new(kind: MessageKind, source: Option<String>, content: String) -> Self {
         Self {
             width_without_format: get_width_without_format(&content),
@@ -99,7 +141,7 @@ impl MessageContent {
             source,
             kind,
             time: std::time::SystemTime::now(),
-            is_log: false,
+            flags: MessageFlags::empty(),
         }
     }
 
@@ -118,7 +160,7 @@ impl MessageContent {
     }
 
     pub fn highlight(source: Option<String>, content: String) -> Self {
-        Self::new(MessageKind::Highlight, source, content)
+        Self::new(MessageKind::Normal, source, content).with_highlight(true)
     }
 
     pub fn error(content: String) -> Self {
@@ -145,7 +187,12 @@ impl MessageContent {
     }
 
     pub fn with_log(mut self) -> Self {
-        self.is_log = true;
+        self.flags.set(MessageFlags::IS_LOG, true);
+        self
+    }
+
+    pub fn with_highlight(mut self, value: bool) -> Self {
+        self.flags.set(MessageFlags::IS_HIGHLIGHTED, value);
         self
     }
 
@@ -203,7 +250,7 @@ impl MessageContent {
         if let Some(color_source) = color_source {
             nickname_style = nickname_style.fg(color_source);
         }
-        if self.kind.eq(&MessageKind::Highlight) {
+        if self.is_highlighted() {
             nickname_style = nickname_style.bg(Color::Red).fg(Color::LightYellow);
         }
 
@@ -211,9 +258,9 @@ impl MessageContent {
             MessageKind::Error => Style::default().fg(Color::Red),
             MessageKind::Info => Style::default().fg(Color::LightBlue),
             MessageKind::Action | MessageKind::Notice => Style::default().fg(Color::LightBlue),
-            MessageKind::Normal | MessageKind::Highlight => Style::default(),
+            MessageKind::Normal => Style::default(),
         };
-        let separator_style = if self.is_log {
+        let separator_style = if self.is_log() {
             Style::default().fg(Color::Gray)
         } else {
             Style::default()
@@ -405,6 +452,27 @@ mod test {
 
         assert!(render_window(&message, 20, 0, 0).is_empty());
         assert!(render_window(&message, 20, 5, 3).is_empty());
+    }
+
+    #[test]
+    fn test_should_hightlight() {
+        let current_nick = "nickname".to_string();
+
+        assert!(MessageContent::should_highlight(
+            &current_nick,
+            "my nickname is "
+        ));
+        assert!(!MessageContent::should_highlight(
+            &current_nick,
+            "my nicknameis "
+        ));
+        assert!(MessageContent::should_highlight(&current_nick, "nickname"));
+        assert!(MessageContent::should_highlight(&current_nick, " nickname"));
+        assert!(MessageContent::should_highlight(&current_nick, "nickname "));
+        assert!(MessageContent::should_highlight(
+            &current_nick,
+            ",nickname "
+        ));
     }
 
     #[test]

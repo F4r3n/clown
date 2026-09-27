@@ -50,6 +50,7 @@ thiserror = "2.0.20"
 anyhow = "1.0.104"
 nom = { version = "8.0.0", features = ["std"], default-features = false }
 ureq = {version = "3.4.1", optional = true}
+bitflags = "2.13.2"
 
 [dev-dependencies]
 anyhow = "1.0.104"

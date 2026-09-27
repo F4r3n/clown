@@ -1,8 +1,8 @@
 use crate::message_irc::log::message_logger::{
     LogReader, LoggedMessage, LoggedTimedMessage, MessageLogger,
 };
-use crate::message_irc::message_content::MessageContent;
 use crate::message_irc::message_content::WordPos;
+use crate::message_irc::message_content::{MessageContent, MessageKind};
 use crate::state::server_id::ServerID;
 use ahash::AHashMap;
 
@@ -103,12 +103,13 @@ impl ServersMessages {
 
     pub fn read_log(
         &mut self,
+        current_nick: &str,
         number_lines: usize,
         server_id: ServerID,
         channel: &str,
     ) -> anyhow::Result<usize> {
         if let Some(server_group) = self.get_server_group_mut(Some(server_id)) {
-            server_group.read_log(channel, number_lines)
+            server_group.read_log(current_nick, channel, number_lines)
         } else {
             Ok(0)
         }
@@ -266,7 +267,7 @@ impl Messages {
         last_date.date_naive() != now_date.date_naive()
     }*/
 
-    fn read_log(&mut self, number_lines: usize) -> anyhow::Result<usize> {
+    fn read_log(&mut self, current_nick: &str, number_lines: usize) -> anyhow::Result<usize> {
         let log_reader = match self.log_reader.as_mut() {
             Some(reader) => reader,
             None => return Ok(0),
@@ -290,7 +291,11 @@ impl Messages {
                         }
                         last_time = msg.time;
             */
-            self.logged_messages.push(create_message(msg));
+            let msg = create_message(msg);
+            let should_highlight = msg.get_kind().eq(&MessageKind::Normal)
+                && MessageContent::should_highlight(current_nick, msg.get_content());
+            self.logged_messages
+                .push(msg.with_highlight(should_highlight));
         }
 
         Ok(self
@@ -339,11 +344,16 @@ impl ChannelMessages {
         }
     }
 
-    fn read_log(&mut self, channel: &str, number_lines: usize) -> anyhow::Result<usize> {
+    fn read_log(
+        &mut self,
+        current_nick: &str,
+        channel: &str,
+        number_lines: usize,
+    ) -> anyhow::Result<usize> {
         self.messages
             .entry(channel.to_string())
             .or_default()
-            .read_log(number_lines)
+            .read_log(current_nick, number_lines)
     }
 
     pub fn has_messages(&self, channel: &str) -> bool {

@@ -2,6 +2,7 @@ use super::dimension_discuss::{META_LENGTH, NICKNAME_LENGTH, SEPARATOR_LENGTH, T
 use super::servers_messages::{Messages, Range, ServersMessages};
 use crate::component::Draw;
 use crate::message_irc::textwrapper::wrap_content;
+use crate::state::irc_model::IrcModel;
 use crate::state::server_id::ServerID;
 use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
 use crossterm::event::KeyCode;
@@ -423,17 +424,23 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
-    fn scroll_up_logs(&mut self, messages: &mut ServersMessages) {
-        if self.possible_scroll_up(messages, 1) > 0 || self.read_log(messages, 1) > 0 {
+    fn scroll_up_logs(&mut self, current_nick: &str, messages: &mut ServersMessages) {
+        if self.possible_scroll_up(messages, 1) > 0 || self.read_log(current_nick, messages, 1) > 0
+        {
             self.scroll_up_no_check();
         }
     }
 
-    fn read_log(&mut self, messages: &mut ServersMessages, number_lines: usize) -> usize {
+    fn read_log(
+        &mut self,
+        current_nick: &str,
+        messages: &mut ServersMessages,
+        number_lines: usize,
+    ) -> usize {
         if let Some(server_id) = self.current_server_id {
             //cannot scroll up, maybe open the logs
             messages.open_log(server_id, &self.current_channel);
-            match messages.read_log(number_lines, server_id, &self.current_channel) {
+            match messages.read_log(current_nick, number_lines, server_id, &self.current_channel) {
                 Ok(v) => v,
                 Err(e) => {
                     tracing::error!("Cannot read logs: {e}");
@@ -455,11 +462,14 @@ impl DiscussWidget {
         offset
     }
 
-    fn scroll_page_up_logs(&mut self, messages: &mut ServersMessages) {
+    fn scroll_page_up_logs(&mut self, current_nick: &str, messages: &mut ServersMessages) {
         let offset = self.scroll_page_up(messages);
         if offset < self.max_visible_height {
-            let log_offset =
-                self.read_log(messages, self.max_visible_height.saturating_sub(offset));
+            let log_offset = self.read_log(
+                current_nick,
+                messages,
+                self.max_visible_height.saturating_sub(offset),
+            );
             if log_offset > 0 {
                 self.scroll_offset = self.scroll_offset.saturating_add(log_offset);
                 self.follow_last = false;
@@ -482,29 +492,6 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
-    fn should_highlight(&self, current_nickname: &str, in_content: &str) -> bool {
-        let nick = current_nickname;
-
-        if let Some(start_byte) = in_content.find(nick) {
-            let end_byte = start_byte + nick.len();
-
-            // char before
-            let prev_char = in_content[..start_byte].chars().next_back();
-
-            // char after
-            let next_char = in_content[end_byte..].chars().next();
-
-            let is_boundary = |c: char| c.is_ascii_punctuation() || c.is_ascii_whitespace();
-
-            let start_ok = prev_char.is_none() || prev_char.is_some_and(is_boundary);
-            let end_ok = next_char.is_none() || next_char.is_some_and(is_boundary);
-
-            start_ok && end_ok
-        } else {
-            false
-        }
-    }
-
     fn compute_time_size(&self, row: u16) -> WidgetBox {
         let time_size = if self.display_time && row.saturating_div(3) > META_LENGTH {
             Some(TIME_LENGTH)
@@ -516,6 +503,11 @@ impl DiscussWidget {
             padding: time_padding,
             size: time_size.unwrap_or(0),
         }
+    }
+
+    fn get_current_nick<'b>(&self, irc_model: &'b IrcModel) -> Option<&'b str> {
+        self.current_server_id
+            .and_then(|v| irc_model.get_server(v).map(|v| v.get_current_nick()))
     }
 }
 
@@ -721,7 +713,7 @@ impl crate::component::EventHandler for DiscussWidget {
                     }
 
                     let is_highlight =
-                        self.should_highlight(irc_server.get_current_nick(), content);
+                        MessageContent::should_highlight(irc_server.get_current_nick(), content);
 
                     self.add_line(
                         &mut ctx.messages,
@@ -850,7 +842,10 @@ impl crate::component::EventHandler for DiscussWidget {
                         None
                     }
                     crossterm::event::MouseEventKind::ScrollUp => {
-                        self.scroll_up_logs(&mut ctx.messages);
+                        let nick = self
+                            .get_current_nick(&ctx.session.model)
+                            .unwrap_or_default();
+                        self.scroll_up_logs(nick, &mut ctx.messages);
                         None
                     }
                     crossterm::event::MouseEventKind::Down(button) => {
@@ -922,7 +917,10 @@ impl crate::component::EventHandler for DiscussWidget {
                 },
                 crossterm::event::Event::Key(key_event) => match key_event.code {
                     KeyCode::PageUp => {
-                        self.scroll_page_up_logs(&mut ctx.messages);
+                        let nick = self
+                            .get_current_nick(&ctx.session.model)
+                            .unwrap_or_default();
+                        self.scroll_page_up_logs(nick, &mut ctx.messages);
                         None
                     }
                     KeyCode::PageDown => {
@@ -1099,19 +1097,6 @@ mod tests {
         discuss.scroll_offset = 0;
         assert_eq!(discuss.possible_scroll_up(&messages, 10), 10);
         assert_eq!(discuss.possible_scroll_up(&messages, 100), 12);
-    }
-
-    #[test]
-    fn test_should_hightlight() {
-        let current_nick = "nickname".to_string();
-
-        let discuss = DiscussWidget::new();
-        assert!(discuss.should_highlight(&current_nick, "my nickname is "));
-        assert!(!discuss.should_highlight(&current_nick, "my nicknameis "));
-        assert!(discuss.should_highlight(&current_nick, "nickname"));
-        assert!(discuss.should_highlight(&current_nick, " nickname"));
-        assert!(discuss.should_highlight(&current_nick, "nickname "));
-        assert!(discuss.should_highlight(&current_nick, ",nickname "));
     }
 
     #[test]
