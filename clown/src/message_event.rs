@@ -58,7 +58,6 @@ pub enum MessageEvent {
     HoverURL(String /* URL */),
     #[allow(dead_code)]
     Hover(String), //currently not used, but the skeleton can be used anywhere
-    PullIRC,
     Connect(ServerID),
     DisConnect(ServerID),
     OpenWeb(String),

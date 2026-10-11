@@ -9,22 +9,26 @@ mod message_queue;
 mod project_path;
 mod state;
 mod tui;
+mod wake_event;
 mod widget_view;
 use crate::irc_view::discuss::servers_messages::ServersMessages;
 use crate::irc_view::main_view;
 use crate::project_path::ProjectPath;
+use crate::state::context::Ctx;
 use crate::state::model::{Model, RunningState};
 use crate::state::session::Session;
-use event_handler::Event;
+use crate::wake_event::WakeEvent;
 use event_handler::EventHandler;
+use futures::FutureExt;
 use message_event::MessageEvent;
 use message_irc::message_content::MessageKind;
 use message_queue::MessageQueue;
 use ratatui::Frame;
 use shadow_rs::shadow;
+use tokio_stream::StreamExt;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
-
+const MAX_IRC_BATCH: usize = 100;
 pub enum Views<'a> {
     Main(main_view::MainView<'a>),
 }
@@ -119,25 +123,34 @@ async fn main() -> anyhow::Result<()> {
         "Use the command /help".to_string(),
     ));
     list_messages.push_message(MessageEvent::SettingsDidChange);
-
     while ctx.model.running_state != RunningState::Done {
-        if let Some(event) = events.next().await {
-            match event {
-                Event::Tick | Event::Crossterm(_) => {
-                    handle_event(&mut ctx, &mut current_view, event, &mut list_messages)?;
-                    while let Some(current_msg) = list_messages.next() {
-                        update(&mut ctx, &mut current_view, current_msg, &mut list_messages).await;
-                    }
-                }
-                Event::Error => {
-                    tracing::error!("Error in the events");
-                }
+        let wake_event = tokio::select! {
+            Some(event) = events.next() => {
+                wake_event::WakeEvent::Event(event)
             }
-            if need_redraw(&mut ctx.model, &mut current_view) {
-                terminal.draw(|f| view(&mut ctx, &mut current_view, f))?;
+            Some((id,message)) = ctx.session.irc_streams.next() =>{
+                wake_event::WakeEvent::IRC((id, message))
             }
-        } else {
-            ctx.model.running_state = RunningState::Done;
+            else => { ctx.model.running_state = RunningState::Done; continue; }
+        };
+        handle_event(&mut ctx, &mut current_view, wake_event, &mut list_messages)?;
+        for _ in 0..MAX_IRC_BATCH {
+            let Some(Some((id, msg))) = ctx.session.irc_streams.next().now_or_never() else {
+                break;
+            };
+            handle_event(
+                &mut ctx,
+                &mut current_view,
+                WakeEvent::IRC((id, msg)),
+                &mut list_messages,
+            )?;
+        }
+        while let Some(current_msg) = list_messages.next() {
+            update(&mut ctx, &mut current_view, current_msg, &mut list_messages).await;
+        }
+
+        if need_redraw(&mut ctx.model, &mut current_view) {
+            terminal.draw(|f| view(&mut ctx, &mut current_view, f))?;
         }
     }
     EventHandler::disable_mouse_event()?;
@@ -157,7 +170,7 @@ fn view(ctx: &mut crate::state::context::Ctx, views: &mut Views<'_>, frame: &mut
 fn handle_event(
     ctx: &mut crate::state::context::Ctx,
     views: &mut Views<'_>,
-    event: Event,
+    event: WakeEvent,
     out_messages: &mut MessageQueue,
 ) -> anyhow::Result<Option<MessageEvent>> {
     match views {

@@ -8,7 +8,7 @@ use clown_core::command::Command;
 use clown_core::conn::ConnectionConfig;
 use clown_core::message::ServerMessage;
 use tokio::sync::mpsc;
-
+use tokio_stream::{StreamMap, wrappers::ReceiverStream};
 pub struct SessionStatus<'a> {
     pub server_id: ServerID,
     pub channel: Option<std::borrow::Cow<'a, str>>,
@@ -75,12 +75,14 @@ impl ServerSlot {
 pub struct Session {
     pub model: IrcModel,
     servers: Vec<ServerSlot>,
+    pub irc_streams: StreamMap<ServerID, ReceiverStream<ServerMessage>>,
 }
 
 impl Session {
     pub fn new(in_length: usize) -> Self {
         Self {
             model: IrcModel::new(in_length),
+            irc_streams: StreamMap::new(),
             servers: std::iter::repeat_with(ServerSlot::new)
                 .take(in_length)
                 .collect(),
@@ -174,7 +176,7 @@ impl Session {
             .map(|s| s.retry.get_next_retry())
     }
 
-    pub fn pull_all_server_message(&mut self) -> impl Iterator<Item = (ServerID, ServerMessage)> {
+    /*pub fn pull_all_server_message(&mut self) -> impl Iterator<Item = (ServerID, ServerMessage)> {
         self.servers.iter_mut().enumerate().flat_map(|(i, conn)| {
             conn.connection.iter_mut().flat_map(move |conn| {
                 std::iter::from_fn(move || {
@@ -186,7 +188,7 @@ impl Session {
                 })
             })
         })
-    }
+    }*/
 
     pub fn pull_all_server_error(&mut self) -> impl Iterator<Item = (ServerID, String)> {
         self.servers.iter_mut().enumerate().flat_map(|(i, slot)| {
@@ -300,12 +302,13 @@ impl Session {
         if !server.retry.increment_retry() {
             anyhow::bail!("No retries left");
         }
-
+        self.irc_streams
+            .insert(in_id, ReceiverStream::new(receiver.inner));
+        //TDODO: remove ID from stream on disconnection
         server.connection = Some(IRCConnection {
             command_sender,
             error_receiver,
             _error_sender: error_sender.clone(),
-            message_reciever: receiver,
             task: tokio::spawn(async move {
                 if let Err(err) = client.launch(&connection_config).await {
                     let _ = error_sender.send(format!("Connection error: {err}")).await;

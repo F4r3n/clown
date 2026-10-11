@@ -28,6 +28,7 @@ use crate::state::session::Session;
 use crate::widget_view;
 use clown_core::command::Command;
 use clown_core::conn::ConnectionConfig;
+use clown_core::message::ServerMessage;
 use clown_core::response::Response;
 use clown_core::response::ResponseNumber;
 use ratatui::layout::Position;
@@ -452,8 +453,6 @@ impl MainView<'_> {
                 }
             }
         }
-
-        messages.push_message(MessageEvent::PullIRC);
     }
 
     fn handle_tick(
@@ -481,191 +480,124 @@ impl MainView<'_> {
         }
     }
 
-    fn update_pull_irc(
+    fn handle_server_message(
         &mut self,
+        server_id: ServerID,
+        recieved: &ServerMessage,
         ctx: &mut crate::state::context::Ctx,
         messages: &mut MessageQueue,
     ) {
         let mut server_to_init = vec![];
-        for (server_id, recieved) in ctx.session.pull_all_server_message() {
-            let reply = recieved.reply();
-            let source = recieved.source().map(|v| v.to_string());
 
-            debug!("server_id : {:?}, {:?}", server_id, recieved);
-            //log_info_sync(format!("{reply:?}\n").as_str());
-            match reply {
-                Response::Cmd(command) => match command {
-                    Command::PrivMsg(target, content) => {
-                        if let Some(source) = source {
-                            if content.starts_with("\x01ACTION") {
-                                if let Some(parsed_content) = content.get(8..content.len() - 1) {
-                                    messages.push_message(MessageEvent::ActionMsg(
-                                        server_id,
-                                        source,
-                                        target,
-                                        parsed_content.to_string(),
-                                    ));
-                                }
-                            } else {
-                                messages.push_message(MessageEvent::PrivMsg(
-                                    server_id, source, target, content,
+        let reply = recieved.reply();
+        let source = recieved.source().map(|v| v.to_string());
+
+        debug!("server_id : {:?}, {:?}", server_id, recieved);
+        //log_info_sync(format!("{reply:?}\n").as_str());
+        match reply {
+            Response::Cmd(command) => match command {
+                Command::PrivMsg(target, content) => {
+                    if let Some(source) = source {
+                        if content.starts_with("\x01ACTION") {
+                            if let Some(parsed_content) = content.get(8..content.len() - 1) {
+                                messages.push_message(MessageEvent::ActionMsg(
+                                    server_id,
+                                    source,
+                                    target,
+                                    parsed_content.to_string(),
                                 ));
                             }
                         } else {
-                            tracing::error!(error = %MessageError::MissingSource, "PrivMSG");
+                            messages.push_message(MessageEvent::PrivMsg(
+                                server_id, source, target, content,
+                            ));
                         }
+                    } else {
+                        tracing::error!(error = %MessageError::MissingSource, "PrivMSG");
                     }
-                    Command::Nick(new_user) => {
-                        if let Some(source) = source
-                            && let Some(nickname) = ctx.model.get_nickname(server_id)
+                }
+                Command::Nick(new_user) => {
+                    if let Some(source) = source
+                        && let Some(nickname) = ctx.model.get_nickname(server_id)
+                    {
+                        if source.eq_ignore_ascii_case(nickname)
+                            && let Err(e) = ctx.model.set_nickname(server_id, new_user.clone())
                         {
-                            if source.eq_ignore_ascii_case(nickname)
-                                && let Err(e) = ctx.model.set_nickname(server_id, new_user.clone())
-                            {
-                                tracing::error!(error = %e, "Impossible to save");
-                            }
+                            tracing::error!(error = %e, "Impossible to save");
+                        }
 
-                            messages.push_message(MessageEvent::ReplaceUser(
-                                server_id, source, new_user,
-                            ));
-                        } else {
-                            tracing::error!(error = %MessageError::MissingSource, "Nick");
-                        }
+                        messages
+                            .push_message(MessageEvent::ReplaceUser(server_id, source, new_user));
+                    } else {
+                        tracing::error!(error = %MessageError::MissingSource, "Nick");
                     }
-                    Command::Notice(target, message) => {
-                        //Display a notice directly to the user current channel
-                        if let Some(source) = source {
-                            messages.push_message(MessageEvent::Notice(
-                                server_id, target, source, message,
-                            ));
-                        }
+                }
+                Command::Notice(target, message) => {
+                    //Display a notice directly to the user current channel
+                    if let Some(source) = source {
+                        messages
+                            .push_message(MessageEvent::Notice(server_id, target, source, message));
                     }
-                    Command::Topic(channel, topic) => {
-                        messages.push_message(MessageEvent::SetTopic(
-                            server_id, source, channel, topic,
-                        ));
+                }
+                Command::Topic(channel, topic) => {
+                    messages
+                        .push_message(MessageEvent::SetTopic(server_id, source, channel, topic));
+                }
+                Command::Quit(reason) => {
+                    if let Some(source) = source {
+                        messages.push_message(MessageEvent::Quit(server_id, source, reason));
+                    } else {
+                        tracing::error!(error = %MessageError::MissingSource, "Quit");
                     }
-                    Command::Quit(reason) => {
-                        if let Some(source) = source {
-                            messages.push_message(MessageEvent::Quit(server_id, source, reason));
-                        } else {
-                            tracing::error!(error = %MessageError::MissingSource, "Quit");
-                        }
-                    }
-                    Command::Part(channel, _reason) => {
-                        if let Some(source) = source {
-                            messages.push_message(MessageEvent::Part(
-                                server_id,
-                                channel.to_string(),
-                                source,
-                            ));
-                        } else {
-                            tracing::error!(error = %MessageError::MissingSource, "Part");
-                        }
-                    }
-                    Command::Join(channel) => {
-                        if let Some(source) = source {
-                            //Create a new 'user' as IRC-Server
-                            messages.push_message(MessageEvent::Join(
-                                server_id,
-                                channel.clone(),
-                                source.clone(),
-                            ));
-
-                            messages.push_message(MessageEvent::Config(ConfigEvent::AddColor(
-                                vec![source.clone()],
-                            )));
-
-                            //If the server has received the join command and send it back
-                            // we are allowed to select the channel if we are the current user
-                            if let Some(nickname) = ctx.model.get_nickname(server_id)
-                                && source.eq_ignore_ascii_case(nickname)
-                            {
-                                messages.push_message(MessageEvent::SelectChannel(
-                                    Some(server_id),
-                                    channel.clone(),
-                                ));
-                            }
-                        } else {
-                            tracing::error!(error = %MessageError::MissingSource, "Join");
-                        }
-                    }
-                    Command::Error(err) => {
-                        messages.push_message(MessageEvent::AddMessageViewInfo(
-                            Some(server_id),
-                            None,
-                            crate::message_irc::message_content::MessageKind::Error,
-                            err,
-                        ));
-                        messages.push_message(MessageEvent::DisConnect(server_id))
-                    }
-                    Command::Unknown(content) => {
-                        messages.push_message(MessageEvent::AddMessageViewInfo(
-                            Some(server_id),
-                            None,
-                            crate::message_irc::message_content::MessageKind::Error,
-                            content,
-                        ));
-                    }
-                    _ => {}
-                },
-                Response::Rpl(reply) => match reply {
-                    ResponseNumber::Welcome(content) => {
-                        server_to_init.push(server_id);
-
-                        messages.push_message(MessageEvent::AddMessageViewInfo(
-                            Some(server_id),
-                            source.clone(),
-                            crate::message_irc::message_content::MessageKind::Normal,
-                            content,
-                        ));
-                    }
-                    ResponseNumber::YourHost(content)
-                    | ResponseNumber::Created(content)
-                    | ResponseNumber::MyInfo(content)
-                    | ResponseNumber::Bounce(content)
-                    | ResponseNumber::LUserClient(content)
-                    | ResponseNumber::LUserOp(content)
-                    | ResponseNumber::LUserUnknown(content)
-                    | ResponseNumber::LUserChannels(content)
-                    | ResponseNumber::LUserMe(content)
-                    | ResponseNumber::MOTD(content)
-                    | ResponseNumber::MOTDStart2(content)
-                    | ResponseNumber::MOTDStart(content)
-                    | ResponseNumber::EndOfMOTD(content) => {
-                        messages.push_message(MessageEvent::AddMessageViewInfo(
-                            Some(server_id),
-                            source.clone(),
-                            crate::message_irc::message_content::MessageKind::Normal,
-                            content,
-                        ));
-                    }
-                    ResponseNumber::NameReply(_symbol, channel, list_users) => {
-                        messages.push_message(MessageEvent::UpdateUsers(
+                }
+                Command::Part(channel, _reason) => {
+                    if let Some(source) = source {
+                        messages.push_message(MessageEvent::Part(
                             server_id,
-                            channel,
-                            list_users.clone(),
+                            channel.to_string(),
+                            source,
                         ));
-                        messages
-                            .push_message(MessageEvent::Config(ConfigEvent::AddColor(list_users)));
+                    } else {
+                        tracing::error!(error = %MessageError::MissingSource, "Part");
                     }
-                    ResponseNumber::Topic(channel, topic) => {
-                        messages
-                            .push_message(MessageEvent::SetTopic(server_id, None, channel, topic));
-                    }
-                    ResponseNumber::Err(_, content) => {
-                        messages.push_message(MessageEvent::AddMessageViewInfo(
-                            Some(server_id),
-                            None,
-                            crate::message_irc::message_content::MessageKind::Error,
-                            content,
+                }
+                Command::Join(channel) => {
+                    if let Some(source) = source {
+                        //Create a new 'user' as IRC-Server
+                        messages.push_message(MessageEvent::Join(
+                            server_id,
+                            channel.clone(),
+                            source.clone(),
                         ));
+
+                        messages.push_message(MessageEvent::Config(ConfigEvent::AddColor(vec![
+                            source.clone(),
+                        ])));
+
+                        //If the server has received the join command and send it back
+                        // we are allowed to select the channel if we are the current user
+                        if let Some(nickname) = ctx.model.get_nickname(server_id)
+                            && source.eq_ignore_ascii_case(nickname)
+                        {
+                            messages.push_message(MessageEvent::SelectChannel(
+                                Some(server_id),
+                                channel.clone(),
+                            ));
+                        }
+                    } else {
+                        tracing::error!(error = %MessageError::MissingSource, "Join");
                     }
-                    _ => {
-                        //tracing::error!(error = %MessageError::UnknownMessage);
-                    }
-                },
-                Response::Unknown(content) => {
+                }
+                Command::Error(err) => {
+                    messages.push_message(MessageEvent::AddMessageViewInfo(
+                        Some(server_id),
+                        None,
+                        crate::message_irc::message_content::MessageKind::Error,
+                        err,
+                    ));
+                    messages.push_message(MessageEvent::DisConnect(server_id))
+                }
+                Command::Unknown(content) => {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(server_id),
                         None,
@@ -673,8 +605,71 @@ impl MainView<'_> {
                         content,
                     ));
                 }
-            };
-        }
+                _ => {}
+            },
+            Response::Rpl(reply) => match reply {
+                ResponseNumber::Welcome(content) => {
+                    server_to_init.push(server_id);
+
+                    messages.push_message(MessageEvent::AddMessageViewInfo(
+                        Some(server_id),
+                        source.clone(),
+                        crate::message_irc::message_content::MessageKind::Normal,
+                        content,
+                    ));
+                }
+                ResponseNumber::YourHost(content)
+                | ResponseNumber::Created(content)
+                | ResponseNumber::MyInfo(content)
+                | ResponseNumber::Bounce(content)
+                | ResponseNumber::LUserClient(content)
+                | ResponseNumber::LUserOp(content)
+                | ResponseNumber::LUserUnknown(content)
+                | ResponseNumber::LUserChannels(content)
+                | ResponseNumber::LUserMe(content)
+                | ResponseNumber::MOTD(content)
+                | ResponseNumber::MOTDStart2(content)
+                | ResponseNumber::MOTDStart(content)
+                | ResponseNumber::EndOfMOTD(content) => {
+                    messages.push_message(MessageEvent::AddMessageViewInfo(
+                        Some(server_id),
+                        source.clone(),
+                        crate::message_irc::message_content::MessageKind::Normal,
+                        content,
+                    ));
+                }
+                ResponseNumber::NameReply(_symbol, channel, list_users) => {
+                    messages.push_message(MessageEvent::UpdateUsers(
+                        server_id,
+                        channel,
+                        list_users.clone(),
+                    ));
+                    messages.push_message(MessageEvent::Config(ConfigEvent::AddColor(list_users)));
+                }
+                ResponseNumber::Topic(channel, topic) => {
+                    messages.push_message(MessageEvent::SetTopic(server_id, None, channel, topic));
+                }
+                ResponseNumber::Err(_, content) => {
+                    messages.push_message(MessageEvent::AddMessageViewInfo(
+                        Some(server_id),
+                        None,
+                        crate::message_irc::message_content::MessageKind::Error,
+                        content,
+                    ));
+                }
+                _ => {
+                    //tracing::error!(error = %MessageError::UnknownMessage);
+                }
+            },
+            Response::Unknown(content) => {
+                messages.push_message(MessageEvent::AddMessageViewInfo(
+                    Some(server_id),
+                    None,
+                    crate::message_irc::message_content::MessageKind::Error,
+                    content,
+                ));
+            }
+        };
 
         for id in server_to_init {
             ctx.session.reset_retry(id);
@@ -689,6 +684,76 @@ impl MainView<'_> {
                 }
             }
         }
+    }
+
+    fn handle_crossterm_event(
+        &mut self,
+        ctx: &mut crate::state::context::Ctx,
+        event: &Event,
+        messages: &mut MessageQueue,
+    ) {
+        match event {
+            Event::Crossterm(crossterm::event::Event::Key(key_event)) => {
+                // Pass event to focused widget
+                if self.has_focus {
+                    match self.state {
+                        ViewState::Discuss => {
+                            if !key_event.modifiers.is_empty() {
+                                ctx.model.handle_event(key_event);
+                            }
+                            for child in self.children().iter_mut() {
+                                if let Some(new_message) = child.handle_events(ctx, event) {
+                                    messages.push_message(new_message);
+                                }
+                            }
+                        }
+                        ViewState::Search => {
+                            if let Some(new_message) = self.search_widget.handle_events(ctx, event)
+                            {
+                                messages.push_message(new_message);
+                            }
+                        }
+                    }
+                }
+            }
+            Event::Crossterm(crossterm::event::Event::Resize(_, _)) => {
+                self.need_redraw = true;
+            }
+            Event::Crossterm(crossterm::event::Event::FocusGained) => {
+                self.has_focus = true;
+            }
+            Event::Crossterm(crossterm::event::Event::FocusLost) => {
+                self.has_focus = false;
+            }
+            Event::Crossterm(crossterm::event::Event::Paste(_)) => {
+                if let Some(message) = self.input.handle_events(ctx, event) {
+                    messages.push_message(message);
+                }
+            }
+            Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => match self.state {
+                ViewState::Discuss => {
+                    if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row)
+                    {
+                        for child in self.children().iter_mut() {
+                            if child.get_id().eq(&id)
+                                && let Some(new_message) = child.handle_events(ctx, event)
+                            {
+                                messages.push_message(new_message);
+                            }
+                        }
+                    }
+                }
+                ViewState::Search => {
+                    if let Some(new_message) = self.search_widget.handle_events(ctx, event) {
+                        messages.push_message(new_message);
+                    }
+                }
+            },
+            Event::Tick => {
+                self.handle_tick(ctx, event, messages);
+            }
+            _ => {}
+        };
     }
 }
 
@@ -769,72 +834,18 @@ impl widget_view::WidgetView for MainView<'_> {
     fn handle_event(
         &mut self,
         ctx: &mut crate::state::context::Ctx,
-        event: &Event,
+        event: &crate::wake_event::WakeEvent,
         messages: &mut MessageQueue,
     ) {
         // Handle focus switching first
         match event {
-            Event::Crossterm(crossterm::event::Event::Key(key_event)) => {
-                // Pass event to focused widget
-                if self.has_focus {
-                    match self.state {
-                        ViewState::Discuss => {
-                            if !key_event.modifiers.is_empty() {
-                                ctx.model.handle_event(key_event);
-                            }
-                            for child in self.children().iter_mut() {
-                                if let Some(new_message) = child.handle_events(ctx, event) {
-                                    messages.push_message(new_message);
-                                }
-                            }
-                        }
-                        ViewState::Search => {
-                            if let Some(new_message) = self.search_widget.handle_events(ctx, event)
-                            {
-                                messages.push_message(new_message);
-                            }
-                        }
-                    }
-                }
+            crate::wake_event::WakeEvent::Event(event) => {
+                self.handle_crossterm_event(ctx, event, messages);
             }
-            Event::Crossterm(crossterm::event::Event::Resize(_, _)) => {
-                self.need_redraw = true;
+            crate::wake_event::WakeEvent::IRC((id, message)) => {
+                self.handle_server_message(*id, message, ctx, messages);
             }
-            Event::Crossterm(crossterm::event::Event::FocusGained) => {
-                self.has_focus = true;
-            }
-            Event::Crossterm(crossterm::event::Event::FocusLost) => {
-                self.has_focus = false;
-            }
-            Event::Crossterm(crossterm::event::Event::Paste(_)) => {
-                if let Some(message) = self.input.handle_events(ctx, event) {
-                    messages.push_message(message);
-                }
-            }
-            Event::Crossterm(crossterm::event::Event::Mouse(mouse_event)) => match self.state {
-                ViewState::Discuss => {
-                    if let Some(id) = self.get_id_from_row_col(mouse_event.column, mouse_event.row)
-                    {
-                        for child in self.children().iter_mut() {
-                            if child.get_id().eq(&id)
-                                && let Some(new_message) = child.handle_events(ctx, event)
-                            {
-                                messages.push_message(new_message);
-                            }
-                        }
-                    }
-                }
-                ViewState::Search => {
-                    if let Some(new_message) = self.search_widget.handle_events(ctx, event) {
-                        messages.push_message(new_message);
-                    }
-                }
-            },
-            Event::Tick => {
-                self.handle_tick(ctx, event, messages);
-            }
-            _ => {}
-        };
+        }
     }
 
     fn update(
@@ -941,10 +952,6 @@ impl widget_view::WidgetView for MainView<'_> {
                         "Disconnected".to_string(),
                     ));
                 }
-            }
-            MessageEvent::PullIRC => {
-                self.update_pull_irc(ctx, messages);
-                return;
             }
             MessageEvent::QuitAll(reason) => {
                 for id in ctx.session.iter_valid_connection_id() {

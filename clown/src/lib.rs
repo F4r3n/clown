@@ -10,4 +10,5 @@ pub mod message_irc;
 pub mod message_queue;
 pub mod project_path;
 pub mod state;
+pub mod wake_event;
 pub mod widget_view;
