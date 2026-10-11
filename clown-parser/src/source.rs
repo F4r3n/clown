@@ -8,13 +8,13 @@ use nom::{
 };
 
 #[derive(PartialEq, Eq)]
-pub enum SourceKind<'a> {
+pub(crate) enum SourceKind<'a> {
     Nick(&'a [u8]),
     Server(&'a [u8]),
 }
 
 #[derive(PartialEq, Eq)]
-pub struct Source<'s> {
+pub(crate) struct Source<'s> {
     source: Option<SourceKind<'s>>,
     user: Option<&'s [u8]>,
     host: Option<&'s [u8]>,

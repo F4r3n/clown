@@ -19,7 +19,7 @@ pub struct Outgoing {
 }
 
 impl Outgoing {
-    pub async fn receive_message<W>(
+    pub(crate) async fn receive_message<W>(
         &mut self,
         writer: &mut BufWriter<W>,
         server_message: ServerMessage,
@@ -49,7 +49,7 @@ impl Outgoing {
         Ok(())
     }
 
-    pub async fn process<R, W>(
+    pub(crate) async fn process<R, W>(
         &mut self,
         reader: BufReader<R>,
         mut writer: BufWriter<W>,
@@ -97,7 +97,7 @@ impl Outgoing {
         Ok(())
     }
 
-    pub fn create_outgoing(&mut self) -> (CommandSender, MessageReceiver) {
+    pub(crate) fn create_outgoing(&mut self) -> (CommandSender, MessageReceiver) {
         let (command_sender, command_receiver) = mpsc::unbounded_channel::<Command>();
         let (message_sender, message_receiver) = mpsc::channel::<ServerMessage>(100);
         self.receiver = Some(CommandReceiver {

@@ -1,3 +1,3 @@
 pub mod message;
-pub mod parser;
+mod parser;
 mod source;

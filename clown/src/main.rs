@@ -14,7 +14,6 @@ mod widget_view;
 use crate::irc_view::discuss::servers_messages::ServersMessages;
 use crate::irc_view::main_view;
 use crate::project_path::ProjectPath;
-use crate::state::context::Ctx;
 use crate::state::model::{Model, RunningState};
 use crate::state::session::Session;
 use crate::wake_event::WakeEvent;

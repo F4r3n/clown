@@ -7,7 +7,7 @@ use nom::{
     sequence::preceded,
 };
 
-pub fn parse_command(buf: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
+pub(crate) fn parse_command(buf: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
     opt(preceded(
         space0,                                                          // optional leading spaces
         alt((alpha1, take_while_m_n(3, 3, |c: u8| c.is_ascii_digit()))), // letter* / 3digit
@@ -16,7 +16,7 @@ pub fn parse_command(buf: &[u8]) -> IResult<&[u8], Option<&[u8]>> {
 }
 
 /// Parse IRC parameters into a Vec<&[u8]>
-pub fn parse_parameters(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub(crate) fn parse_parameters(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let pos_colon = input
         .windows(2)
         .position(|w| w == b" :")
@@ -29,7 +29,7 @@ pub fn parse_parameters(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 /// Parse IRC parameters into a Vec<&[u8]>
-pub fn parse_trailing(input: &[u8]) -> IResult<&[u8], std::option::Option<&[u8]>> {
+pub(crate) fn parse_trailing(input: &[u8]) -> IResult<&[u8], std::option::Option<&[u8]>> {
     opt(preceded(
         nom::bytes::complete::tag(" :"),
         take_till(|c| c == b'\r' || c == b'\n' || c == 0),
