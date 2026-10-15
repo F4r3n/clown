@@ -83,6 +83,22 @@ impl InputWidget {
         }
     }
 
+    fn move_cursor_previous_break(&mut self) {
+        if let Some(previous_break) = self.find_previous_break(true) {
+            self.cursor_position = previous_break;
+        } else {
+            self.cursor_position = 0;
+        }
+    }
+
+    fn move_cursor_next_break(&mut self) {
+        if let Some(previous_break) = self.find_next_break(true) {
+            self.cursor_position = previous_break;
+        } else {
+            self.cursor_position = self.value.len();
+        }
+    }
+
     fn move_cursor_right(&mut self) {
         if self.cursor_position >= self.value.len() {
             return;
@@ -129,6 +145,28 @@ impl InputWidget {
             .map(|v| v.0.saturating_add(1))
     }
 
+    fn find_next_break(&self, skip_spaces: bool) -> Option<usize> {
+        if self.cursor_position > self.value.len() {
+            return None;
+        }
+        let mut cursor_pos = self.cursor_position;
+        if skip_spaces {
+            for c in self.value[self.cursor_position..].chars() {
+                if c.is_whitespace() {
+                    cursor_pos = cursor_pos.saturating_add(c.len_utf8());
+                } else {
+                    break;
+                }
+            }
+        }
+
+        self.value[cursor_pos..]
+            .char_indices()
+            .find(|&(_, ch)| ch.is_whitespace())
+            .map(|v| v.0.saturating_add(0))
+            .map(|v| v.saturating_add(cursor_pos))
+    }
+
     fn delete_previous_word(&mut self) {
         if let Some(cursor_pos) = self.find_previous_break(true) {
             self.value.drain((cursor_pos)..self.cursor_position);
@@ -168,8 +206,20 @@ impl InputWidget {
                 KeyCode::Backspace => {
                     self.delete_char_before_cursor();
                 }
-                KeyCode::Left => self.move_cursor_left(),
-                KeyCode::Right => self.move_cursor_right(),
+                KeyCode::Left => {
+                    if key_event.modifiers.contains(KeyModifiers::ALT) {
+                        self.move_cursor_previous_break()
+                    } else {
+                        self.move_cursor_left()
+                    }
+                }
+                KeyCode::Right => {
+                    if key_event.modifiers.contains(KeyModifiers::ALT) {
+                        self.move_cursor_next_break()
+                    } else {
+                        self.move_cursor_right()
+                    }
+                }
                 KeyCode::End => self.move_cursor_end(),
                 KeyCode::Home => self.move_cursor_home(),
                 KeyCode::Delete => self.delete_char_after_cursor(),
@@ -308,6 +358,27 @@ mod tests {
             w.find_previous_break(false).and_then(|v| w.value.get(..v)),
             Some("Hello my na ")
         );
+    }
+
+    #[test]
+    fn test_find_next_break() {
+        let mut w = InputWidget {
+            value: "Hello my na".to_string(),
+            cursor_position: 0,
+            ..Default::default()
+        };
+
+        let mut next = w.find_next_break(true).map_or(w.cursor_position, |v| v);
+        assert_eq!(w.value.get(..next), Some("Hello"));
+
+        w.cursor_position = next;
+        next = w.find_next_break(true).map_or(w.cursor_position, |v| v);
+
+        assert_eq!(w.value.get(..next), Some("Hello my"));
+
+        w.cursor_position = next;
+        let next = w.find_next_break(true);
+        assert_eq!(next, None);
     }
 
     #[test]
