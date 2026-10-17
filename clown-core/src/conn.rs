@@ -119,9 +119,21 @@ impl Connection {
         (host, port)
     }
 
+    fn set_socket_option(stream: TcpStream) -> Result<TcpStream, ConnectionError> {
+        let ka = socket2::TcpKeepalive::new()
+            .with_time(std::time::Duration::from_secs(60))
+            .with_interval(std::time::Duration::from_secs(30))
+            .with_retries(3);
+        let sf = socket2::SockRef::from(&stream);
+        stream.set_nodelay(true)?;
+        sf.set_tcp_keepalive(&ka)?;
+
+        Ok(stream)
+    }
+
     async fn establish_stream(&self, host: &str, port: u16) -> Result<IRCStream, ConnectionError> {
         let stream = TcpStream::connect(Connection::socket_addr(host, port)).await?;
-        stream.set_nodelay(true)?;
+        let stream = Self::set_socket_option(stream)?;
 
         Ok(IRCStream::PLAIN(stream))
     }
@@ -132,7 +144,8 @@ impl Connection {
         port: u16,
     ) -> Result<IRCStream, ConnectionError> {
         let stream = TcpStream::connect(Connection::socket_addr(host, port)).await?;
-        stream.set_nodelay(true)?;
+        let stream = Self::set_socket_option(stream)?;
+
         let mut root_cert_store = RootCertStore::empty();
         root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 

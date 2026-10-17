@@ -26,6 +26,7 @@ tokio-rustls = { version = "0.26", default-features = false, features = [
 tokio-util = { version = "0.7", default-features = false, features = ["codec"] }
 tokio-stream = { version = "0.1", default-features = false }
 webpki-roots = { version = "1.0.9", default-features = false }
+socket2 = "0.6.5"
 
 [lints]
 workspace = true

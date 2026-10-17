@@ -441,6 +441,7 @@ dependencies = [
  "phf",
  "rustls",
  "serde",
+ "socket2",
  "thiserror 2.0.20",
  "tokio",
  "tokio-rustls",
