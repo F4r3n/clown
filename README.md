@@ -6,8 +6,9 @@ An IRC client written in Rust, with the goal to be memory and CPU light.
 
 * Run in terminal
 * Multiple channels and servers
-* Message logs
+* Message logs, searchable with `/search`
 * Tab completion
+* Configurable keybindings
 * Link preview on hover
 * Scroll with mouse or keyboard
 * Auto reconnect
@@ -82,7 +83,7 @@ All commands are typed in the input bar and start with `/`.
 
 | Command | Description |
 |---------|-------------|
-| `/connect` | Connect to the server (no-op if already connected) |
+| `/connect [server]` | Connect to a server by its config `name`, or the first one (no-op if already connected) |
 | `/quit [reason]` | Disconnect and exit the app |
 | `/nick <nickname>` | Change your nickname |
 | `/join <channel>` | Join a channel |
@@ -91,10 +92,25 @@ All commands are typed in the input bar and start with `/`.
 | `/me <action>` | Send an action message |
 | `/topic <text>` | Set the topic of the current channel |
 | `/close [buffer]` | Close the current buffer, or a named one |
+| `/search <text>` | Search the logs of the current buffer (`Enter` to search again, `Esc` to leave) |
 | `/spell [language]` | Load the spellchecker for a language (`fr`, `en`, …), depends on a build feature |
 | `/config get <path>` | Read a config value |
 | `/config set <path> <value>` | Write a config value |
 | `/help` | List all available commands |
+
+## Keyboard shortcuts
+
+| Keys | Action |
+|------|--------|
+| `Ctrl+N` / `Ctrl+P` | Next / previous channel |
+| `Alt+Down` / `Alt+Up` | Next / previous server |
+| `PageUp` / `PageDown` | Scroll messages (older messages are loaded from the logs) |
+| `Up` / `Down` | Browse input history |
+| `Tab` | Complete nickname or command |
+| `Alt+Left` / `Alt+Right` | Move cursor to previous / next word |
+| `Home` / `End` | Move cursor to start / end of input |
+| `Ctrl+W` | Delete previous word |
+| `Ctrl+H` | Delete previous character |
 
 ## Config
 
@@ -124,7 +140,7 @@ list = ["#rust"]
 auto_join = true
 ```
 
-### Config dictionnary
+### Config dictionary
 
 **`[[servers]]`** — one block per server, at least one required
 
@@ -132,13 +148,14 @@ auto_join = true
 |-----|----------|---------|-------------|
 | `name` | yes | — | Display name |
 | `connection.address` | yes | — | Server hostname |
-| `connection.port` | no | `6697` | Port (`6697` = TLS, `6667` = plain) |
+| `connection.port` | yes | — | Port (usually `6697` for TLS, `6667` for plain) |
+| `connection.use_tls` | no | `true` | Connect with TLS |
 | `login.nickname` | yes | — | Your nickname |
 | `login.password` | no | — | Server password (sent as `PASS`) |
 | `login.real_name` | no | nickname | Real name |
 | `login.username` | no | nickname | Username |
-| `channels.list` | no | `[]` | Channels to join |
-| `channels.auto_join` | no | `false` | Join `channels.list` automatically on connect |
+| `channels.list` | yes | — | Channels to join (can be `[]`) |
+| `channels.auto_join` | yes | — | Join `channels.list` automatically on connect |
 
 **`[completion]`**
 
@@ -162,6 +179,19 @@ auto_join = true
 | `discuss.left_bar.nickname` | `true` | Show nickname column |
 | `users.enabled` | `true` | Show user list panel |
 | `topic.enabled` | `true` | Show topic bar |
+
+**`[[keybindings.bind]]`** — one block per binding
+
+| Key | Description |
+|-----|-------------|
+| `action` | `toggle_user_panel`, `toggle_topic_panel` or `toggle_time_discuss_panel` |
+| `keys` | Modifiers (`ctrl`, `alt`, `shift`, `meta`) plus one character |
+
+```toml
+[[keybindings.bind]]
+action = "toggle_user_panel"
+keys = ["ctrl", "u"]
+```
 
 ![clown](images/clown.png)
 ![clown_preview](images/clown_preview.png)
