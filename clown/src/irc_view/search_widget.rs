@@ -85,11 +85,11 @@ async fn async_search(
             {
                 let positions = content
                     .match_indices(&query.to_search)
-                    .map(|v| std::range::Range {
+                    .map(|v| Range {
                         start: v.0,
                         end: v.0 + query.to_search.len(),
                     })
-                    .collect::<Vec<std::range::Range<usize>>>();
+                    .collect::<Vec<Range<usize>>>();
                 if positions.is_empty() {
                     continue;
                 }
@@ -128,9 +128,11 @@ async fn async_search(
 #[derive(Default)]
 pub struct SearchWidget {
     area: ratatui::prelude::Rect,
+    content_width: u16,
     result: SearchResult,
     scroll_offset: usize,
     max_visible_height: u16,
+    max_visible_list_messages: u16,
     searcher: Option<AsyncSearch>,
     receiver: Option<mpsc::Receiver<SearchItemResult>>,
     input: text_input::InputWidget,
@@ -198,8 +200,8 @@ impl Draw for SearchWidget {
                 TableDimension::new(time_format.length(), NICKNAME_LENGTH, SEPARATOR_LENGTH);
 
             self.max_visible_height = layout_message.height;
-
-            let content_width = self
+            self.max_visible_list_messages = layout_message.height;
+            self.content_width = self
                 .area
                 .width
                 .saturating_sub(table_dimension.get_width())
@@ -207,7 +209,7 @@ impl Draw for SearchWidget {
 
             let visible_rows = self.collect_visible_rows(
                 &time_format,
-                content_width,
+                self.content_width,
                 &table_dimension,
                 &ctx.model,
             );
@@ -253,9 +255,44 @@ impl SearchWidget {
         self.need_redraw = true;
     }
 
-    fn scroll_down(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_add(1);
+    fn page_up(&mut self) {
+        self.scroll_offset = self
+            .scroll_offset
+            .saturating_sub(self.max_visible_height as usize);
         self.need_redraw = true;
+    }
+
+    fn page_down(&mut self) {
+        let value = self.possible_scroll_down(self.max_visible_height as usize);
+        if value > 0 {
+            self.scroll_offset = self.scroll_offset.saturating_add(value);
+            self.need_redraw = true;
+        }
+    }
+
+    fn scroll_down(&mut self) {
+        let value = self.possible_scroll_down(1);
+        if value > 0 {
+            self.scroll_offset = self.scroll_offset.saturating_add(value);
+            self.need_redraw = true;
+        }
+    }
+
+    fn possible_scroll_down(&self, offset: usize) -> usize {
+        let current_visible = self
+            .scroll_offset
+            .saturating_add(self.max_visible_height as usize);
+        let mut total_rows = 0;
+        for line in self.result.items.iter() {
+            total_rows += line
+                .search_item
+                .message
+                .wrapped_line_count(self.content_width as usize);
+            if total_rows >= offset.saturating_add(current_visible) {
+                return offset;
+            }
+        }
+        total_rows.saturating_sub(current_visible)
     }
 
     fn collect_visible_rows(
@@ -271,7 +308,7 @@ impl SearchWidget {
             return visible_rows;
         }
 
-        let max_visible_height = (self.max_visible_height as usize).saturating_sub(2);
+        let max_visible_height = self.max_visible_list_messages as usize;
 
         let mut rows_to_skip_in_message = self.scroll_offset;
         let mut visible_rows_total = 0;
@@ -319,6 +356,7 @@ impl SearchWidget {
     fn search(&mut self, query: Query, ctx: &mut crate::state::context::Ctx) {
         let (producer, receiver) = mpsc::channel(10);
         self.result.clear();
+        self.scroll_offset = 0;
         self.receiver = Some(receiver);
         let server_address = query
             .option
@@ -403,7 +441,14 @@ impl EventHandler for SearchWidget {
                             None
                         }
                     }
-
+                    KeyCode::PageUp => {
+                        self.page_up();
+                        None
+                    }
+                    KeyCode::PageDown => {
+                        self.page_down();
+                        None
+                    }
                     _ => {
                         self.input.handle_key_events(key);
                         self.need_redraw = true;
