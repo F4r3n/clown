@@ -2,6 +2,7 @@ pub mod color_user;
 pub mod discuss;
 pub mod main_view;
 
+mod command;
 mod input;
 pub mod search_widget;
 mod tooltip_widget;

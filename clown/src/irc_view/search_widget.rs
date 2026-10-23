@@ -6,7 +6,8 @@ use crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Row;
-use std::{ops::Range, path::PathBuf};
+use std::path::PathBuf;
+use std::range::Range;
 use tokio::{sync::mpsc, task::JoinHandle};
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct QueryOption {
@@ -34,7 +35,6 @@ use crate::{
 // Own the struct, memory wise is < 1MB
 
 struct SearchItemResult {
-    highlights: Vec<Range<usize>>,
     message: MessageContent,
 }
 
@@ -85,23 +85,32 @@ async fn async_search(
             {
                 let positions = content
                     .match_indices(&query.to_search)
-                    .map(|v| Range {
+                    .map(|v| std::range::Range {
                         start: v.0,
                         end: v.0 + query.to_search.len(),
                     })
-                    .collect::<Vec<Range<usize>>>();
+                    .collect::<Vec<std::range::Range<usize>>>();
                 if positions.is_empty() {
                     continue;
                 }
                 count = count.saturating_add(1);
                 last_offset = message.get_offset();
 
+                let mut content = content.to_string();
+
+                for position in positions.iter().rev() {
+                    content = clown_message_render::message_parser::insert_irc_color(
+                        content,
+                        position,
+                        &ratatui::style::Style::default().fg(ratatui::style::Color::LightBlue),
+                    );
+                }
+
                 let _ = producer
                     .send(SearchItemResult {
-                        highlights: positions,
                         message: MessageContent::message(
                             message.get_message().source().map(|v| v.to_string()),
-                            content.to_string(),
+                            content,
                         )
                         .with_time(message.get_message().time),
                     })

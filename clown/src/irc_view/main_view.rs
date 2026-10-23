@@ -1,10 +1,10 @@
 use crate::component::Child;
 use crate::component::Component;
 use crate::event_handler::Event;
+use crate::irc_view::command;
+use crate::irc_view::command::ClientCommand;
+use crate::irc_view::command::help;
 use crate::irc_view::discuss::discuss_widget;
-use crate::irc_view::input::command;
-use crate::irc_view::input::command::ClientCommand;
-use crate::irc_view::input::command::help;
 use crate::irc_view::input::input_widget;
 use crate::irc_view::input::input_widget::CInput;
 use crate::irc_view::search_widget;

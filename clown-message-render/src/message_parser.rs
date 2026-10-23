@@ -1,3 +1,5 @@
+use std::range::Range;
+
 use ratatui::style::{Color, Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
@@ -27,6 +29,42 @@ fn irc_to_color(code: &str) -> Color {
     }
 }
 
+fn color_to_irc_color(in_color: Color) -> Option<u16> {
+    match in_color {
+        Color::White => Some(0),
+        Color::Black => Some(1),
+        Color::Blue => Some(2),
+        Color::Green => Some(3),
+        Color::Red => Some(4),
+        Color::Rgb(127, 63, 0) => Some(5),
+        Color::Magenta => Some(6),
+        Color::Rgb(252, 127, 0) => Some(7),
+        Color::Yellow => Some(8),
+        Color::LightGreen => Some(9),
+        Color::Cyan => Some(10),
+        Color::LightCyan => Some(11),
+        Color::LightBlue => Some(12),
+        Color::Rgb(255, 0, 255) => Some(13),
+        Color::Gray => Some(14),
+        Color::Rgb(210, 210, 210) => Some(15),
+        _ => None,
+    }
+}
+
+pub fn insert_irc_color(
+    mut content: String,
+    pos: &Range<usize>,
+    style: &ratatui::style::Style,
+) -> String {
+    if let Some(fg) = style.fg
+        && let Some(fg) = color_to_irc_color(fg)
+    {
+        content.insert(pos.end, '\x03');
+
+        content.insert_str(pos.start, &format!("\x03{:02}", fg));
+    }
+    content
+}
 fn toggle_modifier(mut style: Style, current: &mut Modifier, toggled: Modifier) -> Style {
     *current ^= toggled;
 
@@ -282,7 +320,7 @@ pub fn is_string_plain(content: &str) -> bool {
     for chunk in &mut chunks {
         //pack everyting in a u64
         // safe because the chunk is 8
-        let word = u64::from_ne_bytes(chunk.try_into().unwrap());
+        let word = u64::from_ne_bytes(chunk.try_into().expect("The chunk is bigger than u64"));
 
         // Check if has bytes inferior to 32 (0x20) (the max is 0x1F = 31)
         // 0x80 is the UTF8 sequence
