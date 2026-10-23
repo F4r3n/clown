@@ -1,4 +1,4 @@
-use crate::message_irc::message_parser::to_spans;
+use crate::message_parser::to_spans;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use std::ops::Range;
@@ -423,7 +423,7 @@ mod tests {
     /// must agree across plain, multibyte, long-word and IRC-formatted inputs.
     #[test]
     fn count_matches_wrap_spans_len() {
-        use crate::message_irc::message_parser::strip_irc_formatting_cow;
+        use crate::message_parser::strip_irc_formatting_cow;
 
         let inputs = [
             "hello world",

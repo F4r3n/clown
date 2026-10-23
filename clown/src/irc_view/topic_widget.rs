@@ -1,6 +1,6 @@
 use crate::component::{Draw, EventHandler};
-use crate::message_irc::message_parser::to_spans;
 use crate::state::server_id::ServerID;
+use clown_message_render::message_parser::to_spans;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;

@@ -1,4 +1,4 @@
-use clown::message_irc::message_content::MessageContent;
+use clown_message_render::message_content::{MessageContent, TimeFormat};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
@@ -16,7 +16,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 .create_rows(
                     black_box(40),
                     None,
-                    Some(&clown::message_irc::message_content::TimeFormat::Hour),
+                    Some(&TimeFormat::Hour),
                     black_box(10),
                     black_box(0),
                     black_box(total),
@@ -39,7 +39,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 .create_rows(
                     black_box(40),
                     None,
-                    Some(&clown::message_irc::message_content::TimeFormat::Hour),
+                    Some(&TimeFormat::Hour),
                     black_box(10),
                     black_box(2),
                     black_box(2),
@@ -56,7 +56,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 .create_rows(
                     black_box(120),
                     None,
-                    Some(&clown::message_irc::message_content::TimeFormat::Hour),
+                    Some(&TimeFormat::Hour),
                     black_box(10),
                     black_box(0),
                     black_box(1),

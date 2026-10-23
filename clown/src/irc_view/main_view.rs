@@ -14,10 +14,10 @@ use crate::irc_view::search_widget::SearchWidget;
 use crate::irc_view::tooltip_widget;
 use crate::irc_view::topic_widget;
 use crate::irc_view::users_widget;
+use crate::log::message_logger;
+use crate::log::message_logger::MessageLogger;
 use crate::message_event::ConfigEvent;
 use crate::message_event::MessageEvent;
-use crate::message_irc::log::message_logger;
-use crate::message_irc::log::message_logger::MessageLogger;
 use crate::message_queue::MessageQueue;
 use crate::state::irc_model::IrcModel;
 use crate::state::model::Model;
@@ -313,13 +313,13 @@ impl MainView<'_> {
                 Ok(result) => Some(MessageEvent::AddMessageViewInfo(
                     None,
                     None,
-                    crate::message_irc::message_content::MessageKind::Info,
+                    clown_message_render::message_content::MessageKind::Info,
                     format!("{path} {result}"),
                 )),
                 Err(e) => Some(MessageEvent::AddMessageViewInfo(
                     None,
                     None,
-                    crate::message_irc::message_content::MessageKind::Error,
+                    clown_message_render::message_content::MessageKind::Error,
                     format!("{path} {e}"),
                 )),
             },
@@ -330,7 +330,7 @@ impl MainView<'_> {
                         Err(e) => Some(MessageEvent::AddMessageViewInfo(
                             None,
                             None,
-                            crate::message_irc::message_content::MessageKind::Error,
+                            clown_message_render::message_content::MessageKind::Error,
                             format!("{} {}", path, e),
                         )),
                     }
@@ -338,7 +338,7 @@ impl MainView<'_> {
                     Some(MessageEvent::AddMessageViewInfo(
                         None,
                         None,
-                        crate::message_irc::message_content::MessageKind::Error,
+                        clown_message_render::message_content::MessageKind::Error,
                         "No values to set".to_string(),
                     ))
                 }
@@ -370,7 +370,7 @@ impl MainView<'_> {
         Some(MessageEvent::AddMessageViewInfo(
             None,
             None,
-            crate::message_irc::message_content::MessageKind::Error,
+            clown_message_render::message_content::MessageKind::Error,
             format!("Unknown command {}", command_name.unwrap_or_default()),
         ))
     }
@@ -438,7 +438,7 @@ impl MainView<'_> {
                 messages.push_message(MessageEvent::AddMessageViewInfo(
                     Some(server_id),
                     None,
-                    crate::message_irc::message_content::MessageKind::Error,
+                    clown_message_render::message_content::MessageKind::Error,
                     msg,
                 ));
                 to_delete.push(server_id);
@@ -592,7 +592,7 @@ impl MainView<'_> {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(server_id),
                         None,
-                        crate::message_irc::message_content::MessageKind::Error,
+                        clown_message_render::message_content::MessageKind::Error,
                         err,
                     ));
                     messages.push_message(MessageEvent::DisConnect(server_id))
@@ -601,7 +601,7 @@ impl MainView<'_> {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(server_id),
                         None,
-                        crate::message_irc::message_content::MessageKind::Error,
+                        clown_message_render::message_content::MessageKind::Error,
                         content,
                     ));
                 }
@@ -614,7 +614,7 @@ impl MainView<'_> {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(server_id),
                         source.clone(),
-                        crate::message_irc::message_content::MessageKind::Normal,
+                        clown_message_render::message_content::MessageKind::Normal,
                         content,
                     ));
                 }
@@ -634,7 +634,7 @@ impl MainView<'_> {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(server_id),
                         source.clone(),
-                        crate::message_irc::message_content::MessageKind::Normal,
+                        clown_message_render::message_content::MessageKind::Normal,
                         content,
                     ));
                 }
@@ -653,7 +653,7 @@ impl MainView<'_> {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(server_id),
                         None,
-                        crate::message_irc::message_content::MessageKind::Error,
+                        clown_message_render::message_content::MessageKind::Error,
                         content,
                     ));
                 }
@@ -665,7 +665,7 @@ impl MainView<'_> {
                 messages.push_message(MessageEvent::AddMessageViewInfo(
                     Some(server_id),
                     None,
-                    crate::message_irc::message_content::MessageKind::Error,
+                    clown_message_render::message_content::MessageKind::Error,
                     content,
                 ));
             }
@@ -891,7 +891,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 messages.push_message(MessageEvent::AddMessageViewInfo(
                     Some(*server_id),
                     None,
-                    crate::message_irc::message_content::MessageKind::Info,
+                    clown_message_render::message_content::MessageKind::Info,
                     format!("Try to connect to '{}'...", addr),
                 ));
                 let server_name = ctx.model.get_name(*server_id).to_string();
@@ -910,7 +910,7 @@ impl widget_view::WidgetView for MainView<'_> {
                             messages.push_message(MessageEvent::AddMessageViewInfo(
                                 Some(*server_id),
                                 None,
-                                crate::message_irc::message_content::MessageKind::Error,
+                                clown_message_render::message_content::MessageKind::Error,
                                 e.to_string(),
                             ));
                         } else {
@@ -922,7 +922,7 @@ impl widget_view::WidgetView for MainView<'_> {
                         messages.push_message(MessageEvent::AddMessageViewInfo(
                             Some(*server_id),
                             None,
-                            crate::message_irc::message_content::MessageKind::Error,
+                            clown_message_render::message_content::MessageKind::Error,
                             format!("Already connected to {}...", addr),
                         ));
                     }
@@ -930,7 +930,7 @@ impl widget_view::WidgetView for MainView<'_> {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(*server_id),
                         None,
-                        crate::message_irc::message_content::MessageKind::Error,
+                        clown_message_render::message_content::MessageKind::Error,
                         format!("Cannot connect to {}...", addr),
                     ));
                 }
@@ -948,7 +948,7 @@ impl widget_view::WidgetView for MainView<'_> {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(*server_id),
                         None,
-                        crate::message_irc::message_content::MessageKind::Info,
+                        clown_message_render::message_content::MessageKind::Info,
                         "Disconnected".to_string(),
                     ));
                 }

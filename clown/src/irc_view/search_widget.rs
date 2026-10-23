@@ -1,7 +1,7 @@
 use crate::irc_view::input::text_input;
+use crate::log::message_logger::{LogReader, MessageLogger};
 use crate::message_event::MessageEvent;
-use crate::message_irc::log::message_logger::{LogReader, MessageLogger};
-use crate::message_irc::message_content::{MessageContent, TimeFormat};
+use clown_message_render::message_content::{MessageContent, TimeFormat};
 use crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::text::{Line, Span};

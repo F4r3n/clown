@@ -1,4 +1,4 @@
-use clown::message_irc::textwrapper::{wrap_content, wrap_spans, wrapped_line_count};
+use clown_message_render::textwrapper::{wrap_content, wrap_spans, wrapped_line_count};
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

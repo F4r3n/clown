@@ -1,10 +1,11 @@
 use super::dimension_discuss::{META_LENGTH, NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use super::servers_messages::{Messages, Range, ServersMessages};
 use crate::component::Draw;
-use crate::message_irc::textwrapper::wrap_content;
+use crate::message_event::MessageEvent;
 use crate::state::irc_model::IrcModel;
 use crate::state::server_id::ServerID;
-use crate::{message_event::MessageEvent, message_irc::message_content::MessageContent};
+use clown_message_render::message_content::MessageContent;
+use clown_message_render::textwrapper::wrap_content;
 use crossterm::event::KeyCode;
 use crossterm::event::MouseButton;
 use ratatui::widgets::Row;
@@ -276,9 +277,9 @@ impl DiscussWidget {
                 }
                 let color = line.get_source().map(|s| model.get_color(s));
                 let time_format = if line.is_log() {
-                    crate::message_irc::message_content::TimeFormat::Day
+                    clown_message_render::message_content::TimeFormat::Day
                 } else {
-                    crate::message_irc::message_content::TimeFormat::Hour
+                    clown_message_render::message_content::TimeFormat::Hour
                 };
 
                 let rows = line.create_rows(

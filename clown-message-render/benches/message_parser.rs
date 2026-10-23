@@ -9,10 +9,10 @@
 //!
 //! Throughput is reported in bytes, so ns/byte is comparable across shapes:
 //!
-//!     cargo bench -p clown --bench message_parser
-//!     cargo bench -p clown --bench message_parser -- to_spans   # one group
+//!     cargo bench -p clown-message-render --bench message_parser
+//!     cargo bench -p clown-message-render --bench message_parser -- to_spans   # one group
 
-use clown::message_irc::message_parser::{
+use clown_message_render::message_parser::{
     get_width_without_format, is_string_plain, strip_irc_formatting_cow, to_spans,
 };
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};

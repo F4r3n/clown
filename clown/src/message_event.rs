@@ -11,7 +11,7 @@ pub enum MessageEvent {
     AddMessageViewInfo(
         Option<ServerID>, /*server id */
         Option<String>,
-        crate::message_irc::message_content::MessageKind,
+        clown_message_render::message_content::MessageKind,
         String,
     ),
     PrivMsg(
@@ -96,7 +96,7 @@ impl From<anyhow::Error> for MessageEvent {
         MessageEvent::AddMessageViewInfo(
             None,
             None,
-            crate::message_irc::message_content::MessageKind::Error,
+            clown_message_render::message_content::MessageKind::Error,
             format!("{}", value),
         )
     }

@@ -2,7 +2,7 @@ use super::completion::Completion;
 use super::history::InputHistory;
 use super::text_input::InputWidget;
 #[cfg(feature = "spell-checker")]
-use {super::spell_checker::SpellChecker, crate::message_irc::message_content::MessageKind};
+use {super::spell_checker::SpellChecker, clown_message_render::message_content::MessageKind};
 
 use crate::component::Draw;
 use crate::message_event::MessageEvent;

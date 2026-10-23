@@ -13,6 +13,8 @@ eula = false
 
 [dependencies]
 clown-core = { version = "0.1.0", path = "../clown-core", features = ["serde"] }
+clown-message-render = { version = "0.1.0", path = "../clown-message-render" }
+
 ratatui = { version = "0.30", default-features = false, features = [
     "crossterm",
     "layout-cache"
@@ -47,14 +49,12 @@ shadow-rs = {version="2.0.0", default-features=false}
 clap = { version = "4.6.6", features = ["derive", "help", "std"], default-features = false }
 bit-vec = "0.10.1"
 thiserror = "2.0.20"
-anyhow = "1.0.104"
 nom = { version = "8.0.0", features = ["std"], default-features = false }
 ureq = {version = "3.4.1", optional = true}
-bitflags = "2.13.2"
 tokio-stream = "0.1.19"
+anyhow = "1.0.104"
 
 [dev-dependencies]
-anyhow = "1.0.104"
 criterion = { version = "0.8.2", features = ["plotters"] }
 tempfile = "3.27.0"
 
@@ -67,17 +67,6 @@ bench = []
 website-preview = ["dep:clown-website-preview", "dep:ureq"]
 spell-checker = ["dep:clown-spell", "dep:ureq"]
 
-[[bench]]
-name = "message_parser"
-harness = false
-
-[[bench]]
-name = "textwrapper"
-harness = false
-
-[[bench]]
-name = "message_content"
-harness = false
 
 [[bench]]
 name = "render_frame"

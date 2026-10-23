@@ -1,10 +1,8 @@
-use crate::message_irc::log::message_logger::{
-    LogReader, LoggedMessage, LoggedTimedMessage, MessageLogger,
-};
-use crate::message_irc::message_content::WordPos;
-use crate::message_irc::message_content::{MessageContent, MessageKind};
+use crate::log::message_logger::{LogReader, LoggedMessage, LoggedTimedMessage, MessageLogger};
 use crate::state::server_id::ServerID;
 use ahash::AHashMap;
+use clown_message_render::message_content::WordPos;
+use clown_message_render::message_content::{MessageContent, MessageKind};
 
 use std::path::PathBuf;
 
@@ -387,7 +385,7 @@ impl ChannelMessages {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message_irc::message_content::MessageContent;
+    use clown_message_render::message_content::MessageContent;
 
     #[test]
     fn test_messages_indexing_logic() {

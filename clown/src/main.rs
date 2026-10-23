@@ -2,9 +2,9 @@ mod async_task;
 mod component;
 mod event_handler;
 mod irc_view;
+mod log;
 mod math;
 mod message_event;
-mod message_irc;
 mod message_queue;
 mod project_path;
 mod state;
@@ -17,10 +17,10 @@ use crate::project_path::ProjectPath;
 use crate::state::model::{Model, RunningState};
 use crate::state::session::Session;
 use crate::wake_event::WakeEvent;
+use clown_message_render::message_content::MessageKind;
 use event_handler::EventHandler;
 use futures::FutureExt;
 use message_event::MessageEvent;
-use message_irc::message_content::MessageKind;
 use message_queue::MessageQueue;
 use ratatui::Frame;
 use shadow_rs::shadow;
@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
 
     if args.merge_logs {
         if let Some(log_location) = ProjectPath::log_dir() {
-            message_irc::log::log_merger::merge_logs(log_location)?;
+            crate::log::log_merger::merge_logs(log_location)?;
         }
         return Ok(());
     }

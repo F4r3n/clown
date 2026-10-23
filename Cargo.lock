@@ -400,10 +400,10 @@ dependencies = [
  "ahash",
  "anyhow",
  "bit-vec",
- "bitflags 2.13.2",
  "chrono",
  "clap",
  "clown-core",
+ "clown-message-render",
  "clown-spell",
  "clown-website-preview",
  "criterion",
@@ -448,6 +448,20 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "webpki-roots",
+]
+
+[[package]]
+name = "clown-message-render"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "anyhow",
+ "bitflags 2.13.2",
+ "chrono",
+ "criterion",
+ "ratatui",
+ "tempfile",
+ "unicode-width",
 ]
 
 [[package]]

@@ -179,7 +179,7 @@ pub fn help() -> MessageEvent {
     MessageEvent::AddMessageViewInfo(
         None,
         None,
-        crate::message_irc::message_content::MessageKind::Info,
+        clown_message_render::message_content::MessageKind::Info,
         output,
     )
 }

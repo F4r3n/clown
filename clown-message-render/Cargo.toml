@@ -1,0 +1,41 @@
+[package]
+name = "clown-message-render"
+version = "0.1.0"
+edition = "2024"
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+ratatui = { version = "0.30", default-features = false, features = [
+    "crossterm",
+    "layout-cache"
+] }
+unicode-width = "0.2.2"
+anyhow = "1.0.104"
+ahash = { version = "0.8.12", features = ["serde"] }
+chrono = { version = "0.4.45", default-features = false, features = [
+    "clock",
+    "std",
+] }
+bitflags = "2.13.2"
+
+
+[dev-dependencies]
+criterion = { version = "0.8.2", features = ["plotters"] }
+tempfile = "3.27.0"
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "message_parser"
+harness = false
+
+[[bench]]
+name = "textwrapper"
+harness = false
+
+[[bench]]
+name = "message_content"
+harness = false
