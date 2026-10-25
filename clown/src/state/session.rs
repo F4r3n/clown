@@ -255,7 +255,7 @@ impl Session {
         self.get_current_irc_server_model().map(|v| SessionStatus {
             server_id: v.get_server_id(),
             channel: v.get_current_channel().map(std::borrow::Cow::Borrowed),
-            nickname: std::borrow::Cow::Borrowed(v.get_current_nick()),
+            nickname: std::borrow::Cow::Borrowed(v.get_current_nick().as_str()),
         })
     }
 

@@ -1,16 +1,17 @@
-use ahash::AHashMap;
-
+use super::irc_name::IrcName;
 use crate::message_event::MessageEvent;
 use crate::state::server_id::ServerID;
+use ahash::AHashMap;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct User {
-    name: String,
+    name: IrcName,
     connected_sections: bit_vec::BitVec,
     is_main: bool,
 }
 const NB_SECTIONS: usize = 32;
 impl User {
-    pub fn new(name: String, is_main: bool) -> Self {
+    pub fn new(name: IrcName, is_main: bool) -> Self {
         Self {
             name,
             is_main,
@@ -20,7 +21,7 @@ impl User {
 
     #[cfg(test)]
     pub fn get_name(&self) -> &str {
-        &self.name
+        self.name.as_str()
     }
 
     pub fn join_section(&mut self, id: usize) {
@@ -47,7 +48,7 @@ impl User {
 #[derive(Debug)]
 struct Channel {
     id: usize,
-    name: String,
+    name: IrcName,
 
     has_unread_message: bool,
     has_received_message: bool,
@@ -155,6 +156,7 @@ impl IrcModel {
                 let server_name = self.get_server_name(*server_id).to_string();
 
                 if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
+                    let server_name = IrcName::new(&server_name);
                     server.add_channel(&server_name);
                 }
             }
@@ -165,7 +167,8 @@ impl IrcModel {
             }
             MessageEvent::Part(server_id, channel, user) => {
                 if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
-                    server.part(channel, user);
+                    let channel = IrcName::new(channel);
+                    server.part(&channel, user);
                 }
             }
             MessageEvent::Quit(server_id, user, _) => {
@@ -189,7 +192,8 @@ impl IrcModel {
                 if let Some(server_id) = server_id
                     && let Some(Some(server)) = self.get_mut_server_from_id(*server_id)
                 {
-                    server.select_channel(channel);
+                    let channel = IrcName::new(channel);
+                    server.select_channel(&channel);
                 }
                 self.current_id = *server_id;
             }
@@ -228,13 +232,13 @@ impl IrcModel {
 
 #[derive(Debug)]
 pub struct IrcServerModel {
-    users: ahash::AHashMap<String, User>,
+    users: ahash::AHashMap<IrcName, User>,
 
     //Usually not a lot of channels, so keeping a vector is fine
     list_channels: Vec<Channel>,
-    current_channel: Option<String>,
+    current_channel: Option<IrcName>,
 
-    current_nick: String,
+    current_nick: IrcName,
     server_id: ServerID,
     name: String,
 }
@@ -243,8 +247,8 @@ impl IrcServerModel {
     pub fn new_model(server_id: ServerID, server_name: String, nick_name: String) -> Self {
         let mut users = AHashMap::new();
         users.insert(
-            Self::sanitize_name(&nick_name).to_lowercase(),
-            User::new(Self::sanitize_name(&nick_name).to_string(), true),
+            IrcName::new(&nick_name),
+            User::new(IrcName::new(&nick_name), true),
         );
         Self {
             users,
@@ -252,19 +256,20 @@ impl IrcServerModel {
             server_id,
             list_channels: Vec::new(),
             current_channel: None,
-            current_nick: Self::sanitize_name(&nick_name).to_string(),
+            current_nick: IrcName::new(&nick_name),
         }
     }
 
     pub fn get_current_channel(&self) -> Option<&str> {
-        self.current_channel.as_deref()
+        self.current_channel.as_ref().map(IrcName::as_str)
     }
 
     pub fn get_server_name(&self) -> &str {
         self.name.as_str()
     }
 
-    pub fn get_current_nick(&self) -> &str {
+    //TODO:replace with IrcName
+    pub fn get_current_nick(&self) -> &IrcName {
         &self.current_nick
     }
 
@@ -272,37 +277,41 @@ impl IrcServerModel {
         self.server_id
     }
 
-    pub fn get_target<'b>(&self, source: &'b str, target: &'b str) -> &'b str {
-        if target.eq_ignore_ascii_case(self.get_current_nick()) {
+    pub fn get_target_from_irc_name<'b>(
+        &self,
+        source: &'b IrcName,
+        target: &'b IrcName,
+    ) -> &'b IrcName {
+        if target.eq(self.get_current_nick()) {
             source
         } else {
             target
         }
     }
 
-    fn sanitize_name(user: &str) -> &str {
-        user.strip_prefix('@').unwrap_or(user)
+    pub fn get_target<'b>(&self, source: &'b str, target: &'b str) -> &'b str {
+        if target.eq_ignore_ascii_case(self.get_current_nick().as_str()) {
+            source
+        } else {
+            target
+        }
     }
 
     fn get_channel(&self, channel: &str) -> Option<&Channel> {
-        self.list_channels
-            .iter()
-            .find(|v| v.name.eq_ignore_ascii_case(channel))
+        self.list_channels.iter().find(|v| v.name.eq(channel))
     }
 
-    fn get_channel_mut(&mut self, channel: &str) -> Option<&mut Channel> {
-        self.list_channels
-            .iter_mut()
-            .find(|v| v.name.eq_ignore_ascii_case(channel))
+    fn get_channel_mut(&mut self, channel: &IrcName) -> Option<&mut Channel> {
+        self.list_channels.iter_mut().find(|v| v.name.eq(channel))
     }
 
-    pub fn add_channel(&mut self, channel: &str) -> usize {
-        if let Some(c) = self.get_channel(channel) {
+    pub fn add_channel(&mut self, channel: &IrcName) -> usize {
+        if let Some(c) = self.get_channel(channel.as_str()) {
             return c.id;
         }
         let new_channel = Channel {
             id: self.list_channels.len(),
-            name: channel.to_string(),
+            name: channel.clone(),
             has_received_message: false,
             has_unread_message: false,
         };
@@ -311,30 +320,27 @@ impl IrcServerModel {
         id
     }
 
-    fn rename_channel(&mut self, old: &str, new: &str) {
+    fn rename_channel(&mut self, old: &IrcName, new: &IrcName) {
         if let Some(c) = self.get_channel_mut(old) {
-            c.name = new.to_string();
+            c.name = new.clone();
         }
     }
 
     fn join(&mut self, channel: &str, nick: &str) {
-        let nick = Self::sanitize_name(nick);
-        let id = self.add_channel(channel);
+        let nick = IrcName::new(nick);
+        let id = self.add_channel(&IrcName::new(channel));
 
-        let entry = self.users.entry(nick.to_lowercase()).or_insert_with(|| {
-            User::new(
-                nick.to_string(),
-                self.current_nick.eq_ignore_ascii_case(nick),
-            )
-        });
+        let entry = self
+            .users
+            .entry(nick.clone())
+            //TODO: might avoid clone, if the args are in the other order
+            .or_insert_with(|| User::new(nick.clone(), self.current_nick.eq(&nick)));
+
         entry.join_section(id);
-        if entry.is_main {
-            self.current_channel = Some(channel.to_string());
-        }
     }
 
-    fn part(&mut self, channel: &str, nick: &str) {
-        let nick = Self::sanitize_name(nick).to_lowercase();
+    fn part(&mut self, channel: &IrcName, nick: &str) {
+        let nick = IrcName::new(nick);
         let id = self.add_channel(channel);
 
         let mut should_delete = false;
@@ -349,52 +355,49 @@ impl IrcServerModel {
     }
 
     fn quit(&mut self, nick: &str) {
-        let nick = Self::sanitize_name(nick).to_lowercase();
+        let nick = IrcName::new(nick);
 
         self.users.remove(&nick);
     }
 
     fn nick(&mut self, old: &str, new: &str) {
-        let old = Self::sanitize_name(old);
-        let new = Self::sanitize_name(new);
-        let old_lower = old.to_lowercase();
+        let old = IrcName::new(old);
+        let new = IrcName::new(new);
 
-        if self.current_nick.eq_ignore_ascii_case(old) {
-            self.current_nick = new.to_string();
-        }
-
-        if let Some(user) = self.users.remove(&old_lower) {
-            self.rename_channel(old, new);
-
-            let mut old_user = user.clone();
-            old_user.name = new.to_string();
+        if let Some(mut user) = self.users.remove(&old) {
+            self.rename_channel(&old, &new);
 
             if let Some(channel) = self.current_channel.as_mut()
-                && (*channel).eq_ignore_ascii_case(&old_lower)
+                && old == *channel.as_str()
             {
-                *channel = new.to_string();
+                *channel = new.clone();
             }
 
-            self.users.insert(new.to_lowercase(), old_user);
+            user.name = new.clone();
+            self.users.insert(new.clone(), user);
+        }
+
+        if self.current_nick == old {
+            self.current_nick = new;
         }
     }
 
     pub fn is_main_user(&self, user: &str) -> bool {
-        if let Some(user) = self.users.get(&Self::sanitize_name(user).to_lowercase()) {
+        if let Some(user) = self.users.get(&IrcName::new(user)) {
             user.is_main
         } else {
             false
         }
     }
 
-    pub fn get_user(&self, user: &str) -> Option<&User> {
-        self.users.get(&Self::sanitize_name(user).to_lowercase())
+    pub fn get_user(&self, user: &IrcName) -> Option<&User> {
+        self.users.get(user)
     }
 
     pub fn has_user_joined_channel(&self, user: &str, channel: &str) -> bool {
-        if let Some(id) = self.get_channel(channel).map(|v| v.id) {
+        if let Some(id) = self.get_channel(&channel).map(|v| v.id) {
             self.users
-                .get(&Self::sanitize_name(user).to_lowercase())
+                .get(&IrcName::new(user))
                 .map(|v| v.has_joined_section(id))
                 .is_some_and(|v| v)
         } else {
@@ -403,7 +406,7 @@ impl IrcServerModel {
     }
 
     pub fn get_all_joined_channel(&self, user: &str) -> impl Iterator<Item = &str> + '_ {
-        let user = Self::sanitize_name(user).to_lowercase();
+        let user = IrcName::new(user);
         let maybe_user = self.users.get(&user);
         maybe_user.into_iter().flat_map(|u| {
             self.list_channels
@@ -415,20 +418,15 @@ impl IrcServerModel {
 
     // a(source) sends to b(target)
     fn received_message(&mut self, source: &str, target: &str) {
-        let target = Self::sanitize_name(target);
-        let source = Self::sanitize_name(source);
+        let target = IrcName::new(target);
+        let source = IrcName::new(source);
 
-        let target = self.get_target(source, target);
+        let target = self.get_target_from_irc_name(&source, &target);
         let id = self.add_channel(target);
 
-        let target = target.to_lowercase();
+        let new_message = self.current_channel.as_ref().is_some_and(|v| v.eq(target));
 
-        let new_message = self
-            .current_channel
-            .as_ref()
-            .is_some_and(|v| v.eq_ignore_ascii_case(&target));
-
-        if let Some(user) = self.get_user(&target)
+        if let Some(user) = self.get_user(target)
             && user.is_main
         {
             return;
@@ -439,9 +437,9 @@ impl IrcServerModel {
         }
     }
 
-    fn select_channel(&mut self, channel: &str) {
-        self.current_channel = Some(Self::sanitize_name(channel).to_string());
-        if let Some(c) = self.get_channel_mut(&channel.to_lowercase()) {
+    fn select_channel(&mut self, channel: &IrcName) {
+        self.current_channel = Some(channel.clone());
+        if let Some(c) = self.get_channel_mut(channel) {
             c.has_unread_message = false;
         }
     }
@@ -533,7 +531,7 @@ mod tests {
             "#rust".into(),
             "Alice".into(),
         ));
-        assert!(server(&m).get_user("alice").is_some());
+        assert!(server(&m).get_user(&IrcName::new("alice")).is_some());
 
         m.handle_action(&MessageEvent::Quit(
             ServerID::new(0),
@@ -541,7 +539,7 @@ mod tests {
             Some("bye".into()),
         ));
 
-        assert!(server(&m).get_user("alice").is_none());
+        assert!(server(&m).get_user(&IrcName::new("alice")).is_none());
     }
 
     #[test]
@@ -577,8 +575,8 @@ mod tests {
             "BoB".into(),
         ));
 
-        assert!(server(&m).get_user("alice").is_none());
-        assert!(server(&m).get_user("bob").is_some());
+        assert!(server(&m).get_user(&IrcName::new("alice")).is_none());
+        assert!(server(&m).get_user(&IrcName::new("bob")).is_some());
 
         // Rename Jack → Miki
         m.handle_action(&MessageEvent::ReplaceUser(
@@ -589,8 +587,8 @@ mod tests {
 
         let s = server(&m);
 
-        assert!(s.get_user("jack").is_none());
-        assert!(s.get_user("miki").is_some());
+        assert!(s.get_user(&IrcName::new("jack")).is_none());
+        assert!(s.get_user(&IrcName::new("miki")).is_some());
         assert!(s.get_channel("jack").is_none());
         assert!(s.get_channel("miki").is_some());
     }
@@ -745,7 +743,6 @@ mod tests {
         ));
 
         assert!(server(&m).is_main_user("me"));
-        assert_eq!(server(&m).get_current_channel(), Some("#rust"));
 
         m.handle_action(&MessageEvent::ReplaceUser(
             ServerID::new(0),
@@ -788,5 +785,38 @@ mod tests {
         ));
         assert!(server(&m).is_main_user("newme"));
         assert!(!server(&m).is_main_user("me"));
+    }
+
+    #[test]
+    fn test_names_reply_does_not_change_current_channel() {
+        let mut m = model();
+        setup_server(&mut m);
+
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#a".into(),
+            "Me".into(),
+        ));
+        m.handle_action(&MessageEvent::SelectChannel(
+            Some(ServerID::new(0)),
+            "#a".into(),
+        ));
+
+        // NAMES for another channel, containing our own nick
+        m.handle_action(&MessageEvent::UpdateUsers(
+            ServerID::new(0),
+            "#b".into(),
+            vec!["@Me".into(), "Jack".into()],
+        ));
+        assert_eq!(server(&m).get_current_channel(), Some("#a"));
+        assert!(server(&m).has_user_joined_channel("me", "#b"));
+
+        // A JOIN alone does not switch either, only SelectChannel does
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#c".into(),
+            "Me".into(),
+        ));
+        assert_eq!(server(&m).get_current_channel(), Some("#a"));
     }
 }

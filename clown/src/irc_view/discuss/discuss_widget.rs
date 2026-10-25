@@ -507,8 +507,11 @@ impl DiscussWidget {
     }
 
     fn get_current_nick<'b>(&self, irc_model: &'b IrcModel) -> Option<&'b str> {
-        self.current_server_id
-            .and_then(|v| irc_model.get_server(v).map(|v| v.get_current_nick()))
+        self.current_server_id.and_then(|v| {
+            irc_model
+                .get_server(v)
+                .map(|v| v.get_current_nick().as_str())
+        })
     }
 }
 
@@ -702,7 +705,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 {
                     let target = irc_server.get_target(source, target);
 
-                    if source.eq_ignore_ascii_case(irc_server.get_current_nick())
+                    if source.eq_ignore_ascii_case(irc_server.get_current_nick().as_str())
                         && !target.eq_ignore_ascii_case(current_channel)
                     {
                         self.add_line(
@@ -713,8 +716,10 @@ impl crate::component::EventHandler for DiscussWidget {
                         );
                     }
 
-                    let is_highlight =
-                        MessageContent::should_highlight(irc_server.get_current_nick(), content);
+                    let is_highlight = MessageContent::should_highlight(
+                        irc_server.get_current_nick().as_str(),
+                        content,
+                    );
 
                     self.add_line(
                         &mut ctx.messages,
