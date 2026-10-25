@@ -321,10 +321,12 @@ impl IrcServerModel {
         let nick = Self::sanitize_name(nick);
         let id = self.add_channel(channel);
 
-        let entry = self
-            .users
-            .entry(nick.to_lowercase())
-            .or_insert_with(|| User::new(nick.to_string(), false));
+        let entry = self.users.entry(nick.to_lowercase()).or_insert_with(|| {
+            User::new(
+                nick.to_string(),
+                self.current_nick.eq_ignore_ascii_case(nick),
+            )
+        });
         entry.join_section(id);
         if entry.is_main {
             self.current_channel = Some(channel.to_string());
@@ -357,16 +359,18 @@ impl IrcServerModel {
         let new = Self::sanitize_name(new);
         let old_lower = old.to_lowercase();
 
+        if self.current_nick.eq_ignore_ascii_case(old) {
+            self.current_nick = new.to_string();
+        }
+
         if let Some(user) = self.users.remove(&old_lower) {
             self.rename_channel(old, new);
 
             let mut old_user = user.clone();
             old_user.name = new.to_string();
-            if old_user.is_main {
-                self.current_nick = new.to_string()
-            }
+
             if let Some(channel) = self.current_channel.as_mut()
-                && (*channel).eq(&old_lower)
+                && (*channel).eq_ignore_ascii_case(&old_lower)
             {
                 *channel = new.to_string();
             }
@@ -681,5 +685,108 @@ mod tests {
         // target is channel -> return channel
         let t = s.get_target("Alice", "#RUST");
         assert_eq!(t, "#RUST");
+    }
+
+    #[test]
+    fn test_peer_nick_change_in_private_channel() {
+        let mut m = model();
+        setup_server(&mut m);
+
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#rust".into(),
+            "Me".into(),
+        ));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#rust".into(),
+            "Jack".into(),
+        ));
+        m.handle_action(&MessageEvent::PrivMsg(
+            ServerID::new(0),
+            "Jack".into(),
+            "Me".into(),
+            "hello".into(),
+        ));
+        m.handle_action(&MessageEvent::SelectChannel(
+            Some(ServerID::new(0)),
+            "Jack".into(),
+        ));
+
+        m.handle_action(&MessageEvent::ReplaceUser(
+            ServerID::new(0),
+            "Jack".into(),
+            "Miki".into(),
+        ));
+
+        // Messages must now be sent to the new nick
+        assert_eq!(server(&m).get_current_channel(), Some("Miki"));
+    }
+
+    #[test]
+    fn test_main_user_kept_after_rejoin() {
+        let mut m = model();
+        setup_server(&mut m);
+
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#rust".into(),
+            "Me".into(),
+        ));
+        m.handle_action(&MessageEvent::Part(
+            ServerID::new(0),
+            "#rust".into(),
+            "Me".into(),
+        ));
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#rust".into(),
+            "ME".into(),
+        ));
+
+        assert!(server(&m).is_main_user("me"));
+        assert_eq!(server(&m).get_current_channel(), Some("#rust"));
+
+        m.handle_action(&MessageEvent::ReplaceUser(
+            ServerID::new(0),
+            "Me".into(),
+            "NewMe".into(),
+        ));
+
+        assert_eq!(server(&m).get_current_nick(), "NewMe");
+        assert!(server(&m).is_main_user("newme"));
+    }
+
+    #[test]
+    fn test_own_nick_change_without_channel() {
+        let mut m = model();
+        setup_server(&mut m);
+
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#rust".into(),
+            "Me".into(),
+        ));
+        m.handle_action(&MessageEvent::Part(
+            ServerID::new(0),
+            "#rust".into(),
+            "Me".into(),
+        ));
+
+        // Not in any channel, but the server still sends back our NICK
+        m.handle_action(&MessageEvent::ReplaceUser(
+            ServerID::new(0),
+            "Me".into(),
+            "NewMe".into(),
+        ));
+        assert_eq!(server(&m).get_current_nick(), "NewMe");
+
+        m.handle_action(&MessageEvent::Join(
+            ServerID::new(0),
+            "#rust".into(),
+            "NewMe".into(),
+        ));
+        assert!(server(&m).is_main_user("newme"));
+        assert!(!server(&m).is_main_user("me"));
     }
 }
