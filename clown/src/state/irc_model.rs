@@ -5,23 +5,16 @@ use ahash::AHashMap;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct User {
-    name: IrcName,
     connected_sections: bit_vec::BitVec,
     is_main: bool,
 }
 const NB_SECTIONS: usize = 32;
 impl User {
-    pub fn new(name: IrcName, is_main: bool) -> Self {
+    pub fn new(is_main: bool) -> Self {
         Self {
-            name,
             is_main,
             connected_sections: bit_vec::BitVec::from_elem(NB_SECTIONS, false),
         }
-    }
-
-    #[cfg(test)]
-    pub fn get_name(&self) -> &str {
-        self.name.as_str()
     }
 
     pub fn join_section(&mut self, id: usize) {
@@ -244,10 +237,7 @@ pub struct IrcServerModel {
 impl IrcServerModel {
     pub fn new_model(server_id: ServerID, server_name: String, nick_name: String) -> Self {
         let mut users = AHashMap::new();
-        users.insert(
-            IrcName::new(&nick_name),
-            User::new(IrcName::new(&nick_name), true),
-        );
+        users.insert(IrcName::new(&nick_name), User::new(true));
         Self {
             users,
             name: server_name,
@@ -319,7 +309,7 @@ impl IrcServerModel {
             .users
             .entry(nick.clone())
             //TODO: might avoid clone, if the args are in the other order
-            .or_insert_with(|| User::new(nick.clone(), self.current_nick.eq(nick)));
+            .or_insert_with(|| User::new(self.current_nick.eq(nick)));
 
         entry.join_section(id);
     }
@@ -343,7 +333,7 @@ impl IrcServerModel {
     }
 
     fn nick(&mut self, old: &IrcName, new: &IrcName) {
-        if let Some(mut user) = self.users.remove(old) {
+        if let Some(user) = self.users.remove(old) {
             self.rename_channel(old, new);
 
             if let Some(channel) = self.current_channel.as_mut()
@@ -352,7 +342,6 @@ impl IrcServerModel {
                 *channel = new.clone();
             }
 
-            user.name = new.clone();
             self.users.insert(new.clone(), user);
         }
 

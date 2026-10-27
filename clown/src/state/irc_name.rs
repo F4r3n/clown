@@ -1,18 +1,7 @@
 #[derive(Debug, Clone, Eq, Default)]
 pub struct IrcName(String);
 
-//TODO:later
-enum Mode {
-    OWNER,
-    ADMIN,
-    OPERATOR,
-    HALFOP,
-    VOICE,
-}
-pub struct User {
-    name: IrcName,
-    mode: Mode,
-}
+//TODO: store
 
 impl IrcName {
     pub fn new(name: &str) -> Self {
