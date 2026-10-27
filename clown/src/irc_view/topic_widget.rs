@@ -1,4 +1,5 @@
 use crate::component::{Draw, EventHandler};
+use crate::state::irc_name::IrcName;
 use crate::state::server_id::ServerID;
 use clown_message_render::message_parser::to_spans;
 use ratatui::layout::Rect;
@@ -6,7 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 pub struct TopicWidget {
-    topic_collection: Vec<ahash::AHashMap<String, String>>,
+    topic_collection: Vec<ahash::AHashMap<IrcName, String>>,
     need_redraw: bool,
 }
 
@@ -39,7 +40,7 @@ impl TopicWidget {
         }
     }
 
-    fn get_topic(&self, server_id: ServerID, channel: &str) -> Option<&str> {
+    fn get_topic(&self, server_id: ServerID, channel: &IrcName) -> Option<&str> {
         if let Some(list_topics) = self.topic_collection.get(server_id.as_usize()) {
             list_topics.get(channel).map(|v| v.as_str())
         } else {
@@ -47,9 +48,9 @@ impl TopicWidget {
         }
     }
 
-    fn update_topic(&mut self, server_id: ServerID, channel: &str, content: String) {
+    fn update_topic(&mut self, server_id: ServerID, channel: &IrcName, content: String) {
         if let Some(server) = self.topic_collection.get_mut(server_id.as_usize()) {
-            server.insert(channel.to_string(), content);
+            server.insert(channel.clone(), content);
         }
         self.need_redraw = true;
     }
@@ -127,7 +128,7 @@ mod tests {
     fn test_set_and_get_topic() {
         let mut widget = TopicWidget::new();
         let server_id = ServerID::new(0);
-        let channel = "#rust";
+        let channel = &IrcName::new("#rust");
         let topic = "Welcome to Rust IRC!";
 
         // Ensure the vector has space
@@ -155,13 +156,13 @@ mod tests {
         let event_with_source = MessageEvent::SetTopic(
             server_id,
             Some("NickServ".to_string()),
-            "#rust".to_string(),
+            "#rust".into(),
             "Crusty but trusty".to_string(),
         );
 
         widget.handle_actions(&mut ctx, &event_with_source);
         assert_eq!(
-            widget.get_topic(server_id, "#rust"),
+            widget.get_topic(server_id, &"#rust".into()),
             Some("Crusty but trusty")
         );
 
@@ -169,13 +170,13 @@ mod tests {
         let event_no_source = MessageEvent::SetTopic(
             server_id,
             None,
-            "#rust".to_string(),
+            "#rust".into(),
             "New Topic No Source".to_string(),
         );
 
         widget.handle_actions(&mut ctx, &event_no_source);
         assert_eq!(
-            widget.get_topic(server_id, "#rust"),
+            widget.get_topic(server_id, &"#rust".into()),
             Some("New Topic No Source")
         );
     }
@@ -184,7 +185,7 @@ mod tests {
     fn test_get_topic_out_of_bounds() {
         let widget = TopicWidget::new();
         // Should return None safely even if server_id doesn't exist in the Vec
-        assert_eq!(widget.get_topic(ServerID::new(99), "#anything"), None);
+        assert_eq!(widget.get_topic(ServerID::new(99), &"#anything".into()), None);
     }
 
     // Helper to satisfy the Draw/EventHandler traits in tests

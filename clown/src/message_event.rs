@@ -1,5 +1,5 @@
+use crate::state::irc_name::IrcName;
 use crate::state::server_id::ServerID;
-
 #[derive(PartialEq, Debug)]
 pub enum ConfigEvent {
     AddColor(Vec<String> /*usernames*/),
@@ -16,43 +16,43 @@ pub enum MessageEvent {
     ),
     PrivMsg(
         ServerID, /*server id */
-        String,   /*source */
-        String,   /*target*/
+        IrcName,  /*source */
+        IrcName,  /*target*/
         String,   /*content*/
     ),
     Notice(
         ServerID, /*server id */
-        String,   /*source */
-        String,   /*target*/
+        IrcName,  /*source */
+        IrcName,  /*target*/
         String,   /*content*/
     ),
     ActionMsg(
         ServerID, /*server id */
-        String,   /*source */
-        String,   /*target*/
+        IrcName,  /*source */
+        IrcName,  /*target*/
         String,   /*content*/
     ),
-    SelectChannel(Option<ServerID> /*server id */, String),
+    SelectChannel(Option<ServerID> /*server id */, IrcName),
     UpdateUsers(
-        ServerID,    /*server id */
-        String,      /*channel*/
-        Vec<String>, /*list users */
+        ServerID,     /*server id */
+        IrcName,      /*channel*/
+        Vec<IrcName>, /*list users */
     ),
     ReplaceUser(
         ServerID, /*server id */
-        String,   /*old */
-        String,   /*new */
+        IrcName,  /*old */
+        IrcName,  /*new */
     ),
     Join(
         ServerID, /*server id */
-        String,   /*channel*/
-        String,   /*user */
+        IrcName,  /*channel*/
+        IrcName,  /*user */
     ),
     JoinServer(ServerID /*server id */),
     SetTopic(
         ServerID,       /*server id */
         Option<String>, /*source*/
-        String,         /*channel */
+        IrcName,        /*channel */
         String,         /*topic */
     ),
     HoverURL(String /* URL */),
@@ -64,18 +64,18 @@ pub enum MessageEvent {
     SpellChecker(Option<String>),
     Part(
         ServerID, /*server id */
-        String,   /*channel */
-        String,   /*user */
+        IrcName,  /*channel */
+        IrcName,  /*user */
     ),
     Quit(
         ServerID,       /*server id */
-        String,         /*user*/
+        IrcName,        /*user*/
         Option<String>, /*reason*/
     ),
     QuitAll(Option<String> /*reason*/),
     SettingsDidChange,
     Bel,
-    CloseBuffer(Option<ServerID> /*server id */, String /*name */),
+    CloseBuffer(Option<ServerID> /*server id */, IrcName /*name */),
     Search(super::irc_view::search_widget::Query),
     SearchEnd(),
     Config(ConfigEvent),

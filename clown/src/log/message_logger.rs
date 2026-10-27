@@ -654,10 +654,10 @@ impl MessageLogger {
             MessageEvent::Join(_, channel, user) => {
                 self.write_to_target(
                     server_address,
-                    Some(channel),
+                    Some(channel.as_str()),
                     LoggedMessage::Join {
-                        source: Cow::Borrowed(user),
-                        channel: Cow::Borrowed(channel),
+                        source: Cow::Borrowed(user.as_str()),
+                        channel: Cow::Borrowed(channel.as_str()),
                     },
                     false,
                 )?;
@@ -668,10 +668,10 @@ impl MessageLogger {
                     for channel in irc_model.get_all_joined_channel(*server_id, old) {
                         self.write_to_target(
                             server_address,
-                            Some(channel),
+                            Some(channel.as_str()),
                             LoggedMessage::NickChange {
-                                old: Cow::Borrowed(old),
-                                new: Cow::Borrowed(new),
+                                old: Cow::Borrowed(old.as_str()),
+                                new: Cow::Borrowed(new.as_str()),
                             },
                             true,
                         )?;
@@ -682,10 +682,10 @@ impl MessageLogger {
             MessageEvent::Part(_, channel, user) => {
                 self.write_to_target(
                     server_address,
-                    Some(channel),
+                    Some(channel.as_str()),
                     LoggedMessage::Part {
-                        source: Cow::Borrowed(user),
-                        channel: Cow::Borrowed(channel),
+                        source: Cow::Borrowed(user.as_str()),
+                        channel: Cow::Borrowed(channel.as_str()),
                     },
                     true,
                 )?;
@@ -696,9 +696,9 @@ impl MessageLogger {
                     for channel in irc_model.get_all_joined_channel(*server_id, user) {
                         self.write_to_target(
                             server_address,
-                            Some(channel),
+                            Some(channel.as_str()),
                             LoggedMessage::Quit {
-                                source: Cow::Borrowed(user),
+                                source: Cow::Borrowed(user.as_str()),
                             },
                             true,
                         )?;
@@ -709,10 +709,10 @@ impl MessageLogger {
             MessageEvent::SetTopic(_, Some(source), channel, content) => {
                 self.write_to_target(
                     server_address,
-                    Some(channel),
+                    Some(channel.as_str()),
                     LoggedMessage::Topic {
                         source: Cow::Borrowed(source),
-                        channel: Cow::Borrowed(channel),
+                        channel: Cow::Borrowed(channel.as_str()),
                         content: Cow::Borrowed(content),
                     },
                     false,
@@ -728,9 +728,9 @@ impl MessageLogger {
 
                     self.write_to_target(
                         server_address,
-                        Some(target),
+                        Some(target.as_str()),
                         LoggedMessage::Message {
-                            source: Cow::Borrowed(source),
+                            source: Cow::Borrowed(source.as_str()),
                             content: Cow::Borrowed(content),
                         },
                         false,
@@ -741,9 +741,9 @@ impl MessageLogger {
             MessageEvent::ActionMsg(_, source, target, content) => {
                 self.write_to_target(
                     server_address,
-                    Some(target),
+                    Some(target.as_str()),
                     LoggedMessage::Action {
-                        source: Cow::Borrowed(source),
+                        source: Cow::Borrowed(source.as_str()),
                         content: Cow::Borrowed(content),
                     },
                     false,

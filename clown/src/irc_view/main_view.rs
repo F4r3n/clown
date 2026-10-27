@@ -20,6 +20,7 @@ use crate::message_event::ConfigEvent;
 use crate::message_event::MessageEvent;
 use crate::message_queue::MessageQueue;
 use crate::state::irc_model::IrcModel;
+use crate::state::irc_name::IrcName;
 use crate::state::model::Model;
 use crate::state::model::RunningState;
 use crate::state::model::StoredConfig;
@@ -88,7 +89,7 @@ impl MainView<'_> {
         let log_dir = crate::project_path::ProjectPath::log_dir()
             .unwrap_or(std::env::current_dir().unwrap_or(std::path::Path::new("").to_path_buf()));
         let mut discuss_widget = discuss_widget::DiscussWidget::new();
-        discuss_widget.set_current_channel(None, "Global");
+        discuss_widget.set_current_channel(None, IrcName::new("Global"));
         let messages_display = Component::new("messages", discuss_widget);
         let tooltip_widget = Component::new("tooltip", tooltip_widget::ToolTipDiscussWidget::new());
 
@@ -277,8 +278,8 @@ impl MainView<'_> {
         {
             Some(MessageEvent::ActionMsg(
                 status.server_id,
-                status.nickname.to_string(),
-                status_channel.to_string(),
+                status.nickname.into_owned(),
+                status_channel.into_owned(),
                 content,
             ))
         } else {
@@ -291,15 +292,19 @@ impl MainView<'_> {
         content: String,
         session: &mut Session,
     ) -> Option<MessageEvent> {
-        if let Err(e) = session.send_command_current_server(clown_core::command::Command::PrivMsg(
-            channel.clone(),
-            content.clone(),
-        )) {
+        if let Err(e) =
+            session.send_command_current_server(Command::PrivMsg(channel.clone(), content.clone()))
+        {
             return Some(MessageEvent::from_error(e));
         }
-        session
-            .get_current_status()
-            .map(|v| MessageEvent::PrivMsg(v.server_id, v.nickname.to_string(), channel, content))
+        session.get_current_status().map(|v| {
+            MessageEvent::PrivMsg(
+                v.server_id,
+                v.nickname.into_owned(),
+                channel.into(),
+                content,
+            )
+        })
     }
 
     fn handle_cmd_config(
@@ -347,16 +352,16 @@ impl MainView<'_> {
     }
 
     fn handle_cmd_close_buffer(
-        channel: Option<String>,
+        channel: Option<IrcName>,
         session: &mut Session,
     ) -> Option<MessageEvent> {
         let status = session.get_current_status();
         let server_id = status.as_ref().map(|s| s.server_id);
-        let channel = channel.or_else(|| status.and_then(|s| s.channel.map(|v| v.to_string())));
-
+        let channel =
+            channel.or_else(|| status.and_then(|s| s.channel.map(std::borrow::Cow::into_owned)));
         if let Some(channel) = channel {
-            if channel.starts_with('#')
-                && let Err(e) = session.send_command_part(Some(channel.clone()), None)
+            if channel.as_str().starts_with('#')
+                && let Err(e) = session.send_command_part(Some(channel.to_string()), None)
             {
                 return Some(MessageEvent::from_error(e));
             }
@@ -399,11 +404,11 @@ impl MainView<'_> {
             && let Some(status_channel) = cstatus.channel
         {
             let content = content.to_string();
-            if status_channel.eq_ignore_ascii_case(&cstatus.nickname) {
+            if status_channel.eq(&cstatus.nickname) {
                 Some(MessageEvent::PrivMsg(
                     cstatus.server_id,
-                    cstatus.nickname.to_string(),
-                    status_channel.to_string(),
+                    cstatus.nickname.into_owned(),
+                    status_channel.into_owned(),
                     content,
                 ))
             } else {
@@ -414,8 +419,8 @@ impl MainView<'_> {
                     Err(e) => Some(MessageEvent::from_error(e)),
                     _ => Some(MessageEvent::PrivMsg(
                         cstatus.server_id,
-                        cstatus.nickname.to_string(),
-                        status_channel.to_string(),
+                        cstatus.nickname.into_owned(),
+                        status_channel.into_owned(),
                         content,
                     )),
                 }
@@ -502,14 +507,17 @@ impl MainView<'_> {
                             if let Some(parsed_content) = content.get(8..content.len() - 1) {
                                 messages.push_message(MessageEvent::ActionMsg(
                                     server_id,
-                                    source,
-                                    target,
+                                    IrcName::from(source),
+                                    IrcName::from(target),
                                     parsed_content.to_string(),
                                 ));
                             }
                         } else {
                             messages.push_message(MessageEvent::PrivMsg(
-                                server_id, source, target, content,
+                                server_id,
+                                IrcName::from(source),
+                                IrcName::from(target),
+                                content,
                             ));
                         }
                     } else {
@@ -526,8 +534,11 @@ impl MainView<'_> {
                             tracing::error!(error = %e, "Impossible to save");
                         }
 
-                        messages
-                            .push_message(MessageEvent::ReplaceUser(server_id, source, new_user));
+                        messages.push_message(MessageEvent::ReplaceUser(
+                            server_id,
+                            IrcName::from(source),
+                            IrcName::from(new_user),
+                        ));
                     } else {
                         tracing::error!(error = %MessageError::MissingSource, "Nick");
                     }
@@ -535,17 +546,29 @@ impl MainView<'_> {
                 Command::Notice(target, message) => {
                     //Display a notice directly to the user current channel
                     if let Some(source) = source {
-                        messages
-                            .push_message(MessageEvent::Notice(server_id, target, source, message));
+                        messages.push_message(MessageEvent::Notice(
+                            server_id,
+                            IrcName::from(target),
+                            IrcName::from(source),
+                            message,
+                        ));
                     }
                 }
                 Command::Topic(channel, topic) => {
-                    messages
-                        .push_message(MessageEvent::SetTopic(server_id, source, channel, topic));
+                    messages.push_message(MessageEvent::SetTopic(
+                        server_id,
+                        source,
+                        IrcName::from(channel),
+                        topic,
+                    ));
                 }
                 Command::Quit(reason) => {
                     if let Some(source) = source {
-                        messages.push_message(MessageEvent::Quit(server_id, source, reason));
+                        messages.push_message(MessageEvent::Quit(
+                            server_id,
+                            IrcName::from(source),
+                            reason,
+                        ));
                     } else {
                         tracing::error!(error = %MessageError::MissingSource, "Quit");
                     }
@@ -554,8 +577,8 @@ impl MainView<'_> {
                     if let Some(source) = source {
                         messages.push_message(MessageEvent::Part(
                             server_id,
-                            channel.to_string(),
-                            source,
+                            IrcName::from(channel),
+                            IrcName::from(source),
                         ));
                     } else {
                         tracing::error!(error = %MessageError::MissingSource, "Part");
@@ -566,8 +589,8 @@ impl MainView<'_> {
                         //Create a new 'user' as IRC-Server
                         messages.push_message(MessageEvent::Join(
                             server_id,
-                            channel.clone(),
-                            source.clone(),
+                            IrcName::from(channel.clone()),
+                            IrcName::from(source.clone()),
                         ));
 
                         messages.push_message(MessageEvent::Config(ConfigEvent::AddColor(vec![
@@ -576,12 +599,15 @@ impl MainView<'_> {
 
                         //If the server has received the join command and send it back
                         // we are allowed to select the channel if we are the current user
-                        if let Some(nickname) = ctx.model.get_nickname(server_id)
-                            && source.eq_ignore_ascii_case(nickname)
+                        if ctx
+                            .session
+                            .model
+                            .get_server(server_id)
+                            .is_some_and(|s| *s.get_current_nick() == *source.as_str())
                         {
                             messages.push_message(MessageEvent::SelectChannel(
                                 Some(server_id),
-                                channel.clone(),
+                                IrcName::from(channel),
                             ));
                         }
                     } else {
@@ -641,13 +667,18 @@ impl MainView<'_> {
                 ResponseNumber::NameReply(_symbol, channel, list_users) => {
                     messages.push_message(MessageEvent::UpdateUsers(
                         server_id,
-                        channel,
-                        list_users.clone(),
+                        IrcName::from(channel),
+                        list_users.iter().map(|v| IrcName::new(v)).collect(),
                     ));
                     messages.push_message(MessageEvent::Config(ConfigEvent::AddColor(list_users)));
                 }
                 ResponseNumber::Topic(channel, topic) => {
-                    messages.push_message(MessageEvent::SetTopic(server_id, None, channel, topic));
+                    messages.push_message(MessageEvent::SetTopic(
+                        server_id,
+                        None,
+                        IrcName::from(channel),
+                        topic,
+                    ));
                 }
                 ResponseNumber::Err(_, content) => {
                     messages.push_message(MessageEvent::AddMessageViewInfo(
@@ -897,7 +928,7 @@ impl widget_view::WidgetView for MainView<'_> {
                 let server_name = ctx.model.get_name(*server_id).to_string();
                 messages.push_message(MessageEvent::SelectChannel(
                     Some(*server_id),
-                    server_name.clone(),
+                    IrcName::from(server_name.clone()),
                 ));
 
                 if let Some(conn_cfg) = ctx.model.get_connection_config(*server_id)
@@ -959,7 +990,7 @@ impl widget_view::WidgetView for MainView<'_> {
                         && let Err(e) = self.log(
                             ctx.model.get_connection_config(id).as_ref(),
                             Some(&ctx.session.model),
-                            &MessageEvent::Quit(id, nickname.to_string(), reason.clone()),
+                            &MessageEvent::Quit(id, IrcName::from(nickname), reason.clone()),
                         )
                     {
                         tracing::error!(error = %e, "Cannot write logs");

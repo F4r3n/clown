@@ -6,7 +6,6 @@
 //!     RUSTFLAGS="-C force-frame-pointers=yes" \
 //!       cargo bench -p clown --features bench --profile profiling --bench render_frame
 
-use clown::component::Draw;
 use clown::irc_view::discuss::discuss_widget::DiscussWidget;
 use clown::irc_view::discuss::servers_messages::ServersMessages;
 use clown::message_irc::message_content::MessageContent;
@@ -14,12 +13,13 @@ use clown::state::context::Ctx;
 use clown::state::model::Model;
 use clown::state::server_id::ServerID;
 use clown::state::session::Session;
+use clown::{component::Draw, state::irc_name::IrcName};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use ratatui::{Terminal, backend::TestBackend};
 use std::hint::black_box;
 
 const SERVER_ID: ServerID = ServerID::new(0);
-const CHANNEL: &str = "#rust";
+const CHANNEL: IrcName = IrcName::new("#rust");
 
 /// Deterministic corpus generator, so two profiles are comparable.
 struct Lcg(u64);
@@ -105,7 +105,7 @@ fn build_ctx(message_count: usize) -> (Ctx, DiscussWidget) {
         widget.add_line(
             &mut messages,
             Some(SERVER_ID),
-            CHANNEL,
+            &CHANNEL,
             next_message(&mut rng),
         );
     }

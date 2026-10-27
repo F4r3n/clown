@@ -1,6 +1,7 @@
 use ahash::AHashMap;
 
 use crate::state::config::{Config, ValueParameter};
+use crate::state::irc_name::IrcName;
 use crate::state::server_id::ServerID;
 
 use super::trie::Trie;
@@ -8,7 +9,7 @@ use super::trie::Trie;
 #[derive(Hash, PartialEq, Eq)]
 struct KeyServerChannel {
     server_id: Option<ServerID>,
-    channel: String,
+    channel: IrcName,
 }
 
 pub struct InputCompletion {
@@ -45,27 +46,17 @@ impl InputCompletion {
         self.config = Trie::new();
     }
 
-    pub fn add_users(&mut self, server_id: ServerID, channel: &str, users: &Vec<String>) {
-        let channel = Self::sanitize_key(channel);
-
+    pub fn add_users(&mut self, server_id: ServerID, channel: &IrcName, users: &Vec<IrcName>) {
         let channel = self
             .channels
             .entry(KeyServerChannel {
-                channel: channel.to_string(),
+                channel: channel.clone(),
                 server_id: Some(server_id),
             })
             .or_insert(Trie::new());
         for user in users {
-            channel.add_word(Self::sanitize_name(user).to_string());
+            channel.add_word(user.to_string());
         }
-    }
-
-    fn sanitize_name(user: &str) -> &str {
-        user.strip_prefix('@').unwrap_or(user)
-    }
-
-    fn sanitize_key(key: &str) -> String {
-        key.to_lowercase()
     }
 
     pub fn replace_user(&mut self, old: &str, new: &str) {
@@ -75,31 +66,26 @@ impl InputCompletion {
         }
     }
 
-    pub fn remove_channel(&mut self, server_id: ServerID, channel: &str) {
-        let channel = Self::sanitize_key(channel);
-
+    pub fn remove_channel(&mut self, server_id: ServerID, channel: &IrcName) {
         self.channels.remove(&KeyServerChannel {
-            channel: channel.to_string(),
+            channel: channel.clone(),
             server_id: Some(server_id),
         });
     }
 
-    pub fn disable_user(&mut self, server_id: ServerID, channel: &str, user: &str) {
-        let channel = Self::sanitize_key(channel);
-
+    pub fn disable_user(&mut self, server_id: ServerID, channel: &IrcName, user: &str) {
         if let Some(channel) = self.channels.get_mut(&KeyServerChannel {
-            channel: channel.to_string(),
+            channel: channel.clone(),
             server_id: Some(server_id),
         }) {
             channel.disable_word(user);
         }
     }
 
-    pub fn add_user(&mut self, server_id: ServerID, channel: &str, user: String) {
-        let channel = Self::sanitize_key(channel);
+    pub fn add_user(&mut self, server_id: ServerID, channel: &IrcName, user: String) {
         self.channels
             .entry(KeyServerChannel {
-                channel: channel.to_string(),
+                channel: channel.clone(),
                 server_id: Some(server_id),
             })
             .or_insert(Trie::new())
@@ -109,13 +95,11 @@ impl InputCompletion {
     pub fn list(
         &self,
         server_id: Option<ServerID>,
-        channel: &str,
+        channel: &IrcName,
         start_word: &str,
     ) -> Option<Vec<String>> {
-        let channel = Self::sanitize_key(channel);
-
         if let Some(channel) = self.channels.get(&KeyServerChannel {
-            channel: channel.to_string(),
+            channel: channel.clone(),
             server_id,
         }) {
             channel.list(start_word)
@@ -229,7 +213,7 @@ struct CompletionState {
 pub struct Completion {
     pub input_completion: InputCompletion,
     state: Option<CompletionState>,
-    pub current_channel: String,
+    pub current_channel: IrcName,
     pub server_id: Option<ServerID>,
     on_empty_input_suffix: String,
     in_message_suffix: String,
@@ -386,10 +370,10 @@ mod test {
 
         comp.input_completion.add_users(
             ServerID::new(0),
-            "#test",
-            &vec!["tata".to_string(), "titi".to_string()],
+            &"#test".into(),
+            &vec!["tata".into(), "titi".into()],
         );
-        comp.current_channel = "#test".to_string();
+        comp.current_channel = "#test".into();
         comp.server_id = Some(ServerID::new(0));
 
         // Normal user completion (not first word)
@@ -416,11 +400,11 @@ mod test {
 
         comp.input_completion.add_users(
             ServerID::new(0),
-            "#test",
-            &vec!["tata".to_string(), "titi".to_string()],
+            &"#test".into(),
+            &vec!["tata".into(), "titi".into()],
         );
 
-        comp.current_channel = "#test".to_string();
+        comp.current_channel = "#test".into();
         comp.server_id = Some(ServerID::new(0));
 
         // Normal user completion (not first word)
@@ -443,7 +427,7 @@ mod test {
         );
 
         // No channel → no completion
-        comp.current_channel = "".to_string();
+        comp.current_channel = IrcName::default();
         comp.reset();
         comp.set_completion(0, 1, "t");
         assert_eq!(comp.get_next_completion(false), None);
@@ -504,12 +488,12 @@ mod test {
         comp.input_completion.add_command("/help".into());
         comp.input_completion.add_command("/config".into());
         comp.input_completion
-            .add_user(ServerID::new(0), "#test", "yolo".into());
+            .add_user(ServerID::new(0), &"#test".into(), "yolo".into());
 
         comp.input_completion
             .add_config_field("nickname_colors.seed".into());
 
-        comp.current_channel = "#test".to_string();
+        comp.current_channel = "#test".into();
         comp.server_id = Some(ServerID::new(0));
 
         comp.set_completion(0, 13, "/config set n");
@@ -551,11 +535,11 @@ mod test {
 
         comp.input_completion.add_users(
             ServerID::new(0),
-            "#test",
-            &vec!["tata".to_string(), "Titi".to_string()],
+            &"#test".into(),
+            &vec!["tata".into(), "Titi".into()],
         );
 
-        comp.current_channel = "#test".to_string();
+        comp.current_channel = "#test".into();
 
         comp.set_completion(0, 1, "t");
         assert_eq!(
@@ -578,9 +562,9 @@ mod test {
         );
 
         comp.input_completion
-            .add_users(ServerID::new(0), "#test", &vec!["tata".to_string()]);
+            .add_users(ServerID::new(0), &"#test".into(), &vec!["tata".into()]);
 
-        comp.current_channel = "#test".to_string();
+        comp.current_channel = "#test".into();
         comp.server_id = Some(ServerID::new(0));
 
         // First word completion → should use on_empty_input_suffix

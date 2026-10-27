@@ -3,6 +3,7 @@ use super::servers_messages::{Messages, Range, ServersMessages};
 use crate::component::Draw;
 use crate::message_event::MessageEvent;
 use crate::state::irc_model::IrcModel;
+use crate::state::irc_name::IrcName;
 use crate::state::server_id::ServerID;
 use clown_message_render::message_content::MessageContent;
 use clown_message_render::textwrapper::wrap_content;
@@ -66,7 +67,7 @@ pub struct DiscussWidget {
     follow_last: bool,
     area: Rect,
     content_width: usize,
-    current_channel: String,
+    current_channel: IrcName,
     current_server_id: Option<ServerID>,
 
     last_hovered: Option<Hovered>,
@@ -79,7 +80,7 @@ pub struct DiscussWidget {
 impl DiscussWidget {
     pub fn new() -> Self {
         Self {
-            current_channel: String::new(),
+            current_channel: IrcName::default(),
             current_server_id: None,
             scroll_offset: 0,
             max_visible_height: 10,
@@ -101,8 +102,8 @@ impl DiscussWidget {
             && self.scroll_cache.max_visible_height == self.max_visible_height
     }
 
-    pub fn set_current_channel(&mut self, server_id: Option<ServerID>, channel: &str) {
-        self.current_channel = channel.to_lowercase();
+    pub fn set_current_channel(&mut self, server_id: Option<ServerID>, channel: IrcName) {
+        self.current_channel = channel;
         self.current_server_id = server_id;
         self.scroll_offset = 0;
         self.follow_last = true;
@@ -337,10 +338,9 @@ impl DiscussWidget {
         &self,
         messages: &ServersMessages,
         server_id: Option<ServerID>,
-        channel: &str,
+        channel: &IrcName,
     ) -> bool {
-        let channel = channel.to_lowercase();
-        messages.has_messages(server_id, &channel)
+        messages.has_messages(server_id, channel)
     }
 
     fn add_line_scroll(&mut self) {
@@ -356,13 +356,11 @@ impl DiscussWidget {
         &mut self,
         messages: &mut ServersMessages,
         server_id: Option<ServerID>,
-        channel: &str,
+        channel: &IrcName,
         in_message: MessageContent,
     ) {
-        let channel = channel.to_lowercase();
-
-        messages.add_message(server_id, &channel, in_message);
-        if channel == self.current_channel && server_id == self.current_server_id {
+        messages.add_message(server_id, channel, in_message);
+        if channel.eq(&self.current_channel) && server_id == self.current_server_id {
             self.add_line_scroll();
         }
 
@@ -425,7 +423,7 @@ impl DiscussWidget {
         self.redraw = true;
     }
 
-    fn scroll_up_logs(&mut self, current_nick: &str, messages: &mut ServersMessages) {
+    fn scroll_up_logs(&mut self, current_nick: &IrcName, messages: &mut ServersMessages) {
         if self.possible_scroll_up(messages, 1) > 0 || self.read_log(current_nick, messages, 1) > 0
         {
             self.scroll_up_no_check();
@@ -434,7 +432,7 @@ impl DiscussWidget {
 
     fn read_log(
         &mut self,
-        current_nick: &str,
+        current_nick: &IrcName,
         messages: &mut ServersMessages,
         number_lines: usize,
     ) -> usize {
@@ -463,7 +461,7 @@ impl DiscussWidget {
         offset
     }
 
-    fn scroll_page_up_logs(&mut self, current_nick: &str, messages: &mut ServersMessages) {
+    fn scroll_page_up_logs(&mut self, current_nick: &IrcName, messages: &mut ServersMessages) {
         let offset = self.scroll_page_up(messages);
         if offset < self.max_visible_height {
             let log_offset = self.read_log(
@@ -506,12 +504,9 @@ impl DiscussWidget {
         }
     }
 
-    fn get_current_nick<'b>(&self, irc_model: &'b IrcModel) -> Option<&'b str> {
-        self.current_server_id.and_then(|v| {
-            irc_model
-                .get_server(v)
-                .map(|v| v.get_current_nick().as_str())
-        })
+    fn get_current_nick<'b>(&self, irc_model: &'b IrcModel) -> Option<&'b IrcName> {
+        self.current_server_id
+            .and_then(|v| irc_model.get_server(v).map(|v| v.get_current_nick()))
     }
 }
 
@@ -618,7 +613,7 @@ impl crate::component::EventHandler for DiscussWidget {
                                 self.add_line(
                                     &mut ctx.messages,
                                     Some(*server_id),
-                                    server_name,
+                                    &IrcName::new(server_name),
                                     message,
                                 );
                             }
@@ -705,9 +700,7 @@ impl crate::component::EventHandler for DiscussWidget {
                 {
                     let target = irc_server.get_target(source, target);
 
-                    if source.eq_ignore_ascii_case(irc_server.get_current_nick().as_str())
-                        && !target.eq_ignore_ascii_case(current_channel)
-                    {
+                    if source == irc_server.get_current_nick() && target != current_channel {
                         self.add_line(
                             &mut ctx.messages,
                             Some(*server_id),
@@ -726,9 +719,9 @@ impl crate::component::EventHandler for DiscussWidget {
                         Some(*server_id),
                         target,
                         if is_highlight {
-                            MessageContent::highlight(Some(source.clone()), content.clone())
+                            MessageContent::highlight(Some(source.to_string()), content.clone())
                         } else {
-                            MessageContent::message(Some(source.clone()), content.clone())
+                            MessageContent::message(Some(source.to_string()), content.clone())
                         },
                     );
                     if is_highlight {
@@ -748,7 +741,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         &mut ctx.messages,
                         Some(*server_id),
                         target,
-                        MessageContent::notice(Some(source.clone()), content.clone()),
+                        MessageContent::notice(Some(source.to_string()), content.clone()),
                     );
                 }
 
@@ -762,7 +755,7 @@ impl crate::component::EventHandler for DiscussWidget {
                         &mut ctx.messages,
                         Some(*server_id),
                         target,
-                        MessageContent::action(source.clone(), content.clone()),
+                        MessageContent::action(source.to_string(), content.clone()),
                     );
                 }
 
@@ -816,15 +809,15 @@ impl crate::component::EventHandler for DiscussWidget {
                     }
 
                     ctx.messages.rename(Some(*server_id), old, new);
-                    if self.current_channel.eq_ignore_ascii_case(old) {
-                        self.current_channel = new.to_ascii_lowercase();
+                    if self.current_channel == *old {
+                        self.current_channel = new.clone();
                         self.scroll_cache = ScrollbarCache::default();
                     }
                 }
                 None
             }
             MessageEvent::SelectChannel(server_id, channel) => {
-                self.set_current_channel(*server_id, channel);
+                self.set_current_channel(*server_id, channel.clone());
                 None
             }
             _ => None,
@@ -848,9 +841,10 @@ impl crate::component::EventHandler for DiscussWidget {
                         None
                     }
                     crossterm::event::MouseEventKind::ScrollUp => {
+                        let no_nick = IrcName::default();
                         let nick = self
                             .get_current_nick(&ctx.session.model)
-                            .unwrap_or_default();
+                            .unwrap_or(&no_nick);
                         self.scroll_up_logs(nick, &mut ctx.messages);
                         None
                     }
@@ -923,9 +917,10 @@ impl crate::component::EventHandler for DiscussWidget {
                 },
                 crossterm::event::Event::Key(key_event) => match key_event.code {
                     KeyCode::PageUp => {
+                        let no_nick = IrcName::default();
                         let nick = self
                             .get_current_nick(&ctx.session.model)
-                            .unwrap_or_default();
+                            .unwrap_or(&no_nick);
                         self.scroll_page_up_logs(nick, &mut ctx.messages);
                         None
                     }
@@ -994,7 +989,7 @@ mod tests {
 
         let mut messages = new_messages();
         let mut discuss = DiscussWidget::new();
-        discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
+        discuss.set_current_channel(Some(TEST_SERVER_ID), "test".into());
         discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
 
         discuss.content_width = 4;
@@ -1003,19 +998,19 @@ mod tests {
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "test",
+            &"test".into(),
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "test",
+            &"test".into(),
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "test",
+            &"test".into(),
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.scroll_offset = 0;
@@ -1077,7 +1072,7 @@ mod tests {
     fn test_can_scroll_up() {
         let mut messages = new_messages();
         let mut discuss = DiscussWidget::new();
-        discuss.set_current_channel(Some(TEST_SERVER_ID), "");
+        discuss.set_current_channel(Some(TEST_SERVER_ID), IrcName::default());
 
         discuss.content_width = 5;
         discuss.max_visible_height = 3;
@@ -1085,19 +1080,19 @@ mod tests {
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "",
+            &IrcName::default(),
             MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "",
+            &IrcName::default(),
             MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "",
+            &IrcName::default(),
             MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
         );
         discuss.scroll_offset = 0;
@@ -1110,25 +1105,25 @@ mod tests {
         let mut messages = new_messages();
         let model = Model::new_empty_config();
         let mut discuss = DiscussWidget::new();
-        discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
+        discuss.set_current_channel(Some(TEST_SERVER_ID), "test".into());
         discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
 
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "test",
+            &"test".into(),
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "test",
+            &"test".into(),
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "test",
+            &"test".into(),
             MessageContent::message(None, "HELLO".to_string()),
         );
 
@@ -1162,25 +1157,25 @@ mod tests {
     fn test_fake_nb_rows() {
         let mut messages = new_messages();
         let mut discuss = DiscussWidget::new();
-        discuss.set_current_channel(Some(TEST_SERVER_ID), "test");
+        discuss.set_current_channel(Some(TEST_SERVER_ID), "test".into());
         discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
 
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "test",
+            &"test".into(),
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "test",
+            &"test".into(),
             MessageContent::message(None, "HELLO".to_string()),
         );
         discuss.add_line(
             &mut messages,
             Some(TEST_SERVER_ID),
-            "test",
+            &"test".into(),
             MessageContent::message(None, "HELLO".to_string()),
         );
 

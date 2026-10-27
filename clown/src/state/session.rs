@@ -1,5 +1,6 @@
 use super::irc_model::IrcModel;
 use super::irc_model::IrcServerModel;
+use super::irc_name::IrcName;
 use super::model::IRCConnection;
 use super::server_id::ServerID;
 use anyhow::anyhow;
@@ -11,8 +12,8 @@ use tokio::sync::mpsc;
 use tokio_stream::{StreamMap, wrappers::ReceiverStream};
 pub struct SessionStatus<'a> {
     pub server_id: ServerID,
-    pub channel: Option<std::borrow::Cow<'a, str>>,
-    pub nickname: std::borrow::Cow<'a, str>,
+    pub channel: Option<std::borrow::Cow<'a, IrcName>>,
+    pub nickname: std::borrow::Cow<'a, IrcName>,
 }
 
 impl SessionStatus<'_> {
@@ -22,8 +23,8 @@ impl SessionStatus<'_> {
             channel: self
                 .channel
                 .as_ref()
-                .map(|s| std::borrow::Cow::Owned(s.to_string())),
-            nickname: std::borrow::Cow::Owned(self.nickname.to_string()),
+                .map(|s| std::borrow::Cow::Owned(s.clone().into_owned())),
+            nickname: std::borrow::Cow::Owned(self.nickname.clone().into_owned()),
         }
     }
 }
@@ -255,7 +256,7 @@ impl Session {
         self.get_current_irc_server_model().map(|v| SessionStatus {
             server_id: v.get_server_id(),
             channel: v.get_current_channel().map(std::borrow::Cow::Borrowed),
-            nickname: std::borrow::Cow::Borrowed(v.get_current_nick().as_str()),
+            nickname: std::borrow::Cow::Borrowed(v.get_current_nick()),
         })
     }
 

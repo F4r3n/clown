@@ -91,11 +91,13 @@ impl crate::component::EventHandler for CInput {
                 None
             }
             MessageEvent::ReplaceUser(_, old, new) => {
-                self.completion.input_completion.replace_user(old, new);
+                self.completion
+                    .input_completion
+                    .replace_user(old.as_str(), new.as_str());
                 None
             }
             MessageEvent::SelectChannel(server_id, channel) => {
-                self.completion.current_channel = channel.to_string();
+                self.completion.current_channel = channel.clone();
                 self.completion.server_id = *server_id;
 
                 None
@@ -110,7 +112,7 @@ impl crate::component::EventHandler for CInput {
                 None
             }
             MessageEvent::Join(server_id, channel, user) => {
-                self.completion.current_channel = channel.to_string();
+                self.completion.current_channel = channel.clone();
                 self.completion
                     .input_completion
                     .add_user(*server_id, channel, user.to_string());
@@ -125,7 +127,7 @@ impl crate::component::EventHandler for CInput {
                 } else {
                     self.completion
                         .input_completion
-                        .disable_user(*server_id, channel, user);
+                        .disable_user(*server_id, channel, user.as_str());
                 }
 
                 None

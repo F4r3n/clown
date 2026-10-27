@@ -1,4 +1,5 @@
 use crate::log::message_logger::{LogReader, LoggedMessage, LoggedTimedMessage, MessageLogger};
+use crate::state::irc_name::IrcName;
 use crate::state::server_id::ServerID;
 use ahash::AHashMap;
 use clown_message_render::message_content::WordPos;
@@ -75,7 +76,7 @@ impl ServersMessages {
     pub fn add_message(
         &mut self,
         server_id: Option<ServerID>,
-        channel: &str,
+        channel: &IrcName,
         in_message: MessageContent,
     ) {
         if let Some(server_group) = self.get_server_group_mut(server_id) {
@@ -87,7 +88,7 @@ impl ServersMessages {
         }
     }
 
-    pub fn open_log(&mut self, server_id: ServerID, channel: &str) {
+    pub fn open_log(&mut self, server_id: ServerID, channel: &IrcName) {
         if let Some(server_group) = self.get_server_group(Some(server_id))
             && server_group.is_log_open(channel)
         {
@@ -101,10 +102,10 @@ impl ServersMessages {
 
     pub fn read_log(
         &mut self,
-        current_nick: &str,
+        current_nick: &IrcName,
         number_lines: usize,
         server_id: ServerID,
-        channel: &str,
+        channel: &IrcName,
     ) -> anyhow::Result<usize> {
         if let Some(server_group) = self.get_server_group_mut(Some(server_id)) {
             server_group.read_log(current_nick, channel, number_lines)
@@ -149,13 +150,13 @@ impl ServersMessages {
         self.messages.get(Self::server_id_position(server_id))
     }
 
-    pub fn rename(&mut self, server_id: Option<ServerID>, old: &str, new: &str) {
+    pub fn rename(&mut self, server_id: Option<ServerID>, old: &IrcName, new: &IrcName) {
         if let Some(server_group) = self.get_server_group_mut(server_id) {
             server_group.rename(old, new);
         }
     }
 
-    pub fn has_messages(&self, server_id: Option<ServerID>, channel: &str) -> bool {
+    pub fn has_messages(&self, server_id: Option<ServerID>, channel: &IrcName) -> bool {
         if let Some(server_group) = self.get_server_group(server_id) {
             server_group.has_messages(channel)
         } else {
@@ -163,7 +164,11 @@ impl ServersMessages {
         }
     }
 
-    pub fn get_messages(&self, server_id: Option<ServerID>, channel: &str) -> Option<&Messages> {
+    pub fn get_messages(
+        &self,
+        server_id: Option<ServerID>,
+        channel: &IrcName,
+    ) -> Option<&Messages> {
         if let Some(server_group) = self.get_server_group(server_id) {
             server_group.get_messages(channel)
         } else {
@@ -174,7 +179,7 @@ impl ServersMessages {
     pub fn get_url_from_range(
         &self,
         server_id: Option<ServerID>,
-        channel: &str,
+        channel: &IrcName,
         range: &Range,
     ) -> Option<String> {
         if let Some(server_group) = self.get_server_group(server_id) {
@@ -187,7 +192,7 @@ impl ServersMessages {
     pub fn get_word_pos(
         &self,
         server_id: Option<ServerID>,
-        channel: &str,
+        channel: &IrcName,
         index: usize,
         character_pos: usize,
     ) -> Option<Range> {
@@ -244,8 +249,8 @@ impl Messages {
             .chain(self.messages.iter())
     }
 
-    fn open_log(&mut self, log_folder: PathBuf, server_address: &str, channel: &str) {
-        let name = MessageLogger::compute_filename(server_address, Some(channel));
+    fn open_log(&mut self, log_folder: PathBuf, server_address: &str, channel: &IrcName) {
+        let name = MessageLogger::compute_filename(server_address, Some(channel.as_str()));
         let path = log_folder.join(name);
         self.log_reader = LogReader::try_from_path(path.as_path()).ok();
         if let Some(log_reader) = self.log_reader.as_mut() {
@@ -265,7 +270,7 @@ impl Messages {
         last_date.date_naive() != now_date.date_naive()
     }*/
 
-    fn read_log(&mut self, current_nick: &str, number_lines: usize) -> anyhow::Result<usize> {
+    fn read_log(&mut self, current_nick: &IrcName, number_lines: usize) -> anyhow::Result<usize> {
         let log_reader = match self.log_reader.as_mut() {
             Some(reader) => reader,
             None => return Ok(0),
@@ -291,7 +296,7 @@ impl Messages {
             */
             let msg = create_message(msg);
             let should_highlight = msg.get_kind().eq(&MessageKind::Normal)
-                && MessageContent::should_highlight(current_nick, msg.get_content());
+                && MessageContent::should_highlight(current_nick.as_str(), msg.get_content());
             self.logged_messages
                 .push(msg.with_highlight(should_highlight));
         }
@@ -305,38 +310,38 @@ impl Messages {
 
 #[derive(Debug, Default)]
 pub struct ChannelMessages {
-    messages: AHashMap<String, Messages>,
+    messages: AHashMap<IrcName, Messages>,
     server_address: Option<String>,
 }
 
 impl ChannelMessages {
-    pub fn add_message(&mut self, channel: &str, in_message: MessageContent) {
+    pub fn add_message(&mut self, channel: &IrcName, in_message: MessageContent) {
         if let Some(channel) = self.messages.get_mut(channel) {
             channel.push_new(in_message);
         } else {
             self.messages
-                .entry(channel.to_string())
+                .entry(channel.to_owned())
                 .or_default()
                 .push_new(in_message);
         }
     }
 
-    fn rename(&mut self, old: &str, new: &str) {
+    fn rename(&mut self, old: &IrcName, new: &IrcName) {
         if let Some(messages) = self.messages.remove(old) {
-            self.messages.insert(new.to_string(), messages);
+            self.messages.insert(new.clone(), messages);
         }
     }
 
-    fn is_log_open(&self, channel: &str) -> bool {
+    fn is_log_open(&self, channel: &IrcName) -> bool {
         self.messages
             .get(channel)
             .is_some_and(|v| v.log_reader.is_some())
     }
 
-    fn open_log(&mut self, log_folder: PathBuf, channel: &str) {
+    fn open_log(&mut self, log_folder: PathBuf, channel: &IrcName) {
         if let Some(server_address) = self.server_address.as_deref() {
             self.messages
-                .entry(channel.to_string())
+                .entry(channel.to_owned())
                 .or_default()
                 .open_log(log_folder, server_address, channel);
         }
@@ -344,25 +349,25 @@ impl ChannelMessages {
 
     fn read_log(
         &mut self,
-        current_nick: &str,
-        channel: &str,
+        current_nick: &IrcName,
+        channel: &IrcName,
         number_lines: usize,
     ) -> anyhow::Result<usize> {
         self.messages
-            .entry(channel.to_string())
+            .entry(channel.clone())
             .or_default()
             .read_log(current_nick, number_lines)
     }
 
-    pub fn has_messages(&self, channel: &str) -> bool {
+    pub fn has_messages(&self, channel: &IrcName) -> bool {
         self.messages.get(channel).is_some_and(|c| !c.is_empty())
     }
 
-    fn get_messages(&self, channel: &str) -> Option<&Messages> {
+    fn get_messages(&self, channel: &IrcName) -> Option<&Messages> {
         self.messages.get(channel)
     }
 
-    fn get_url_from_range(&self, channel: &str, range: &Range) -> Option<String> {
+    fn get_url_from_range(&self, channel: &IrcName, range: &Range) -> Option<String> {
         self.messages
             .get(channel)
             .and_then(|messages| messages.get(range.line))
@@ -370,7 +375,7 @@ impl ChannelMessages {
             .map(|str| str.to_string())
     }
 
-    fn get_word_pos(&self, channel: &str, index: usize, character_pos: usize) -> Option<Range> {
+    fn get_word_pos(&self, channel: &IrcName, index: usize, character_pos: usize) -> Option<Range> {
         self.messages
             .get(channel)
             .and_then(|messages| messages.get(index))
@@ -430,7 +435,7 @@ mod tests {
     fn test_server_message_routing() {
         let mut storage = ServersMessages::new(PathBuf::from("/tmp"));
         let server_id = Some(ServerID::new(1));
-        let channel = "#rust";
+        let channel = &IrcName::new("#rust");
 
         storage.add_server_group(server_id, Some("irc.libera.chat".to_string()));
         storage.add_message(
@@ -446,7 +451,7 @@ mod tests {
         assert_eq!(msgs.get(0).unwrap().get_content(), "hello");
 
         // Ensure it didn't leak to another channel
-        assert!(!storage.has_messages(server_id, "#other"));
+        assert!(!storage.has_messages(server_id, &"#other".into()));
     }
 
     #[test]
@@ -454,14 +459,16 @@ mod tests {
         let mut storage = ServersMessages::new(PathBuf::from("/tmp"));
         let server_id = Some(ServerID::new(0));
         storage.add_server_group(server_id, Some("localhost".to_string()));
-        storage.add_message(server_id, "Bob", MessageContent::info("Hi Bob".to_string()));
+        let bob = IrcName::new("Bob");
+        let bobby = IrcName::new("Bobby");
+        storage.add_message(server_id, &bob, MessageContent::info("Hi Bob".to_string()));
 
         // Bob changes nick to Bobby
-        storage.rename(server_id, "Bob", "Bobby");
-        assert!(!storage.has_messages(server_id, "Bob"));
-        assert!(storage.has_messages(server_id, "Bobby"));
+        storage.rename(server_id, &bob, &bobby);
+        assert!(!storage.has_messages(server_id, &bob));
+        assert!(storage.has_messages(server_id, &bobby));
 
-        let msgs = storage.get_messages(server_id, "Bobby").unwrap();
+        let msgs = storage.get_messages(server_id, &bobby).unwrap();
         assert_eq!(msgs.get(0).unwrap().get_content(), "Hi Bob");
     }
 
@@ -470,14 +477,15 @@ mod tests {
         let mut storage = ServersMessages::new(PathBuf::from("/tmp"));
 
         // This should fall back to the default group (index 0)
+        let status = IrcName::new("Status");
         storage.add_message(
             None,
-            "Status",
+            &status,
             MessageContent::info("Connecting...".to_string()),
         );
 
-        assert!(storage.has_messages(None, "Status"));
-        let msgs = storage.get_messages(None, "Status").unwrap();
+        assert!(storage.has_messages(None, &status));
+        let msgs = storage.get_messages(None, &status).unwrap();
         assert_eq!(msgs.get(0).unwrap().get_content(), "Connecting...");
     }
 }

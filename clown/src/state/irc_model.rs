@@ -119,7 +119,7 @@ impl IrcModel {
         }
     }
 
-    pub fn is_main_user(&self, server_id: ServerID, nick: &str) -> bool {
+    pub fn is_main_user(&self, server_id: ServerID, nick: &IrcName) -> bool {
         if let Some(Some(server)) = self.get_server_from_id(server_id) {
             server.is_main_user(nick)
         } else {
@@ -141,8 +141,8 @@ impl IrcModel {
     pub fn get_all_joined_channel(
         &self,
         server_id: ServerID,
-        user: &str,
-    ) -> impl Iterator<Item = &str> + '_ {
+        user: &IrcName,
+    ) -> impl Iterator<Item = &IrcName> + '_ {
         self.get_server_from_id(server_id)
             .and_then(|s| s.as_ref())
             .map(|server| server.get_all_joined_channel(user))
@@ -167,8 +167,7 @@ impl IrcModel {
             }
             MessageEvent::Part(server_id, channel, user) => {
                 if let Some(Some(server)) = self.get_mut_server_from_id(*server_id) {
-                    let channel = IrcName::new(channel);
-                    server.part(&channel, user);
+                    server.part(channel, user);
                 }
             }
             MessageEvent::Quit(server_id, user, _) => {
@@ -192,8 +191,7 @@ impl IrcModel {
                 if let Some(server_id) = server_id
                     && let Some(Some(server)) = self.get_mut_server_from_id(*server_id)
                 {
-                    let channel = IrcName::new(channel);
-                    server.select_channel(&channel);
+                    server.select_channel(channel);
                 }
                 self.current_id = *server_id;
             }
@@ -260,8 +258,8 @@ impl IrcServerModel {
         }
     }
 
-    pub fn get_current_channel(&self) -> Option<&str> {
-        self.current_channel.as_ref().map(IrcName::as_str)
+    pub fn get_current_channel(&self) -> Option<&IrcName> {
+        self.current_channel.as_ref()
     }
 
     pub fn get_server_name(&self) -> &str {
@@ -277,11 +275,7 @@ impl IrcServerModel {
         self.server_id
     }
 
-    pub fn get_target_from_irc_name<'b>(
-        &self,
-        source: &'b IrcName,
-        target: &'b IrcName,
-    ) -> &'b IrcName {
+    pub fn get_target<'b>(&self, source: &'b IrcName, target: &'b IrcName) -> &'b IrcName {
         if target.eq(self.get_current_nick()) {
             source
         } else {
@@ -289,15 +283,7 @@ impl IrcServerModel {
         }
     }
 
-    pub fn get_target<'b>(&self, source: &'b str, target: &'b str) -> &'b str {
-        if target.eq_ignore_ascii_case(self.get_current_nick().as_str()) {
-            source
-        } else {
-            target
-        }
-    }
-
-    fn get_channel(&self, channel: &str) -> Option<&Channel> {
+    fn get_channel(&self, channel: &IrcName) -> Option<&Channel> {
         self.list_channels.iter().find(|v| v.name.eq(channel))
     }
 
@@ -306,7 +292,7 @@ impl IrcServerModel {
     }
 
     pub fn add_channel(&mut self, channel: &IrcName) -> usize {
-        if let Some(c) = self.get_channel(channel.as_str()) {
+        if let Some(c) = self.get_channel(channel) {
             return c.id;
         }
         let new_channel = Channel {
@@ -326,49 +312,42 @@ impl IrcServerModel {
         }
     }
 
-    fn join(&mut self, channel: &str, nick: &str) {
-        let nick = IrcName::new(nick);
-        let id = self.add_channel(&IrcName::new(channel));
+    fn join(&mut self, channel: &IrcName, nick: &IrcName) {
+        let id = self.add_channel(channel);
 
         let entry = self
             .users
             .entry(nick.clone())
             //TODO: might avoid clone, if the args are in the other order
-            .or_insert_with(|| User::new(nick.clone(), self.current_nick.eq(&nick)));
+            .or_insert_with(|| User::new(nick.clone(), self.current_nick.eq(nick)));
 
         entry.join_section(id);
     }
 
-    fn part(&mut self, channel: &IrcName, nick: &str) {
-        let nick = IrcName::new(nick);
+    fn part(&mut self, channel: &IrcName, nick: &IrcName) {
         let id = self.add_channel(channel);
 
         let mut should_delete = false;
-        if let Some(user) = self.users.get_mut(&nick) {
+        if let Some(user) = self.users.get_mut(nick) {
             user.quit_section(id);
             should_delete = !user.has_joined_any_section();
         }
 
         if should_delete {
-            self.users.remove(&nick);
+            self.users.remove(nick);
         }
     }
 
-    fn quit(&mut self, nick: &str) {
-        let nick = IrcName::new(nick);
-
-        self.users.remove(&nick);
+    fn quit(&mut self, nick: &IrcName) {
+        self.users.remove(nick);
     }
 
-    fn nick(&mut self, old: &str, new: &str) {
-        let old = IrcName::new(old);
-        let new = IrcName::new(new);
-
-        if let Some(mut user) = self.users.remove(&old) {
-            self.rename_channel(&old, &new);
+    fn nick(&mut self, old: &IrcName, new: &IrcName) {
+        if let Some(mut user) = self.users.remove(old) {
+            self.rename_channel(old, new);
 
             if let Some(channel) = self.current_channel.as_mut()
-                && old == *channel.as_str()
+                && *old == *channel.as_str()
             {
                 *channel = new.clone();
             }
@@ -377,13 +356,13 @@ impl IrcServerModel {
             self.users.insert(new.clone(), user);
         }
 
-        if self.current_nick == old {
-            self.current_nick = new;
+        if self.current_nick == *old {
+            self.current_nick = new.clone();
         }
     }
 
-    pub fn is_main_user(&self, user: &str) -> bool {
-        if let Some(user) = self.users.get(&IrcName::new(user)) {
+    pub fn is_main_user(&self, user: &IrcName) -> bool {
+        if let Some(user) = self.users.get(user) {
             user.is_main
         } else {
             false
@@ -394,10 +373,10 @@ impl IrcServerModel {
         self.users.get(user)
     }
 
-    pub fn has_user_joined_channel(&self, user: &str, channel: &str) -> bool {
-        if let Some(id) = self.get_channel(&channel).map(|v| v.id) {
+    pub fn has_user_joined_channel(&self, user: &IrcName, channel: &IrcName) -> bool {
+        if let Some(id) = self.get_channel(channel).map(|v| v.id) {
             self.users
-                .get(&IrcName::new(user))
+                .get(user)
                 .map(|v| v.has_joined_section(id))
                 .is_some_and(|v| v)
         } else {
@@ -405,23 +384,19 @@ impl IrcServerModel {
         }
     }
 
-    pub fn get_all_joined_channel(&self, user: &str) -> impl Iterator<Item = &str> + '_ {
-        let user = IrcName::new(user);
-        let maybe_user = self.users.get(&user);
+    pub fn get_all_joined_channel(&self, user: &IrcName) -> impl Iterator<Item = &IrcName> + '_ {
+        let maybe_user = self.users.get(user);
         maybe_user.into_iter().flat_map(|u| {
             self.list_channels
                 .iter()
                 .filter(|section| u.has_joined_section(section.id))
-                .map(|section| section.name.as_str())
+                .map(|section| &section.name)
         })
     }
 
     // a(source) sends to b(target)
-    fn received_message(&mut self, source: &str, target: &str) {
-        let target = IrcName::new(target);
-        let source = IrcName::new(source);
-
-        let target = self.get_target_from_irc_name(&source, &target);
+    fn received_message(&mut self, source: &IrcName, target: &IrcName) {
+        let target = self.get_target(source, target);
         let id = self.add_channel(target);
 
         let new_message = self.current_channel.as_ref().is_some_and(|v| v.eq(target));
@@ -444,7 +419,7 @@ impl IrcServerModel {
         }
     }
 
-    pub fn has_unread_message(&self, channel: &str) -> bool {
+    pub fn has_unread_message(&self, channel: &IrcName) -> bool {
         self.get_channel(channel)
             .is_some_and(|v| v.has_unread_message)
     }
@@ -478,9 +453,9 @@ mod tests {
 
         let s = server(&m);
 
-        assert!(s.is_main_user("me"));
-        assert!(s.is_main_user("ME"));
-        assert!(s.is_main_user("Me"));
+        assert!(s.is_main_user(&"me".into()));
+        assert!(s.is_main_user(&"ME".into()));
+        assert!(s.is_main_user(&"Me".into()));
     }
 
     #[test]
@@ -496,8 +471,8 @@ mod tests {
 
         let s = server(&m);
 
-        assert!(s.has_user_joined_channel("alice", "#rust"));
-        assert!(s.has_user_joined_channel("ALICE", "#RUST"));
+        assert!(s.has_user_joined_channel(&"alice".into(), &"#rust".into()));
+        assert!(s.has_user_joined_channel(&"ALICE".into(), &"#RUST".into()));
     }
 
     #[test]
@@ -510,7 +485,7 @@ mod tests {
             "#Rust".into(),
             "Alice".into(),
         ));
-        assert!(server(&m).has_user_joined_channel("alice", "#rust"));
+        assert!(server(&m).has_user_joined_channel(&"alice".into(), &"#rust".into()));
 
         m.handle_action(&MessageEvent::Part(
             ServerID::new(0),
@@ -518,7 +493,7 @@ mod tests {
             "ALICE".into(),
         ));
 
-        assert!(!server(&m).has_user_joined_channel("alice", "#rust"));
+        assert!(!server(&m).has_user_joined_channel(&"alice".into(), &"#rust".into()));
     }
 
     #[test]
@@ -566,7 +541,7 @@ mod tests {
             "hello".into(),
         ));
 
-        assert!(server(&m).get_channel("jack").is_some());
+        assert!(server(&m).get_channel(&"jack".into()).is_some());
 
         // Rename Alice → Bob
         m.handle_action(&MessageEvent::ReplaceUser(
@@ -589,8 +564,8 @@ mod tests {
 
         assert!(s.get_user(&IrcName::new("jack")).is_none());
         assert!(s.get_user(&IrcName::new("miki")).is_some());
-        assert!(s.get_channel("jack").is_none());
-        assert!(s.get_channel("miki").is_some());
+        assert!(s.get_channel(&"jack".into()).is_none());
+        assert!(s.get_channel(&"miki".into()).is_some());
     }
 
     #[test]
@@ -611,14 +586,14 @@ mod tests {
             "hello".into(),
         ));
 
-        assert!(server(&m).has_unread_message("#rust"));
+        assert!(server(&m).has_unread_message(&"#rust".into()));
 
         m.handle_action(&MessageEvent::SelectChannel(
             Some(ServerID::new(0)),
             "#RUST".into(),
         ));
 
-        assert!(!server(&m).has_unread_message("#rust"));
+        assert!(!server(&m).has_unread_message(&"#rust".into()));
     }
 
     #[test]
@@ -637,11 +612,11 @@ mod tests {
             "ALICE".into(),
         ));
 
-        let channels: Vec<_> = server(&m).get_all_joined_channel("alice").collect();
+        let channels: Vec<_> = server(&m).get_all_joined_channel(&"alice".into()).collect();
 
         assert_eq!(channels.len(), 2);
-        assert!(channels.iter().any(|c| c.eq_ignore_ascii_case("#rust")));
-        assert!(channels.iter().any(|c| c.eq_ignore_ascii_case("#linux")));
+        assert!(channels.iter().any(|c| **c == "#rust"));
+        assert!(channels.iter().any(|c| **c == "#linux"));
     }
 
     #[test]
@@ -666,7 +641,7 @@ mod tests {
             "hello".into(),
         ));
 
-        assert!(server(&m).has_unread_message("#RUST"));
+        assert!(server(&m).has_unread_message(&"#RUST".into()));
     }
 
     #[test]
@@ -676,12 +651,16 @@ mod tests {
 
         let s = server(&m);
 
+        let alice = IrcName::new("Alice");
+        let me = IrcName::new("ME");
+        let rust = IrcName::new("#RUST");
+
         // target is main nick -> return source
-        let t = s.get_target("Alice", "ME");
+        let t = s.get_target(&alice, &me);
         assert_eq!(t, "Alice");
 
         // target is channel -> return channel
-        let t = s.get_target("Alice", "#RUST");
+        let t = s.get_target(&alice, &rust);
         assert_eq!(t, "#RUST");
     }
 
@@ -718,7 +697,10 @@ mod tests {
         ));
 
         // Messages must now be sent to the new nick
-        assert_eq!(server(&m).get_current_channel(), Some("Miki"));
+        assert_eq!(
+            server(&m).get_current_channel().map(IrcName::as_str),
+            Some("Miki")
+        );
     }
 
     #[test]
@@ -742,7 +724,7 @@ mod tests {
             "ME".into(),
         ));
 
-        assert!(server(&m).is_main_user("me"));
+        assert!(server(&m).is_main_user(&"me".into()));
 
         m.handle_action(&MessageEvent::ReplaceUser(
             ServerID::new(0),
@@ -751,7 +733,7 @@ mod tests {
         ));
 
         assert_eq!(server(&m).get_current_nick(), "NewMe");
-        assert!(server(&m).is_main_user("newme"));
+        assert!(server(&m).is_main_user(&"newme".into()));
     }
 
     #[test]
@@ -783,8 +765,8 @@ mod tests {
             "#rust".into(),
             "NewMe".into(),
         ));
-        assert!(server(&m).is_main_user("newme"));
-        assert!(!server(&m).is_main_user("me"));
+        assert!(server(&m).is_main_user(&"newme".into()));
+        assert!(!server(&m).is_main_user(&"me".into()));
     }
 
     #[test]
@@ -808,8 +790,11 @@ mod tests {
             "#b".into(),
             vec!["@Me".into(), "Jack".into()],
         ));
-        assert_eq!(server(&m).get_current_channel(), Some("#a"));
-        assert!(server(&m).has_user_joined_channel("me", "#b"));
+        assert_eq!(
+            server(&m).get_current_channel().map(IrcName::as_str),
+            Some("#a")
+        );
+        assert!(server(&m).has_user_joined_channel(&"me".into(), &"#b".into()));
 
         // A JOIN alone does not switch either, only SelectChannel does
         m.handle_action(&MessageEvent::Join(
@@ -817,6 +802,9 @@ mod tests {
             "#c".into(),
             "Me".into(),
         ));
-        assert_eq!(server(&m).get_current_channel(), Some("#a"));
+        assert_eq!(
+            server(&m).get_current_channel().map(IrcName::as_str),
+            Some("#a")
+        );
     }
 }

@@ -1,4 +1,4 @@
-use crate::message_event::MessageEvent;
+use crate::{message_event::MessageEvent, state::irc_name::IrcName};
 
 use strum::{EnumIter, EnumMessage, IntoEnumIterator, IntoStaticStr};
 
@@ -54,7 +54,7 @@ pub enum ClientCommand {
         Option<String>, /*Value */
     ),
     #[strum(message = "close", detailed_message = "To close a buffer")]
-    CloseBuffer(Option<String> /*buffer name, if not current*/),
+    CloseBuffer(Option<IrcName> /*buffer name, if not current*/),
     #[strum(message = "search", detailed_message = "To search")]
     Search(String),
     Unknown(Option<String>),
@@ -103,7 +103,7 @@ pub fn parse_command(in_content: &str) -> Option<ClientCommand> {
                 "config" => args.map_or(Some(ClientCommand::Unknown(None)), |v| {
                     config_command(v).or(Some(ClientCommand::Unknown(None)))
                 }),
-                "close" => Some(ClientCommand::CloseBuffer(args.map(|v| v.to_string()))),
+                "close" => Some(ClientCommand::CloseBuffer(args.map(IrcName::new))),
                 _ => Some(ClientCommand::Unknown(Some(command.to_string()))),
             }
         } else {
