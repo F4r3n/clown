@@ -13,21 +13,6 @@ fn spaces(n: u16) -> &'static str {
     SPACES.get(..n as usize).unwrap_or_default()
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct WordPos {
-    byte_start: usize,
-    byte_end: usize,
-}
-
-impl WordPos {
-    pub fn from(byte_start: usize, byte_end: usize) -> Self {
-        Self {
-            byte_start,
-            byte_end,
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum MessageKind {
     Error,
@@ -99,11 +84,11 @@ impl MessageContent {
         self.flags.contains(MessageFlags::IS_HIGHLIGHTED)
     }
 
-    pub fn get_word_from_pos(&self, pos: &WordPos) -> Option<&str> {
-        self.content.get(pos.byte_start..pos.byte_end)
+    pub fn get_word_from_pos(&self, pos: &std::range::Range<usize>) -> Option<&str> {
+        self.content.get(pos.start..pos.end)
     }
 
-    pub fn get_url_from_pos(&self, pos: &WordPos) -> Option<&str> {
+    pub fn get_url_from_pos(&self, pos: &std::range::Range<usize>) -> Option<&str> {
         self.get_word_from_pos(pos)
             .filter(|w| w.starts_with("http://") || w.starts_with("https://"))
     }
@@ -208,7 +193,7 @@ impl MessageContent {
     pub fn get_time(&self) -> std::time::SystemTime {
         self.time
     }
-    pub fn get_word_pos(&self, character_pos: usize) -> Option<WordPos> {
+    pub fn get_word_pos(&self, character_pos: usize) -> Option<std::range::Range<usize>> {
         let text = self.content.as_str(); //Lets say the URL is in a RAW message
         let bytes = text.as_bytes();
 
@@ -229,7 +214,7 @@ impl MessageContent {
         while end < bytes.len() && !bytes.get(end).is_some_and(|c| c.is_ascii_whitespace()) {
             end += 1;
         }
-        Some(WordPos::from(start, end))
+        Some(std::range::Range { start, end })
     }
 
     fn time_format(&self, format: &TimeFormat) -> impl std::fmt::Display {
@@ -332,7 +317,7 @@ impl MessageContent {
 
 #[cfg(test)]
 mod test {
-    use crate::message_content::{MessageContent, TimeFormat, WordPos};
+    use crate::message_content::{MessageContent, TimeFormat};
     use ratatui::buffer::Buffer;
     use ratatui::layout::{Constraint, Rect};
     use ratatui::widgets::{Row, Table, Widget};
@@ -492,29 +477,47 @@ mod test {
     #[test]
     fn test_word_find() {
         let message = MessageContent::message(None, "https://test.com".to_string());
-        assert_eq!(message.get_word_pos(0), Some(WordPos::from(0, 16)));
+        assert_eq!(
+            message.get_word_pos(0),
+            Some(std::range::Range { start: 0, end: 16 })
+        );
         assert_eq!(message.get_word_pos(100), None);
 
         let message = MessageContent::message(None, "a aa aa https://test.com".to_string());
-        assert_eq!(message.get_word_pos(0), Some(WordPos::from(0, 1)));
+        assert_eq!(
+            message.get_word_pos(0),
+            Some(std::range::Range { start: 0, end: 1 })
+        );
         assert_eq!(message.get_word_pos(100), None);
-        assert_eq!(message.get_word_pos(10), Some(WordPos::from(8, 24)));
+        assert_eq!(
+            message.get_word_pos(10),
+            Some(std::range::Range { start: 8, end: 24 })
+        );
     }
 
     #[test]
     fn test_url_find() {
         let message = MessageContent::message(None, "https://test.com".to_string());
         assert_eq!(
-            message.get_url_from_pos(&WordPos::from(0, 16)),
+            message.get_url_from_pos(&std::range::Range { start: 0, end: 16 }),
             Some("https://test.com")
         );
-        assert_eq!(message.get_url_from_pos(&WordPos::from(0, 100)), None);
+        assert_eq!(
+            message.get_url_from_pos(&std::range::Range { start: 0, end: 100 }),
+            None
+        );
 
         let message = MessageContent::message(None, "a aa aa https://test.com".to_string());
-        assert_eq!(message.get_url_from_pos(&WordPos::from(0, 0)), None);
-        assert_eq!(message.get_url_from_pos(&WordPos::from(0, 100)), None);
         assert_eq!(
-            message.get_url_from_pos(&WordPos::from(8, 24)),
+            message.get_url_from_pos(&std::range::Range { start: 0, end: 0 }),
+            None
+        );
+        assert_eq!(
+            message.get_url_from_pos(&std::range::Range { start: 0, end: 100 }),
+            None
+        );
+        assert_eq!(
+            message.get_url_from_pos(&std::range::Range { start: 8, end: 24 }),
             Some("https://test.com")
         );
     }

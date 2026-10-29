@@ -2,7 +2,6 @@ use crate::log::message_logger::{LogReader, LoggedMessage, LoggedTimedMessage, M
 use crate::state::irc_name::IrcName;
 use crate::state::server_id::ServerID;
 use ahash::AHashMap;
-use clown_message_render::message_content::WordPos;
 use clown_message_render::message_content::{MessageContent, MessageKind};
 
 use std::path::PathBuf;
@@ -52,9 +51,9 @@ fn create_message(log: LoggedTimedMessage<'_>) -> MessageContent {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Range {
-    line: usize,
-    word_pos: WordPos,
+pub struct WordRange {
+    pub line: usize,
+    pub word_pos: std::range::Range<usize>,
 }
 
 #[derive(Debug, Default)]
@@ -180,24 +179,10 @@ impl ServersMessages {
         &self,
         server_id: Option<ServerID>,
         channel: &IrcName,
-        range: &Range,
+        range: &WordRange,
     ) -> Option<String> {
         if let Some(server_group) = self.get_server_group(server_id) {
             server_group.get_url_from_range(channel, range)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_word_pos(
-        &self,
-        server_id: Option<ServerID>,
-        channel: &IrcName,
-        index: usize,
-        character_pos: usize,
-    ) -> Option<Range> {
-        if let Some(server_group) = self.get_server_group(server_id) {
-            server_group.get_word_pos(channel, index, character_pos)
         } else {
             None
         }
@@ -367,23 +352,12 @@ impl ChannelMessages {
         self.messages.get(channel)
     }
 
-    fn get_url_from_range(&self, channel: &IrcName, range: &Range) -> Option<String> {
+    fn get_url_from_range(&self, channel: &IrcName, range: &WordRange) -> Option<String> {
         self.messages
             .get(channel)
             .and_then(|messages| messages.get(range.line))
             .and_then(|message| message.get_url_from_pos(&range.word_pos))
             .map(|str| str.to_string())
-    }
-
-    fn get_word_pos(&self, channel: &IrcName, index: usize, character_pos: usize) -> Option<Range> {
-        self.messages
-            .get(channel)
-            .and_then(|messages| messages.get(index))
-            .and_then(|message| message.get_word_pos(character_pos))
-            .map(|w| Range {
-                line: index,
-                word_pos: w,
-            })
     }
 }
 

@@ -8,18 +8,18 @@
 
 use clown::irc_view::discuss::discuss_widget::DiscussWidget;
 use clown::irc_view::discuss::servers_messages::ServersMessages;
-use clown::message_irc::message_content::MessageContent;
 use clown::state::context::Ctx;
 use clown::state::model::Model;
 use clown::state::server_id::ServerID;
 use clown::state::session::Session;
 use clown::{component::Draw, state::irc_name::IrcName};
+use clown_message_render::message_content::MessageContent;
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use ratatui::{Terminal, backend::TestBackend};
 use std::hint::black_box;
 
 const SERVER_ID: ServerID = ServerID::new(0);
-const CHANNEL: IrcName = IrcName::new("#rust");
+const CHANNEL: &str = "#rust";
 
 /// Deterministic corpus generator, so two profiles are comparable.
 struct Lcg(u64);
@@ -92,20 +92,21 @@ fn next_message(rng: &mut Lcg) -> MessageContent {
 fn build_ctx(message_count: usize) -> (Ctx, DiscussWidget) {
     let mut messages = ServersMessages::new(std::path::PathBuf::new());
     let mut widget = DiscussWidget::new();
+    let channel = IrcName::new(CHANNEL);
 
     widget.add_server_group(
         &mut messages,
         Some(SERVER_ID),
         Some("irc.libera.chat".to_string()),
     );
-    widget.set_current_channel(Some(SERVER_ID), CHANNEL);
+    widget.set_current_channel(Some(SERVER_ID), channel.clone());
 
     let mut rng = Lcg(0x5eed);
     for _ in 0..message_count {
         widget.add_line(
             &mut messages,
             Some(SERVER_ID),
-            &CHANNEL,
+            &channel,
             next_message(&mut rng),
         );
     }

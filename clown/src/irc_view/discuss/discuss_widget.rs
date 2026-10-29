@@ -1,31 +1,24 @@
-use super::dimension_discuss::{META_LENGTH, NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
-use super::servers_messages::{Messages, Range, ServersMessages};
+use super::servers_messages::{ServersMessages, WordRange};
 use crate::component::Draw;
+use crate::irc_view::discuss::message_collection::MessageViewer;
 use crate::message_event::MessageEvent;
 use crate::state::irc_model::IrcModel;
 use crate::state::irc_name::IrcName;
 use crate::state::server_id::ServerID;
 use clown_message_render::message_content::MessageContent;
-use clown_message_render::textwrapper::wrap_content;
 use crossterm::event::KeyCode;
 use crossterm::event::MouseButton;
-use ratatui::widgets::Row;
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState, Table},
-};
+use ratatui::{Frame, layout::Rect};
 use std::time::Duration;
 
 #[derive(Debug)]
 struct Hovered {
     time: std::time::Instant,
-    range: Range,
+    range: WordRange,
 }
 
 impl Hovered {
-    pub fn new(range: Range) -> Self {
+    pub fn new(range: WordRange) -> Self {
         Self {
             range,
             time: std::time::Instant::now(),
@@ -34,47 +27,12 @@ impl Hovered {
 }
 
 #[derive(Debug)]
-pub struct WidgetBox {
-    pub size: u16,
-    pub padding: u16,
-}
-
-impl WidgetBox {
-    fn get_full_size(&self) -> u16 {
-        self.size.saturating_add(self.padding)
-    }
-
-    fn is_empty(&self) -> bool {
-        self.get_full_size() == 0
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct ScrollbarCache {
-    pub start_message_index: usize,
-    pub rows_to_skip_in_message: usize,
-
-    pub cache_width: usize,
-    pub scroll_offset: usize,
-    pub max_visible_height: usize,
-}
-
-#[derive(Debug)]
 pub struct DiscussWidget {
-    vertical_scroll_state: ScrollbarState,
-    scroll_offset: usize,
-    max_visible_height: usize,
-    follow_last: bool,
-    area: Rect,
-    content_width: usize,
+    message_viewer: MessageViewer,
     current_channel: IrcName,
     current_server_id: Option<ServerID>,
-
     last_hovered: Option<Hovered>,
-    redraw: bool,
-
     display_time: bool,
-    scroll_cache: ScrollbarCache,
 }
 
 impl DiscussWidget {
@@ -82,41 +40,22 @@ impl DiscussWidget {
         Self {
             current_channel: IrcName::default(),
             current_server_id: None,
-            scroll_offset: 0,
-            max_visible_height: 10,
-            follow_last: true,
-            vertical_scroll_state: ScrollbarState::default(),
-            area: Rect::default(),
-            content_width: 0,
+            message_viewer: MessageViewer::new(),
             last_hovered: None,
-            redraw: true,
             display_time: true,
-            scroll_cache: ScrollbarCache::default(),
         }
-    }
-
-    pub fn is_scroll_cache_valid(&self) -> bool {
-        self.content_width > 0
-            && self.scroll_cache.cache_width == self.content_width
-            && self.scroll_cache.scroll_offset == self.scroll_offset
-            && self.scroll_cache.max_visible_height == self.max_visible_height
     }
 
     pub fn set_current_channel(&mut self, server_id: Option<ServerID>, channel: IrcName) {
         self.current_channel = channel;
         self.current_server_id = server_id;
-        self.scroll_offset = 0;
-        self.follow_last = true;
-
-        self.scroll_cache = ScrollbarCache::default();
+        self.message_viewer.reset_scroll();
     }
 
     #[cfg(any(test, feature = "bench"))]
     #[allow(dead_code)]
     pub fn set_scroll_offset(&mut self, offset: usize) {
-        self.scroll_offset = offset;
-        self.follow_last = offset == 0;
-        self.redraw = true;
+        self.message_viewer.set_scroll_offset(offset);
     }
 
     fn get_range_from_mouse(
@@ -124,213 +63,18 @@ impl DiscussWidget {
         messages: &ServersMessages,
         row: u16,
         col: u16,
-    ) -> Option<Range> {
-        let mouse_position = ratatui::prelude::Position::new(col, row);
-
-        if self.area.contains(mouse_position) {
-            if let Some((index, character)) =
-                self.get_current_line_index_character(messages, row, col)
-            {
-                messages.get_word_pos(
-                    self.current_server_id,
-                    &self.current_channel,
-                    index,
-                    character,
-                )
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-
-    fn find_viewport_start(&self, messages: &Messages) -> (usize, usize) {
-        if self.is_scroll_cache_valid() {
-            return (
-                self.scroll_cache.start_message_index,
-                self.scroll_cache.rows_to_skip_in_message,
-            );
-        }
-
-        let message_count = messages.len();
-        let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
-
-        let mut start_message_index = 0;
-        let mut rows_from_bottom = 0;
-        let mut rows_to_skip_in_message = 0;
-
-        for (i, line) in messages.iter().rev().enumerate() {
-            let total_rows = line.wrapped_line_count(self.content_width);
-            if rows_from_bottom + total_rows >= target_visual_top {
-                start_message_index = message_count.saturating_sub(1).saturating_sub(i);
-                rows_to_skip_in_message =
-                    (rows_from_bottom + total_rows).saturating_sub(target_visual_top);
-                break;
-            }
-            rows_from_bottom += total_rows;
-        }
-
-        (start_message_index, rows_to_skip_in_message)
-    }
-
-    pub fn get_current_line_index_character(
-        &self,
-        messages: &ServersMessages,
-        mouse_pos_y: u16,
-        mouse_pos_x: u16,
-    ) -> Option<(usize, usize)> {
-        let index_y = mouse_pos_y.saturating_sub(self.area.y) as usize;
-        let mouse_pos_x = mouse_pos_x.saturating_sub(self.area.x) as usize;
-
-        let text_start = self.area.width as usize - self.content_width;
-        if mouse_pos_x < text_start {
-            return None;
-        }
-
-        let pos_x = mouse_pos_x - text_start;
-        if pos_x > self.content_width {
-            return None;
-        }
-
-        let mut visible_rows_total = 0;
-
-        if let Some(messages) = messages.get_messages(self.current_server_id, &self.current_channel)
-        {
-            let (start_message_index, mut rows_to_skip_in_message) =
-                self.find_viewport_start(messages);
-
-            for (line_index, line) in messages.iter().enumerate().skip(start_message_index) {
-                let total_line_rows = line.wrapped_line_count(self.content_width);
-
-                // Calculate available rows after skipping the top part (if any)
-                let rows_available = total_line_rows.saturating_sub(rows_to_skip_in_message);
-
-                // Cap strictly to the remaining height
-                let rows_remaining = self.max_visible_height.saturating_sub(visible_rows_total);
-                let rows_to_take = rows_remaining.min(rows_available);
-
-                if rows_to_take == 0 && rows_remaining == 0 {
-                    break;
-                }
-
-                let stripped = line.stripped_formatting();
-                let mut rows = wrap_content(&stripped, self.content_width);
-                let mut char_skipped: usize = 0;
-                if let Some(rows) = rows.get(..rows_to_skip_in_message) {
-                    char_skipped = rows.iter().map(|v| v.chars().count()).sum();
-                }
-                rows = rows.into_iter().skip(rows_to_skip_in_message).collect();
-                let rows_len = rows.len();
-
-                if index_y < visible_rows_total + rows_len {
-                    let pointed_row = (index_y - visible_rows_total).min(rows_len - 1);
-                    //it will be an approximation, because wrapping can remove spaces,
-                    //  but sometimes does not remove characters
-                    let char_position: usize = rows
-                        .get(..pointed_row)
-                        .map(|slice| slice.iter().map(|v| v.chars().count()).sum())
-                        .unwrap_or(0);
-                    if char_skipped + char_position + pos_x > line.get_message_width() {
-                        return None;
-                    }
-                    return Some((line_index, char_skipped + char_position + pos_x));
-                }
-                rows_to_skip_in_message = 0; // Reset for subsequent messages
-
-                visible_rows_total += rows_len;
-            }
-        }
-
-        None
-    }
-
-    fn collect_visible_rows<'a>(
-        &'a self,
-        messages: &'a ServersMessages,
-        model: &crate::state::model::Model,
-        display_time: bool,
-    ) -> Vec<Row<'a>> {
-        let mut visible_rows = Vec::new();
-        if self.content_width == 0 {
-            return visible_rows;
-        }
-
-        if let Some(messages) = messages.get_messages(self.current_server_id, &self.current_channel)
-        {
-            let (start_message_index, mut rows_to_skip_in_message) =
-                self.find_viewport_start(messages);
-
-            let mut visible_rows_total = 0;
-
-            for line in messages.iter().skip(start_message_index) {
-                let total_line_rows = line.wrapped_line_count(self.content_width);
-
-                // Calculate available rows after skipping the top part (if any)
-                let rows_available = total_line_rows.saturating_sub(rows_to_skip_in_message);
-
-                // Cap strictly to the remaining height
-                let rows_remaining = self.max_visible_height.saturating_sub(visible_rows_total);
-                let rows_to_take = rows_remaining.min(rows_available);
-
-                if rows_to_take == 0 && rows_remaining == 0 {
-                    break;
-                }
-                let color = line.get_source().map(|s| model.get_color(s));
-                let time_format = if line.is_log() {
-                    clown_message_render::message_content::TimeFormat::Day
-                } else {
-                    clown_message_render::message_content::TimeFormat::Hour
-                };
-
-                let rows = line.create_rows(
-                    self.content_width as u16,
-                    color,
-                    display_time.then_some(&time_format),
-                    NICKNAME_LENGTH,
-                    rows_to_skip_in_message,
-                    rows_to_take,
-                );
-
-                visible_rows_total += rows_to_take;
-                visible_rows.extend(rows);
-
-                rows_to_skip_in_message = 0; // Reset for subsequent messages
-
-                if visible_rows_total >= self.max_visible_height {
-                    break;
-                }
-            }
-        }
-
-        visible_rows
+    ) -> Option<WordRange> {
+        messages
+            .get_messages(self.current_server_id, &self.current_channel)
+            .and_then(|messages| self.message_viewer.get_range_from_mouse(messages, row, col))
     }
 
     #[cfg(any(test, feature = "bench"))]
     #[allow(dead_code)]
     pub fn total_lines(&self, messages: &ServersMessages) -> usize {
-        self.get_fake_total_lines(messages)
-    }
-
-    //Does not properly get the number of lines
-    //but because its called each rendering time, better be fast
-    fn get_fake_total_lines(&self, messages: &ServersMessages) -> usize {
-        if self.content_width == 0 {
-            return 0;
-        }
-
         messages
             .get_messages(self.current_server_id, &self.current_channel)
-            .map(|msgs| {
-                if self.content_width == 1 {
-                    return msgs.iter().map(|m| m.get_message_width()).sum::<usize>();
-                }
-                //need divisor >=2
-                let div = crate::math::div::DivCeilBy::new(self.content_width);
-                msgs.iter()
-                    .map(|m| div.apply(m.get_message_width()))
-                    .sum::<usize>()
-            })
+            .map(|messages| self.message_viewer.total_lines(messages))
             .unwrap_or(0)
     }
 
@@ -344,12 +88,7 @@ impl DiscussWidget {
     }
 
     fn add_line_scroll(&mut self) {
-        if self.follow_last {
-            self.scroll_offset = 0;
-        } else {
-            self.scroll_offset = self.scroll_offset.saturating_add(1);
-        }
-        self.scroll_cache = ScrollbarCache::default();
+        self.message_viewer.add_line_scroll();
     }
 
     pub fn add_line(
@@ -364,7 +103,7 @@ impl DiscussWidget {
             self.add_line_scroll();
         }
 
-        self.redraw = true;
+        self.message_viewer.ask_redraw();
     }
 
     pub fn add_server_group(
@@ -380,47 +119,21 @@ impl DiscussWidget {
         messages.add_message(self.current_server_id, &self.current_channel, in_message);
         self.add_line_scroll();
 
-        self.redraw = true;
-    }
-
-    fn update_scroll_cache(&mut self, messages: &ServersMessages) {
-        if !self.is_scroll_cache_valid()
-            && let Some(messages) =
-                messages.get_messages(self.current_server_id, &self.current_channel)
-        {
-            let (start_message_index, rows_to_skip_in_message) = self.find_viewport_start(messages);
-            self.scroll_cache = ScrollbarCache {
-                start_message_index,
-                rows_to_skip_in_message,
-                cache_width: self.content_width,
-                max_visible_height: self.max_visible_height,
-                scroll_offset: self.scroll_offset,
-            };
-        }
+        self.message_viewer.ask_redraw();
     }
 
     //How many lines I can scroll up
     fn possible_scroll_up(&mut self, messages: &ServersMessages, offset: usize) -> usize {
         if let Some(messages) = messages.get_messages(self.current_server_id, &self.current_channel)
         {
-            let current_visible = self.scroll_offset.saturating_add(self.max_visible_height);
-            let mut total_rows = 0;
-            for line in messages.iter().rev() {
-                total_rows += line.wrapped_line_count(self.content_width);
-                if total_rows >= offset.saturating_add(current_visible) {
-                    return offset;
-                }
-            }
-            total_rows.saturating_sub(current_visible)
+            self.message_viewer.possible_scroll_up(messages, offset)
         } else {
             0
         }
     }
 
     fn scroll_up_no_check(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_add(1);
-        self.follow_last = false;
-        self.redraw = true;
+        self.message_viewer.scroll_up_no_check(1)
     }
 
     fn scroll_up_logs(&mut self, current_nick: &IrcName, messages: &mut ServersMessages) {
@@ -452,56 +165,37 @@ impl DiscussWidget {
     }
 
     fn scroll_page_up(&mut self, messages: &mut ServersMessages) -> usize {
-        let offset = self.possible_scroll_up(messages, self.max_visible_height);
-        if offset > 0 {
-            self.scroll_offset = self.scroll_offset.saturating_add(offset);
-            self.follow_last = false;
-            self.redraw = true;
+        if let Some(messages) = messages.get_messages(self.current_server_id, &self.current_channel)
+        {
+            self.message_viewer.scroll_page_up(messages)
+        } else {
+            0
         }
-        offset
     }
 
     fn scroll_page_up_logs(&mut self, current_nick: &IrcName, messages: &mut ServersMessages) {
         let offset = self.scroll_page_up(messages);
-        if offset < self.max_visible_height {
+        if offset < self.message_viewer.get_max_visible_height() {
             let log_offset = self.read_log(
                 current_nick,
                 messages,
-                self.max_visible_height.saturating_sub(offset),
+                self.message_viewer
+                    .get_max_visible_height()
+                    .saturating_sub(offset),
             );
             if log_offset > 0 {
-                self.scroll_offset = self.scroll_offset.saturating_add(log_offset);
-                self.follow_last = false;
-                self.redraw = true;
+                self.message_viewer.scroll_up_no_check(log_offset);
             }
         }
     }
 
     fn scroll_page_down(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(self.max_visible_height);
-        self.follow_last = self.scroll_offset == 0;
-        self.redraw = true;
+        self.message_viewer
+            .scroll_down_no_check(self.message_viewer.get_max_visible_height());
     }
 
     fn scroll_down(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(1);
-
-        self.follow_last = self.scroll_offset == 0;
-
-        self.redraw = true;
-    }
-
-    fn compute_time_size(&self, row: u16) -> WidgetBox {
-        let time_size = if self.display_time && row.saturating_div(3) > META_LENGTH {
-            Some(TIME_LENGTH)
-        } else {
-            None
-        };
-        let time_padding = time_size.map(|_| 1).unwrap_or(0);
-        WidgetBox {
-            padding: time_padding,
-            size: time_size.unwrap_or(0),
-        }
+        self.message_viewer.scroll_down_no_check(1);
     }
 
     fn get_current_nick<'b>(&self, irc_model: &'b IrcModel) -> Option<&'b IrcName> {
@@ -512,85 +206,34 @@ impl DiscussWidget {
 
 impl Draw for DiscussWidget {
     fn render(&mut self, ctx: &mut crate::state::context::Ctx, frame: &mut Frame<'_>, area: Rect) {
-        if self.redraw {
-            self.redraw = false;
-        }
-
-        self.area = area;
-        let layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Min(0),    // Meta (time + source)
-                Constraint::Length(1), // Scrollbar
-            ])
-            .split(area);
-        let row = layout.first().map(|v| v.width).unwrap_or(0);
-        // Set how many lines can be shown
-        self.max_visible_height = area.height as usize;
-        let time_box = self.compute_time_size(row);
-        let constraints = [
-            Constraint::Length(time_box.get_full_size()), // time
-            Constraint::Max(NICKNAME_LENGTH.saturating_add(1)), // nickname
-            Constraint::Length(SEPARATOR_LENGTH),         // separator
-            Constraint::Min(10),                          // Content
-        ];
-        let mut row_area = self.area;
-        row_area.width = row;
-        let fake_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(constraints)
-            .split(row_area);
-
-        self.content_width = fake_layout.get(3).map(|v| v.width).unwrap_or(0) as usize;
-
-        let number_lines = self.get_fake_total_lines(&ctx.messages);
-        self.update_scroll_cache(&ctx.messages);
-
-        let visible_rows =
-            self.collect_visible_rows(&ctx.messages, &ctx.model, !time_box.is_empty());
-
-        let visible_length = visible_rows.len();
+        match ctx
+            .messages
+            .get_messages(self.current_server_id, &self.current_channel)
         {
-            let text_style = Style::default().fg(Color::White);
-            //TODO: replace render row by own renderer
-            // remove the rows allocation
-            // no more need of constraint
-            let table = Table::new(visible_rows, constraints)
-                .column_spacing(0)
-                .style(text_style);
-
-            if let Some(layout) = layout.first() {
-                frame.render_widget(table, *layout)
-            }
-        }
-
-        self.vertical_scroll_state = ScrollbarState::new(number_lines)
-            .viewport_content_length(visible_length)
-            .position(number_lines.saturating_sub(self.scroll_offset));
-        if let Some(layout_1) = layout.get(1)
-            && layout_1.width > 0
-        {
-            frame.render_stateful_widget(
-                Scrollbar::default()
-                    .orientation(ScrollbarOrientation::VerticalRight)
-                    .thumb_style(Style::default().fg(if self.follow_last {
-                        Color::White
-                    } else {
-                        Color::LightRed
-                    })),
-                *layout_1,
-                &mut self.vertical_scroll_state,
-            );
+            Some(messages) => self.message_viewer.render(
+                messages,
+                |s| ctx.model.get_color(s),
+                self.display_time,
+                frame,
+                area,
+            ),
+            None => self.message_viewer.render(
+                &Vec::new(),
+                |s| ctx.model.get_color(s),
+                self.display_time,
+                frame,
+                area,
+            ),
         }
     }
 }
 
 impl crate::component::EventHandler for DiscussWidget {
     fn get_area(&self) -> Rect {
-        self.area
+        self.message_viewer.get_area()
     }
     fn need_redraw(&self) -> bool {
-        self.redraw
+        self.message_viewer.need_redraw()
     }
 
     fn handle_actions(
@@ -811,7 +454,7 @@ impl crate::component::EventHandler for DiscussWidget {
                     ctx.messages.rename(Some(*server_id), old, new);
                     if self.current_channel == *old {
                         self.current_channel = new.clone();
-                        self.scroll_cache = ScrollbarCache::default();
+                        self.message_viewer.invalidate_cache();
                     }
                 }
                 None
@@ -832,7 +475,7 @@ impl crate::component::EventHandler for DiscussWidget {
         if let crate::event_handler::Event::Crossterm(cross) = &event {
             match cross {
                 crossterm::event::Event::Resize(_x, _y) => {
-                    self.redraw = true;
+                    self.message_viewer.ask_redraw();
                     None
                 }
                 crossterm::event::Event::Mouse(mouse_event) => match mouse_event.kind {
@@ -975,211 +618,268 @@ impl crate::component::EventHandler for DiscussWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::component::EventHandler;
+    use crate::state::context::Ctx;
     use crate::state::model::Model;
+    use crate::state::session::Session;
+    use ratatui::{Terminal, backend::TestBackend};
 
-    const TEST_SERVER_ID: ServerID = ServerID::new(0);
+    const SERVER_ID: ServerID = ServerID::new(0);
+    const NICK: &str = "clowny";
+    const CHANNEL: &str = "#rust";
 
-    fn new_messages() -> ServersMessages {
-        ServersMessages::new(std::path::Path::new("").to_path_buf())
+    // Same order as the main view: widgets first, then the model.
+    fn dispatch(
+        widget: &mut DiscussWidget,
+        ctx: &mut Ctx,
+        event: MessageEvent,
+    ) -> Option<MessageEvent> {
+        let result = widget.handle_actions(ctx, &event);
+        ctx.session.handle_action(&event);
+        result
+    }
+
+    fn join(widget: &mut DiscussWidget, ctx: &mut Ctx, channel: &str, user: &str) {
+        dispatch(
+            widget,
+            ctx,
+            MessageEvent::Join(SERVER_ID, channel.into(), user.into()),
+        );
+    }
+
+    fn privmsg(
+        widget: &mut DiscussWidget,
+        ctx: &mut Ctx,
+        source: &str,
+        target: &str,
+        content: &str,
+    ) -> Option<MessageEvent> {
+        dispatch(
+            widget,
+            ctx,
+            MessageEvent::PrivMsg(SERVER_ID, source.into(), target.into(), content.to_string()),
+        )
+    }
+
+    // Connected to one server, joined and looking at CHANNEL.
+    fn setup() -> (Ctx, DiscussWidget) {
+        let mut ctx = Ctx {
+            session: Session::new(1),
+            model: Model::new_empty_config(),
+            messages: ServersMessages::new(std::path::PathBuf::new()),
+        };
+        ctx.session
+            .model
+            .init_server(SERVER_ID, "irc.test".to_string(), NICK.to_string());
+
+        let mut widget = DiscussWidget::new();
+        dispatch(&mut widget, &mut ctx, MessageEvent::JoinServer(SERVER_ID));
+        join(&mut widget, &mut ctx, CHANNEL, NICK);
+        dispatch(
+            &mut widget,
+            &mut ctx,
+            MessageEvent::SelectChannel(Some(SERVER_ID), CHANNEL.into()),
+        );
+
+        (ctx, widget)
+    }
+
+    fn contents(ctx: &Ctx, channel: &str) -> Vec<String> {
+        ctx.messages
+            .get_messages(Some(SERVER_ID), &channel.into())
+            .map(|m| m.iter().map(|c| c.get_content().to_string()).collect())
+            .unwrap_or_default()
+    }
+
+    fn last(ctx: &Ctx, channel: &str) -> Option<MessageContent> {
+        ctx.messages
+            .get_messages(Some(SERVER_ID), &channel.into())
+            .and_then(|m| m.iter().last().cloned())
     }
 
     #[test]
-    fn test_find_index() {
-        pub const TEXT_START: usize = (TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH) as usize;
-
-        let mut messages = new_messages();
-        let mut discuss = DiscussWidget::new();
-        discuss.set_current_channel(Some(TEST_SERVER_ID), "test".into());
-        discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
-
-        discuss.content_width = 4;
-        discuss.max_visible_height = 4;
-        discuss.area.width = (TEXT_START + discuss.content_width) as u16;
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &"test".into(),
-            MessageContent::message(None, "HELLO".to_string()),
-        );
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &"test".into(),
-            MessageContent::message(None, "HELLO".to_string()),
-        );
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &"test".into(),
-            MessageContent::message(None, "HELLO".to_string()),
-        );
-        discuss.scroll_offset = 0;
-
-        assert_eq!(discuss.scroll_offset, 0);
-        let mouse_x = TEXT_START as u16;
-        assert_eq!(
-            discuss.get_current_line_index_character(&messages, 0, mouse_x),
-            Some((1, 0))
-        );
-        assert_eq!(
-            discuss.get_current_line_index_character(&messages, 2, mouse_x),
-            Some((2, 0))
-        );
-        assert_eq!(
-            discuss.get_current_line_index_character(&messages, 1, mouse_x),
-            Some((1, 4))
-        );
+    fn test_join_is_shown_in_channel() {
+        let (mut ctx, mut widget) = setup();
+        join(&mut widget, &mut ctx, CHANNEL, "alice");
 
         assert_eq!(
-            discuss.get_current_line_index_character(&messages, 3, mouse_x),
-            Some((2, 4))
+            contents(&ctx, CHANNEL),
+            vec![
+                format!("You joined the channel {CHANNEL}"),
+                "alice has joined".to_string()
+            ]
         );
+    }
+
+    #[test]
+    fn test_privmsg_in_channel() {
+        let (mut ctx, mut widget) = setup();
+
         assert_eq!(
-            discuss.get_current_line_index_character(&messages, 4, mouse_x),
+            privmsg(&mut widget, &mut ctx, "alice", CHANNEL, "hello"),
             None
         );
 
-        discuss.scroll_offset = 1;
-        discuss.area.width = (TEXT_START + discuss.content_width) as u16;
-        assert_eq!(
-            discuss.get_current_line_index_character(&messages, 0, mouse_x),
-            Some((0, 4))
-        );
-        assert_eq!(
-            discuss.get_current_line_index_character(&messages, 1, mouse_x),
-            Some((1, 0))
-        );
-        assert_eq!(
-            discuss.get_current_line_index_character(&messages, 2, mouse_x),
-            Some((1, 4))
-        );
+        let message = last(&ctx, CHANNEL).expect("message in channel");
+        assert_eq!(message.get_content(), "hello");
+        assert_eq!(message.get_source(), Some("alice"));
+        assert!(!message.is_highlighted());
+    }
+
+    #[test]
+    fn test_privmsg_to_me_goes_to_query_buffer() {
+        let (mut ctx, mut widget) = setup();
+        let before = contents(&ctx, CHANNEL);
+
+        privmsg(&mut widget, &mut ctx, "alice", NICK, "psst");
+
+        assert_eq!(contents(&ctx, "alice"), vec!["psst".to_string()]);
+        assert_eq!(contents(&ctx, CHANNEL), before);
+    }
+
+    #[test]
+    fn test_own_privmsg_is_echoed_in_current_channel() {
+        let (mut ctx, mut widget) = setup();
+
+        privmsg(&mut widget, &mut ctx, NICK, "bob", "yo");
+
+        assert_eq!(contents(&ctx, "bob"), vec!["yo".to_string()]);
+        let echo = last(&ctx, CHANNEL).expect("echo in current channel");
+        assert_eq!(echo.get_content(), "yo");
+        assert_eq!(echo.get_source(), Some(">bob<"));
+    }
+
+    #[test]
+    fn test_highlight_rings_bell() {
+        let (mut ctx, mut widget) = setup();
 
         assert_eq!(
-            discuss.get_current_line_index_character(&messages, 3, mouse_x),
-            Some((2, 0))
+            privmsg(&mut widget, &mut ctx, "alice", CHANNEL, "hey clowny!"),
+            Some(MessageEvent::Bel)
         );
-        assert_eq!(
-            discuss.get_current_line_index_character(&messages, 4, mouse_x),
-            Some((2, 4))
+        assert!(last(&ctx, CHANNEL).is_some_and(|m| m.is_highlighted()));
+    }
+
+    #[test]
+    fn test_part_is_shown_in_channel_and_existing_query() {
+        let (mut ctx, mut widget) = setup();
+        join(&mut widget, &mut ctx, CHANNEL, "alice");
+        join(&mut widget, &mut ctx, CHANNEL, "bob");
+
+        // No query with bob: only the channel gets the line
+        dispatch(
+            &mut widget,
+            &mut ctx,
+            MessageEvent::Part(SERVER_ID, CHANNEL.into(), "bob".into()),
         );
+        let msg = format!("bob has left {CHANNEL}");
         assert_eq!(
-            discuss.get_current_line_index_character(&messages, 0, (TEXT_START + 100) as u16),
-            None
+            last(&ctx, CHANNEL).map(|m| m.get_content().to_string()),
+            Some(msg)
+        );
+        assert!(!widget.has_message(&ctx.messages, Some(SERVER_ID), &"bob".into()));
+
+        // Query open with alice: both get the line
+        privmsg(&mut widget, &mut ctx, "alice", NICK, "psst");
+        dispatch(
+            &mut widget,
+            &mut ctx,
+            MessageEvent::Part(SERVER_ID, CHANNEL.into(), "alice".into()),
+        );
+        let msg = format!("alice has left {CHANNEL}");
+        assert_eq!(
+            last(&ctx, CHANNEL).map(|m| m.get_content().to_string()),
+            Some(msg.clone())
+        );
+        assert_eq!(contents(&ctx, "alice"), vec!["psst".to_string(), msg]);
+    }
+
+    #[test]
+    fn test_quit_is_shown_in_every_joined_channel() {
+        let (mut ctx, mut widget) = setup();
+        join(&mut widget, &mut ctx, "#clown", NICK);
+        join(&mut widget, &mut ctx, "#other", NICK);
+        join(&mut widget, &mut ctx, CHANNEL, "alice");
+        join(&mut widget, &mut ctx, "#clown", "alice");
+        let other_before = contents(&ctx, "#other");
+
+        dispatch(
+            &mut widget,
+            &mut ctx,
+            MessageEvent::Quit(SERVER_ID, "alice".into(), Some("bye".to_string())),
+        );
+
+        for channel in [CHANNEL, "#clown"] {
+            assert_eq!(
+                last(&ctx, channel).map(|m| m.get_content().to_string()),
+                Some("alice has quit: bye".to_string()),
+                "{channel}"
+            );
+        }
+        assert_eq!(contents(&ctx, "#other"), other_before);
+    }
+
+    #[test]
+    fn test_nick_change_renames_query_and_follows_current_channel() {
+        let (mut ctx, mut widget) = setup();
+        join(&mut widget, &mut ctx, CHANNEL, "alice");
+        privmsg(&mut widget, &mut ctx, "alice", NICK, "psst");
+        dispatch(
+            &mut widget,
+            &mut ctx,
+            MessageEvent::SelectChannel(Some(SERVER_ID), "alice".into()),
+        );
+
+        dispatch(
+            &mut widget,
+            &mut ctx,
+            MessageEvent::ReplaceUser(SERVER_ID, "alice".into(), "alice2".into()),
+        );
+
+        assert_eq!(widget.current_channel, IrcName::new("alice2"));
+        assert_eq!(contents(&ctx, "alice2"), vec!["psst".to_string()]);
+        assert!(!widget.has_message(&ctx.messages, Some(SERVER_ID), &"alice".into()));
+        assert_eq!(
+            last(&ctx, CHANNEL).map(|m| m.get_content().to_string()),
+            Some("alice has changed their nickname to alice2".to_string())
         );
     }
 
     #[test]
-    fn test_can_scroll_up() {
-        let mut messages = new_messages();
-        let mut discuss = DiscussWidget::new();
-        discuss.set_current_channel(Some(TEST_SERVER_ID), IrcName::default());
+    fn test_nick_change_keeps_scroll_position() {
+        let (mut ctx, mut widget) = setup();
+        privmsg(&mut widget, &mut ctx, "alice", NICK, "psst");
+        dispatch(
+            &mut widget,
+            &mut ctx,
+            MessageEvent::SelectChannel(Some(SERVER_ID), "alice".into()),
+        );
+        widget.set_scroll_offset(3);
 
-        discuss.content_width = 5;
-        discuss.max_visible_height = 3;
-        discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &IrcName::default(),
-            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
+        dispatch(
+            &mut widget,
+            &mut ctx,
+            MessageEvent::ReplaceUser(SERVER_ID, "alice".into(), "alice2".into()),
         );
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &IrcName::default(),
-            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
-        );
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &IrcName::default(),
-            MessageContent::info("aa aaaa aaaaa aa aaa".to_string()),
-        );
-        discuss.scroll_offset = 0;
-        assert_eq!(discuss.possible_scroll_up(&messages, 10), 10);
-        assert_eq!(discuss.possible_scroll_up(&messages, 100), 12);
+
+        assert_eq!(widget.message_viewer.get_scroll_offset(), 3);
     }
 
     #[test]
-    fn test_render_rows() {
-        let mut messages = new_messages();
-        let model = Model::new_empty_config();
-        let mut discuss = DiscussWidget::new();
-        discuss.set_current_channel(Some(TEST_SERVER_ID), "test".into());
-        discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
-
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &"test".into(),
-            MessageContent::message(None, "HELLO".to_string()),
-        );
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &"test".into(),
-            MessageContent::message(None, "HELLO".to_string()),
-        );
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &"test".into(),
-            MessageContent::message(None, "HELLO".to_string()),
+    fn test_render_channel_without_messages() {
+        let (mut ctx, mut widget) = setup();
+        widget.set_current_channel(Some(SERVER_ID), "#empty".into());
+        assert!(
+            ctx.messages
+                .get_messages(Some(SERVER_ID), &"#empty".into())
+                .is_none()
         );
 
-        discuss.content_width = 10;
-        assert_eq!(
-            discuss.collect_visible_rows(&messages, &model, true).len(),
-            3,
-        );
+        let mut terminal = Terminal::new(TestBackend::new(80, 10)).expect("terminal");
+        terminal
+            .draw(|frame| widget.render(&mut ctx, frame, frame.area()))
+            .expect("draw");
 
-        discuss.content_width = 4;
-        discuss.scroll_offset = 0;
-        assert_eq!(
-            discuss.collect_visible_rows(&messages, &model, true).len(),
-            6
-        );
-
-        discuss.content_width = 4;
-        discuss.scroll_offset = 0;
-        discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows(&messages, &model, true);
-        assert_eq!(rows.len(), 2);
-
-        discuss.content_width = 4;
-        discuss.scroll_offset = 1;
-        discuss.max_visible_height = 2;
-        let rows = discuss.collect_visible_rows(&messages, &model, true);
-        assert_eq!(rows.len(), 2);
-    }
-
-    #[test]
-    fn test_fake_nb_rows() {
-        let mut messages = new_messages();
-        let mut discuss = DiscussWidget::new();
-        discuss.set_current_channel(Some(TEST_SERVER_ID), "test".into());
-        discuss.add_server_group(&mut messages, Some(TEST_SERVER_ID), Some(String::new()));
-
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &"test".into(),
-            MessageContent::message(None, "HELLO".to_string()),
-        );
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &"test".into(),
-            MessageContent::message(None, "HELLO".to_string()),
-        );
-        discuss.add_line(
-            &mut messages,
-            Some(TEST_SERVER_ID),
-            &"test".into(),
-            MessageContent::message(None, "HELLO".to_string()),
-        );
-
-        discuss.content_width = 10;
-        assert_eq!(discuss.get_fake_total_lines(&messages), 3);
+        assert!(!widget.need_redraw());
     }
 }
