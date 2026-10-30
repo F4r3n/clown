@@ -1,3 +1,4 @@
+use crate::irc_view::discuss::message_collection::{Anchor, MessageCollection, MessageViewer};
 use crate::irc_view::input::text_input;
 use crate::log::message_logger::{LogReader, MessageLogger};
 use crate::message_event::MessageEvent;
@@ -5,7 +6,6 @@ use clown_message_render::message_content::{MessageContent, TimeFormat};
 use crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Row;
 use std::path::PathBuf;
 use std::range::Range;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -40,6 +40,28 @@ struct SearchItemResult {
 
 struct DisplayItem {
     search_item: SearchItemResult,
+}
+
+impl MessageCollection for Vec<DisplayItem> {
+    fn len(&self) -> usize {
+        Vec::len(self)
+    }
+
+    // Most recent first: must match the order of `iter`
+    fn get(&self, index: usize) -> Option<&MessageContent> {
+        Vec::len(self)
+            .checked_sub(index.saturating_add(1))
+            .and_then(|i| self.as_slice().get(i))
+            .map(|v| &v.search_item.message)
+    }
+
+    fn iter(&self) -> impl DoubleEndedIterator<Item = &MessageContent> {
+        self.as_slice().iter().map(|v| &v.search_item.message)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
 }
 
 #[derive(Default)]
@@ -125,18 +147,16 @@ async fn async_search(
     last_offset
 }
 
-#[derive(Default)]
 pub struct SearchWidget {
-    area: ratatui::prelude::Rect,
-    content_width: u16,
+    message_viewer: MessageViewer,
+
     result: SearchResult,
-    scroll_offset: usize,
-    max_visible_height: u16,
-    max_visible_list_messages: u16,
+    need_redraw: bool,
+    area: ratatui::prelude::Rect,
+
     searcher: Option<AsyncSearch>,
     receiver: Option<mpsc::Receiver<SearchItemResult>>,
     input: text_input::InputWidget,
-    need_redraw: bool,
 }
 
 //What to see
@@ -153,28 +173,6 @@ pub struct SearchWidget {
 // Maybe 2 phase, first only the top panel
 //
 // Shortcut: TODO
-
-struct TableDimension {
-    time: u16,
-    nickname: u16,
-    separator: u16,
-}
-
-impl TableDimension {
-    fn new(time: u16, nickname: u16, separator: u16) -> Self {
-        Self {
-            time,
-            nickname,
-            separator,
-        }
-    }
-
-    fn get_width(&self) -> u16 {
-        self.time
-            .saturating_add(self.nickname)
-            .saturating_add(self.separator)
-    }
-}
 
 impl Draw for SearchWidget {
     fn render(
@@ -193,40 +191,13 @@ impl Draw for SearchWidget {
             ])
             .split(frame.area());
         if let Some(layout_message) = main_layout.first() {
-            let time_format = TimeFormat::Day;
-            const NICKNAME_LENGTH: u16 = 10;
-            const SEPARATOR_LENGTH: u16 = 2;
-            let table_dimension =
-                TableDimension::new(time_format.length(), NICKNAME_LENGTH, SEPARATOR_LENGTH);
-
-            self.max_visible_height = layout_message.height;
-            self.max_visible_list_messages = layout_message.height;
-            self.content_width = self
-                .area
-                .width
-                .saturating_sub(table_dimension.get_width())
-                .saturating_sub(4_u16);
-
-            let visible_rows = self.collect_visible_rows(
-                &time_format,
-                self.content_width,
-                &table_dimension,
-                &ctx.model,
+            self.message_viewer.render(
+                &self.result.items,
+                |s| ctx.model.get_color(s),
+                true,
+                frame,
+                *layout_message,
             );
-
-            //collect visible rows
-            let table = ratatui::widgets::Table::new(
-                visible_rows,
-                [
-                    Constraint::Length(time_format.length().saturating_add(1)), // time
-                    Constraint::Length(NICKNAME_LENGTH.saturating_add(1)),      // nickname
-                    Constraint::Length(1),                                      // separator
-                    Constraint::Min(10),                                        // Content
-                ],
-            )
-            .column_spacing(1);
-
-            frame.render_widget(table, *layout_message)
         }
         if let Some(layout_input) = main_layout.get(1) {
             let width = layout_input.width.max(3) - 3;
@@ -242,6 +213,18 @@ impl Draw for SearchWidget {
 }
 
 impl SearchWidget {
+    pub fn new() -> Self {
+        Self {
+            message_viewer: MessageViewer::new(Some(TimeFormat::Day)).with_anchor(Anchor::Top),
+            result: SearchResult::default(),
+            need_redraw: true,
+            area: ratatui::prelude::Rect::default(),
+            searcher: None,
+            receiver: None,
+            input: text_input::InputWidget::default(),
+        }
+    }
+
     fn default_paragraph(&self) -> ratatui::widgets::Paragraph<'_> {
         ratatui::widgets::Paragraph::new(Line::from(vec![
             Span::from("> ")
@@ -250,113 +233,35 @@ impl SearchWidget {
         ]))
     }
 
+    // The viewer is anchored at the top (most recent result):
+    // scrolling down moves away from the anchor, toward older results.
     fn scroll_up(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(1);
-        self.need_redraw = true;
+        self.message_viewer.scroll_toward_no_check(1);
     }
 
     fn page_up(&mut self) {
-        self.scroll_offset = self
-            .scroll_offset
-            .saturating_sub(self.max_visible_height as usize);
-        self.need_redraw = true;
+        self.message_viewer
+            .scroll_toward_no_check(self.message_viewer.get_max_visible_height());
     }
 
     fn page_down(&mut self) {
-        let value = self.possible_scroll_down(self.max_visible_height as usize);
-        if value > 0 {
-            self.scroll_offset = self.scroll_offset.saturating_add(value);
-            self.need_redraw = true;
-        }
+        self.message_viewer.scroll_page_away(&self.result.items);
     }
 
     fn scroll_down(&mut self) {
-        let value = self.possible_scroll_down(1);
-        if value > 0 {
-            self.scroll_offset = self.scroll_offset.saturating_add(value);
-            self.need_redraw = true;
+        if self
+            .message_viewer
+            .possible_scroll_away(&self.result.items, 1)
+            > 0
+        {
+            self.message_viewer.scroll_away_no_check(1);
         }
-    }
-
-    fn possible_scroll_down(&self, offset: usize) -> usize {
-        let current_visible = self
-            .scroll_offset
-            .saturating_add(self.max_visible_height as usize);
-        let mut total_rows = 0;
-        for line in self.result.items.iter() {
-            total_rows += line
-                .search_item
-                .message
-                .wrapped_line_count(self.content_width as usize);
-            if total_rows >= offset.saturating_add(current_visible) {
-                return offset;
-            }
-        }
-        total_rows.saturating_sub(current_visible)
-    }
-
-    fn collect_visible_rows(
-        &self,
-        time_format: &TimeFormat,
-        content_width: u16,
-        table_dimension: &TableDimension,
-        model: &crate::state::model::Model,
-    ) -> Vec<Row<'_>> {
-        let mut visible_rows = Vec::new();
-
-        if content_width == 0 {
-            return visible_rows;
-        }
-
-        let max_visible_height = self.max_visible_list_messages as usize;
-
-        let mut rows_to_skip_in_message = self.scroll_offset;
-        let mut visible_rows_total = 0;
-
-        for item in &self.result.items {
-            let message = &item.search_item.message;
-            let total_line_rows = message.wrapped_line_count(content_width as usize);
-
-            if rows_to_skip_in_message >= total_line_rows {
-                rows_to_skip_in_message -= total_line_rows;
-                continue;
-            }
-
-            let rows_available = total_line_rows - rows_to_skip_in_message;
-            let rows_remaining = max_visible_height.saturating_sub(visible_rows_total);
-            let rows_to_take = rows_remaining.min(rows_available);
-
-            if rows_to_take == 0 {
-                break;
-            }
-            let color = message.get_source().map(|s| model.get_color(s));
-
-            let rows = message.create_rows(
-                content_width,
-                color,
-                Some(time_format),
-                table_dimension.nickname,
-                rows_to_skip_in_message,
-                rows_to_take,
-            );
-
-            visible_rows_total += rows_to_take;
-            visible_rows.extend(rows);
-
-            rows_to_skip_in_message = 0;
-
-            if visible_rows_total >= max_visible_height {
-                break;
-            }
-        }
-
-        visible_rows
     }
 
     fn search(&mut self, query: Query, ctx: &mut crate::state::context::Ctx) {
         let (producer, receiver) = mpsc::channel(10);
         self.result.clear();
-        self.scroll_offset = 0;
+        self.message_viewer.reset_scroll();
         self.receiver = Some(receiver);
         let server_address = query
             .option
@@ -387,6 +292,7 @@ impl SearchWidget {
                 self.result.items.push(DisplayItem {
                     search_item: result,
                 });
+                self.message_viewer.add_line_scroll();
             }
         }
         use futures::FutureExt;
@@ -477,6 +383,6 @@ impl EventHandler for SearchWidget {
     }
 
     fn need_redraw(&self) -> bool {
-        self.need_redraw
+        self.need_redraw || self.message_viewer.need_redraw()
     }
 }

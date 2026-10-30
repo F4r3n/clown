@@ -40,7 +40,7 @@ impl DiscussWidget {
         Self {
             current_channel: IrcName::default(),
             current_server_id: None,
-            message_viewer: MessageViewer::new(),
+            message_viewer: MessageViewer::new(None),
             last_hovered: None,
             display_time: true,
         }
@@ -126,14 +126,14 @@ impl DiscussWidget {
     fn possible_scroll_up(&mut self, messages: &ServersMessages, offset: usize) -> usize {
         if let Some(messages) = messages.get_messages(self.current_server_id, &self.current_channel)
         {
-            self.message_viewer.possible_scroll_up(messages, offset)
+            self.message_viewer.possible_scroll_away(messages, offset)
         } else {
             0
         }
     }
 
     fn scroll_up_no_check(&mut self) {
-        self.message_viewer.scroll_up_no_check(1)
+        self.message_viewer.scroll_away_no_check(1)
     }
 
     fn scroll_up_logs(&mut self, current_nick: &IrcName, messages: &mut ServersMessages) {
@@ -167,7 +167,7 @@ impl DiscussWidget {
     fn scroll_page_up(&mut self, messages: &mut ServersMessages) -> usize {
         if let Some(messages) = messages.get_messages(self.current_server_id, &self.current_channel)
         {
-            self.message_viewer.scroll_page_up(messages)
+            self.message_viewer.scroll_page_away(messages)
         } else {
             0
         }
@@ -184,18 +184,18 @@ impl DiscussWidget {
                     .saturating_sub(offset),
             );
             if log_offset > 0 {
-                self.message_viewer.scroll_up_no_check(log_offset);
+                self.message_viewer.scroll_away_no_check(log_offset);
             }
         }
     }
 
     fn scroll_page_down(&mut self) {
         self.message_viewer
-            .scroll_down_no_check(self.message_viewer.get_max_visible_height());
+            .scroll_toward_no_check(self.message_viewer.get_max_visible_height());
     }
 
     fn scroll_down(&mut self) {
-        self.message_viewer.scroll_down_no_check(1);
+        self.message_viewer.scroll_toward_no_check(1);
     }
 
     fn get_current_nick<'b>(&self, irc_model: &'b IrcModel) -> Option<&'b IrcName> {
@@ -218,7 +218,7 @@ impl Draw for DiscussWidget {
                 area,
             ),
             None => self.message_viewer.render(
-                &Vec::new(),
+                &Vec::<MessageContent>::new(),
                 |s| ctx.model.get_color(s),
                 self.display_time,
                 frame,

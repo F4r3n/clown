@@ -103,7 +103,7 @@ impl MainView<'_> {
             has_focus: true,
             log_instant: std::time::Instant::now(),
             logger: MessageLogger::new(log_dir),
-            search_widget: Component::new("search", SearchWidget::default()),
+            search_widget: Component::new("search", SearchWidget::new()),
             state: ViewState::default(),
         }
     }

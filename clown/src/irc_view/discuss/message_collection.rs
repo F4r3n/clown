@@ -1,7 +1,7 @@
 use super::dimension_discuss::{META_LENGTH, NICKNAME_LENGTH, SEPARATOR_LENGTH, TIME_LENGTH};
 use super::servers_messages::{Messages, WordRange};
 
-use clown_message_render::message_content::MessageContent;
+use clown_message_render::message_content::{MessageContent, TimeFormat};
 use clown_message_render::textwrapper::wrap_content;
 
 use ratatui::widgets::Row;
@@ -81,8 +81,17 @@ pub struct ScrollbarCache {
     pub max_visible_height: usize,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Anchor {
+    #[default]
+    Bottom,
+    Top,
+}
+
 #[derive(Debug)]
 pub struct MessageViewer {
+    time_format: Option<TimeFormat>,
+    anchor: Anchor,
     vertical_scroll_state: ScrollbarState,
     scroll_offset: usize,
     max_visible_height: usize,
@@ -91,6 +100,12 @@ pub struct MessageViewer {
     content_width: usize,
     redraw: bool,
     scroll_cache: ScrollbarCache,
+}
+
+impl Default for MessageViewer {
+    fn default() -> Self {
+        Self::new(None)
+    }
 }
 
 impl MessageViewer {
@@ -105,8 +120,10 @@ impl MessageViewer {
         self.scroll_cache = ScrollbarCache::default();
     }
 
-    pub fn new() -> Self {
+    pub fn new(time_format: Option<TimeFormat>) -> Self {
         Self {
+            time_format,
+            anchor: Anchor::Bottom,
             scroll_offset: 0,
             max_visible_height: 10,
             follow_last: true,
@@ -116,6 +133,11 @@ impl MessageViewer {
             redraw: true,
             scroll_cache: ScrollbarCache::default(),
         }
+    }
+
+    pub fn with_anchor(mut self, anchor: Anchor) -> Self {
+        self.anchor = anchor;
+        self
     }
 
     pub fn is_scroll_cache_valid(&self) -> bool {
@@ -239,6 +261,18 @@ impl MessageViewer {
             );
         }
 
+        if self.anchor == Anchor::Top {
+            let mut rows_from_top = 0;
+            for (i, line) in collection.iter().enumerate() {
+                let total_rows = line.wrapped_line_count(self.content_width);
+                if rows_from_top + total_rows > self.scroll_offset {
+                    return (i, self.scroll_offset - rows_from_top);
+                }
+                rows_from_top += total_rows;
+            }
+            return (collection.len(), 0);
+        }
+
         let message_count = collection.len();
         let target_visual_top = self.scroll_offset.saturating_add(self.max_visible_height);
 
@@ -293,16 +327,18 @@ impl MessageViewer {
                 break;
             }
             let color = line.get_source().map(&get_color);
-            let time_format = if line.is_log() {
-                clown_message_render::message_content::TimeFormat::Day
-            } else {
-                clown_message_render::message_content::TimeFormat::Hour
-            };
+            let time_format = self.time_format.as_ref().unwrap_or_else(|| {
+                if line.is_log() {
+                    &clown_message_render::message_content::TimeFormat::Day
+                } else {
+                    &clown_message_render::message_content::TimeFormat::Hour
+                }
+            });
 
             let rows = line.create_rows(
                 self.content_width as u16,
                 color,
-                display_time.then_some(&time_format),
+                display_time.then_some(time_format),
                 NICKNAME_LENGTH,
                 rows_to_skip_in_message,
                 rows_to_take,
@@ -374,7 +410,9 @@ impl MessageViewer {
         }
     }
 
-    pub fn possible_scroll_up<M: MessageCollection>(
+    // "away" / "toward" are relative to the anchor:
+    // with `Anchor::Bottom` away is up, with `Anchor::Top` away is down.
+    pub fn possible_scroll_away<M: MessageCollection>(
         &mut self,
         messages: &M,
         offset: usize,
@@ -390,22 +428,22 @@ impl MessageViewer {
         total_rows.saturating_sub(current_visible)
     }
 
-    pub fn scroll_up_no_check(&mut self, offset: usize) {
+    pub fn scroll_away_no_check(&mut self, offset: usize) {
         self.scroll_offset = self.scroll_offset.saturating_add(offset);
         self.follow_last = false;
         self.redraw = true;
     }
 
-    pub fn scroll_down_no_check(&mut self, offset: usize) {
+    pub fn scroll_toward_no_check(&mut self, offset: usize) {
         self.scroll_offset = self.scroll_offset.saturating_sub(offset);
         self.follow_last = self.scroll_offset == 0;
         self.redraw = true;
     }
 
-    pub fn scroll_page_up<M: MessageCollection>(&mut self, messages: &M) -> usize {
-        let offset = self.possible_scroll_up(messages, self.max_visible_height);
+    pub fn scroll_page_away<M: MessageCollection>(&mut self, messages: &M) -> usize {
+        let offset = self.possible_scroll_away(messages, self.max_visible_height);
         if offset > 0 {
-            self.scroll_up_no_check(offset);
+            self.scroll_away_no_check(offset);
         }
         offset
     }
@@ -490,7 +528,10 @@ impl MessageViewer {
 
         self.vertical_scroll_state = ScrollbarState::new(number_lines)
             .viewport_content_length(visible_length)
-            .position(number_lines.saturating_sub(self.scroll_offset));
+            .position(match self.anchor {
+                Anchor::Bottom => number_lines.saturating_sub(self.scroll_offset),
+                Anchor::Top => self.scroll_offset,
+            });
         if let Some(layout_1) = layout.get(1)
             && layout_1.width > 0
         {
@@ -535,7 +576,7 @@ mod tests {
         pub const TEXT_START: usize = (TIME_LENGTH + NICKNAME_LENGTH + SEPARATOR_LENGTH) as usize;
 
         let messages = hello_messages();
-        let mut viewer = MessageViewer::new();
+        let mut viewer = MessageViewer::new(None);
 
         viewer.content_width = 4;
         viewer.max_visible_height = 4;
@@ -598,19 +639,19 @@ mod tests {
         let messages: Vec<MessageContent> = (0..3)
             .map(|_| MessageContent::info("aa aaaa aaaaa aa aaa".to_string()))
             .collect();
-        let mut viewer = MessageViewer::new();
+        let mut viewer = MessageViewer::new(None);
 
         viewer.content_width = 5;
         viewer.max_visible_height = 3;
         viewer.scroll_offset = 0;
-        assert_eq!(viewer.possible_scroll_up(&messages, 10), 10);
-        assert_eq!(viewer.possible_scroll_up(&messages, 100), 12);
+        assert_eq!(viewer.possible_scroll_away(&messages, 10), 10);
+        assert_eq!(viewer.possible_scroll_away(&messages, 100), 12);
     }
 
     #[test]
     fn test_render_rows() {
         let messages = hello_messages();
-        let mut viewer = MessageViewer::new();
+        let mut viewer = MessageViewer::new(None);
 
         viewer.content_width = 10;
         assert_eq!(
@@ -641,7 +682,7 @@ mod tests {
     #[test]
     fn test_fake_nb_rows() {
         let messages = hello_messages();
-        let mut viewer = MessageViewer::new();
+        let mut viewer = MessageViewer::new(None);
 
         viewer.content_width = 10;
         assert_eq!(viewer.get_fake_total_lines(&messages), 3);

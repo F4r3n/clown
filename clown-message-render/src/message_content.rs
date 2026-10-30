@@ -22,6 +22,7 @@ pub enum MessageKind {
     Notice,
 }
 
+#[derive(Debug)]
 pub enum TimeFormat {
     Hour,
     Day,
