@@ -680,7 +680,36 @@ impl MainView<'_> {
                         topic,
                     ));
                 }
-                ResponseNumber::Err(_, content) => {
+                ResponseNumber::Err(e, content) => {
+                    if let clown_core::response::IrcError::NicknameInUse(nick) = e
+                        && ctx //already connected
+                            .session
+                            .model
+                            .get_server(server_id)
+                            .is_some_and(|s| *s.get_current_nick() == *nick.as_str())
+                    {
+                        let new_nick = format!("{nick}_");
+                        messages.push_message(MessageEvent::AddMessageViewInfo(
+                            Some(server_id),
+                            None,
+                            clown_message_render::message_content::MessageKind::Info,
+                            format!("Try with new nickname: {new_nick}"),
+                        ));
+                        if let Err(e) = ctx
+                            .session
+                            .send_command(server_id, Command::Nick(new_nick.clone()))
+                        {
+                            tracing::error!(error = %e, "Failed to retry nickname");
+                        } else {
+                            ctx.model.set_nickname_no_save(server_id, new_nick.clone());
+                            messages.push_message(MessageEvent::ReplaceUser(
+                                server_id,
+                                IrcName::from(nick),
+                                IrcName::from(new_nick),
+                            ));
+                        }
+                    }
+
                     messages.push_message(MessageEvent::AddMessageViewInfo(
                         Some(server_id),
                         None,

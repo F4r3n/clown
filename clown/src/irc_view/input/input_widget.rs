@@ -125,9 +125,11 @@ impl crate::component::EventHandler for CInput {
                         .input_completion
                         .remove_channel(*server_id, channel);
                 } else {
-                    self.completion
-                        .input_completion
-                        .disable_user(*server_id, channel, user.as_str());
+                    self.completion.input_completion.disable_user(
+                        *server_id,
+                        channel,
+                        user.as_str(),
+                    );
                 }
 
                 None

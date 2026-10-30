@@ -190,10 +190,14 @@ impl Model {
     }
 
     pub fn set_nickname(&mut self, server_id: ServerID, nickname: String) -> anyhow::Result<()> {
-        self.stored_config
-            .set_nickname(server_id, nickname.to_string());
+        self.set_nickname_no_save(server_id, nickname);
         self.save()?;
         Ok(())
+    }
+
+    pub fn set_nickname_no_save(&mut self, server_id: ServerID, nickname: String) {
+        self.stored_config
+            .set_nickname(server_id, nickname.to_string());
     }
 
     pub fn get_nickname(&self, in_id: ServerID) -> Option<&str> {

@@ -69,8 +69,12 @@ impl<'a, T> Component<'a, T> {
         self.inner.handle_actions(ctx, event)
     }
 
-    pub fn render(&mut self, ctx: &mut crate::state::context::Ctx, frame: &mut Frame<'_>, area: Rect)
-    where
+    pub fn render(
+        &mut self,
+        ctx: &mut crate::state::context::Ctx,
+        frame: &mut Frame<'_>,
+        area: Rect,
+    ) where
         T: Draw,
     {
         self.inner.render(ctx, frame, area);

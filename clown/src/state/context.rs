@@ -1,6 +1,6 @@
-use crate::irc_view::discuss::servers_messages::ServersMessages;
 use super::model::Model;
 use super::session::Session;
+use crate::irc_view::discuss::servers_messages::ServersMessages;
 
 pub struct Ctx {
     pub session: Session,

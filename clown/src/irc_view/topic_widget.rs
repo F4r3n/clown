@@ -185,7 +185,10 @@ mod tests {
     fn test_get_topic_out_of_bounds() {
         let widget = TopicWidget::new();
         // Should return None safely even if server_id doesn't exist in the Vec
-        assert_eq!(widget.get_topic(ServerID::new(99), &"#anything".into()), None);
+        assert_eq!(
+            widget.get_topic(ServerID::new(99), &"#anything".into()),
+            None
+        );
     }
 
     // Helper to satisfy the Draw/EventHandler traits in tests

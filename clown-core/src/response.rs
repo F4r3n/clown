@@ -272,10 +272,33 @@ pub enum ResponseNumber {
     /// 395: No users
     NoUsers(String),
 
-    Err(u16, String),
+    Err(IrcError, String),
 
     /// Any other reply not explicitly listed
     Unknown(u16, String),
+}
+
+#[derive(Debug)]
+pub enum JoinFailure {
+    Full,
+    InviteOnly,
+    Banned,
+    BadKey,
+    Unavailable,
+}
+
+#[derive(Debug)]
+pub enum IrcError {
+    NoSuchNick(String),              // 401
+    NoSuchChannel(String),           // 403
+    CannotSendToChan(String),        // 404
+    ErroneousNickname(String),       // 432
+    NicknameInUse(String),           // 433
+    NickUnavailable(String),         // 436, 437
+    CannotJoin(String, JoinFailure), // 437, 471, 473, 474, 475
+    ChanOpNeeded(String),            // 482
+    SaslFailed,                      // 904, 905
+    Other(u16),
 }
 
 pub struct ResponseBuilder;
@@ -433,9 +456,89 @@ impl ResponseBuilder {
             394 => EndOfUsers(string_to_send),
             395 => NoUsers(string_to_send),
             400..=502 | 524..=525 | 691 | 696 | 723 | 902 | 904..=907 => {
-                Err(reply_number, string_to_send)
+                let subject = parameters
+                    .and_then(|p| p.split_ascii_whitespace().nth(1))
+                    .map(|v| v.to_string());
+                let error = match (reply_number, subject) {
+                    (401, Some(nick)) => IrcError::NoSuchNick(nick),
+                    (403, Some(channel)) => IrcError::NoSuchChannel(channel),
+                    (404, Some(channel)) => IrcError::CannotSendToChan(channel),
+                    (432, Some(nick)) => IrcError::ErroneousNickname(nick),
+                    (433, Some(nick)) => IrcError::NicknameInUse(nick),
+                    // 437 is sent for both nicks and channels held after a netsplit
+                    (437, Some(channel)) if channel.starts_with(['#', '&', '+', '!']) => {
+                        IrcError::CannotJoin(channel, JoinFailure::Unavailable)
+                    }
+                    (436 | 437, Some(nick)) => IrcError::NickUnavailable(nick),
+                    (471, Some(channel)) => IrcError::CannotJoin(channel, JoinFailure::Full),
+                    (473, Some(channel)) => IrcError::CannotJoin(channel, JoinFailure::InviteOnly),
+                    (474, Some(channel)) => IrcError::CannotJoin(channel, JoinFailure::Banned),
+                    (475, Some(channel)) => IrcError::CannotJoin(channel, JoinFailure::BadKey),
+                    (482, Some(channel)) => IrcError::ChanOpNeeded(channel),
+                    (904 | 905, _) => IrcError::SaslFailed,
+                    _ => IrcError::Other(reply_number),
+                };
+                Err(error, string_to_send)
             }
             _ => Unknown(reply_number, string_to_send),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn error(reply_number: u16, parameters: &str) -> IrcError {
+        match ResponseBuilder::get_reply(reply_number, Some(parameters), Some("reason")) {
+            ResponseNumber::Err(error, content) => {
+                assert_eq!(content, "reason");
+                error
+            }
+            other => panic!("expected an error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_nickname_in_use() {
+        assert!(matches!(
+            error(433, "* clowny"),
+            IrcError::NicknameInUse(nick) if nick == "clowny"
+        ));
+    }
+
+    #[test]
+    fn test_cannot_join() {
+        assert!(matches!(
+            error(473, "me #rust"),
+            IrcError::CannotJoin(channel, JoinFailure::InviteOnly) if channel == "#rust"
+        ));
+        assert!(matches!(
+            error(475, "me #rust"),
+            IrcError::CannotJoin(_, JoinFailure::BadKey)
+        ));
+    }
+
+    #[test]
+    fn test_unavailable_nick_or_channel() {
+        assert!(matches!(
+            error(437, "me clowny"),
+            IrcError::NickUnavailable(nick) if nick == "clowny"
+        ));
+        assert!(matches!(
+            error(437, "me #rust"),
+            IrcError::CannotJoin(channel, JoinFailure::Unavailable) if channel == "#rust"
+        ));
+    }
+
+    #[test]
+    fn test_sasl_failed() {
+        assert!(matches!(error(904, "me"), IrcError::SaslFailed));
+    }
+
+    #[test]
+    fn test_missing_subject_is_other() {
+        assert!(matches!(error(433, "*"), IrcError::Other(433)));
+        assert!(matches!(error(461, "me JOIN"), IrcError::Other(461)));
     }
 }
