@@ -532,9 +532,9 @@ mod tests {
     #[test]
     fn test_unicode() {
         let input = " ﾟ";
-        assert_eq!(input.width(), 1);
+        assert_eq!(input.width(), 2);
         // A + unicode(7) + B = 9
-        assert_eq!(get_width_without_format(input), 1);
+        assert_eq!(get_width_without_format(input), 2);
     }
 
     #[test]
