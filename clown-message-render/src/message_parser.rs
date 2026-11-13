@@ -306,7 +306,7 @@ pub fn get_width_without_format(content: &str) -> usize {
 
 pub fn is_string_plain(content: &str) -> bool {
     let bytes = content.as_bytes();
-    let mut chunks = bytes.chunks_exact(8);
+    let (chunks, remainder) = bytes.as_chunks::<8>();
 
     //from 1 to 31
     const MASK: u32 = (1 << 0x01)
@@ -317,10 +317,10 @@ pub fn is_string_plain(content: &str) -> bool {
         | (1 << 0x1E)
         | (1 << 0x1F);
 
-    for chunk in &mut chunks {
+    for chunk in chunks {
         //pack everyting in a u64
         // safe because the chunk is 8
-        let word = u64::from_ne_bytes(chunk.try_into().expect("The chunk is bigger than u64"));
+        let word = u64::from_ne_bytes(*chunk);
 
         // Check if has bytes inferior to 32 (0x20) (the max is 0x1F = 31)
         // 0x80 is the UTF8 sequence
@@ -338,7 +338,7 @@ pub fn is_string_plain(content: &str) -> bool {
     }
 
     // Process remaining 0..7 bytes
-    for &b in chunks.remainder() {
+    for &b in remainder {
         if b < 0x20 && ((MASK >> b) & 1) != 0 {
             return false;
         }

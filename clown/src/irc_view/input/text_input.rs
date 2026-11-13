@@ -368,11 +368,11 @@ mod tests {
             ..Default::default()
         };
 
-        let mut next = w.find_next_break(true).map_or(w.cursor_position, |v| v);
+        let mut next = w.find_next_break(true).unwrap_or(w.cursor_position);
         assert_eq!(w.value.get(..next), Some("Hello"));
 
         w.cursor_position = next;
-        next = w.find_next_break(true).map_or(w.cursor_position, |v| v);
+        next = w.find_next_break(true).unwrap_or(w.cursor_position);
 
         assert_eq!(w.value.get(..next), Some("Hello my"));
 
