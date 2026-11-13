@@ -32,6 +32,7 @@ as_ptr_cast_mut = "warn"
 lint_groups_priority = "allow"
 new_without_default = "allow"
 
+
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
